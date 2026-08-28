@@ -83,7 +83,7 @@ class NotificationSettingsScreen(ModalScreen[None]):
         """Initialize the notification settings screen.
 
         Args:
-            suppressed: Set of currently suppressed warning keys.
+        suppressed: Set of currently suppressed warning keys.
         """
         super().__init__()
         self._suppressed = suppressed
@@ -92,7 +92,7 @@ class NotificationSettingsScreen(ModalScreen[None]):
         """Compose the screen layout.
 
         Yields:
-            Widgets for the notification settings UI.
+        Widgets for the notification settings UI.
         """
         glyphs = get_glyphs()
         with VerticalGroup():

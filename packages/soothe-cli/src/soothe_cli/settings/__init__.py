@@ -1,22 +1,4 @@
-"""Configuration and constants for the CLI.
-
-This subpackage was split out from the former ``tui/config.py`` god module.
-Each concern lives in its own module:
-
-- :mod:`soothe_cli.settings.settings` — ``Settings`` class + lazy singleton
-- :mod:`soothe_cli.settings.bootstrap` — dotenv loading and start-path detection
-- :mod:`soothe_cli.settings.glyphs` — charset detection and display glyphs
-- :mod:`soothe_cli.settings.provider` — LLM provider auto-detection
-- :mod:`soothe_cli.settings.shell_allow` — shell command allow-list parsing
-- :mod:`soothe_cli.settings.skills_dirs` — extra skill directory parsing
-- :mod:`soothe_cli.settings.stream_config` — LangGraph stream config construction
-- :mod:`soothe_cli.settings.console` — lazy global Rich Console singleton
-
-The lazy ``settings`` and ``console`` singletons are resolved via
-``__getattr__`` to preserve the deferred-initialization semantics of the
-original module — heavy I/O (dotenv loading, project detection) is deferred
-until first access so that e.g. ``Soothe --help`` does not touch the disk.
-"""
+"""Configuration and constants for the CLI."""
 
 from __future__ import annotations
 
@@ -72,16 +54,16 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazy module attributes for ``settings`` and ``console``.
+    """Lazy module attributes for `settings` and `console`.
 
     Defers heavy initialization until first access. Subsequent accesses hit
-    the module-level attribute directly (no ``__getattr__`` overhead).
+    the module-level attribute directly (no `__getattr__` overhead).
 
-    Also lazily resolves ``detect_provider`` to avoid importing the settings
+    Also lazily resolves `detect_provider` to avoid importing the settings
     singleton module at import time (it would pull in dotenv/bootstrap).
 
     Raises:
-        AttributeError: If *name* is not a lazily-provided attribute.
+    AttributeError: If *name* is not a lazily-provided attribute.
     """
     if name == "settings":
         from soothe_cli.settings.core import _get_settings

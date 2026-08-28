@@ -27,8 +27,8 @@ _GENERIC_ERROR_TAILS = frozenset({"", "error", "failed", "tool error"})
 def display_width(text: str) -> int:
     """Terminal display width of *text* (wide chars count as 2 columns).
 
-    Thin wrapper over the canonical ``termaid.utils.display_width`` so callers
-    in this module don't each need a lazy import. Falls back to ``len()`` if
+    Thin wrapper over the canonical `termaid.utils.display_width` so callers
+    in this module don't each need a lazy import. Falls back to `len()` if
     termaid is unavailable (e.g. minimal test environments).
     """
     try:
@@ -50,12 +50,12 @@ def _char_width(ch: str) -> int:
 
 
 def truncate_to_width(text: str, max_cols: int, *, ellipsis: str = "…") -> str:
-    """Truncate *text* to ``max_cols`` terminal columns, appending an ellipsis.
+    """Truncate *text* to `max_cols` terminal columns, appending an ellipsis.
 
     The ellipsis itself counts toward the budget, so the returned string never
-    exceeds ``max_cols``. Slices by character count using display-width
+    exceeds `max_cols`. Slices by character count using display-width
     accounting so East-Asian wide / emoji characters (2 columns each) are not
-    split mid-cell. When ``max_cols`` is non-positive, returns *text* unchanged.
+    split mid-cell. When `max_cols` is non-positive, returns *text* unchanged.
     """
     if max_cols <= 0 or display_width(text) <= max_cols:
         return text
@@ -125,10 +125,10 @@ def _ordered_arg_keys(tool_name: str, clean: dict[str, Any]) -> list[str]:
 
 
 def _args_preview(tool_name: str, args: dict[str, Any], *, max_chars: int | None = None) -> str:
-    """Comma-separated arg summary: primary value bare, extras as ``key=value``.
+    """Comma-separated arg summary: primary value bare, extras as `key=value`.
 
-    ``max_chars`` bounds each value's width (falls back to the per-key default
-    when ``None``). The caller may further truncate the whole command line to a
+    `max_chars` bounds each value's width (falls back to the per-key default
+    when `None`). The caller may further truncate the whole command line to a
     terminal-column budget via :func:`format_step_tool_activity_line`.
     """
     normalized = extract_tool_args_dict(args or {})
@@ -162,12 +162,12 @@ def _args_preview(tool_name: str, args: dict[str, Any], *, max_chars: int | None
 def format_step_tool_activity_command(
     tool_name: str, args: dict[str, Any], *, max_cols: int | None = None
 ) -> str:
-    """One-line invocation summary: ``DisplayName(arg)`` or ``DisplayName``.
+    """One-line invocation summary: `DisplayName(arg)` or `DisplayName`.
 
-    ``max_cols`` is an optional terminal-column budget for the *whole* command
+    `max_cols` is an optional terminal-column budget for the *whole* command
     (display name + parens + args). When set, args are first capped per-value
     to the remaining width, then the assembled command is width-truncated with
-    an ellipsis so it never exceeds ``max_cols``. When ``None`` (tests / unmounted),
+    an ellipsis so it never exceeds `max_cols`. When `None` (tests / unmounted),
     the fixed per-key caps apply and no whole-line truncation occurs.
     """
     canonical = _normalize_tool_name_for_arg_map((tool_name or "").strip() or "tool")
@@ -268,12 +268,12 @@ def format_step_tool_activity_line(
 ) -> str:
     """Full activity text without gutter or phase icon.
 
-    ``max_cols`` is an optional terminal-column budget for the *whole* line
+    `max_cols` is an optional terminal-column budget for the *whole* line
     (command + status tail). When set, the tail is reserved first (it carries
     duration/error info the user needs), then the command is truncated to fit
-    so the assembled line never exceeds ``max_cols`` — one row, no wrap. If
+    so the assembled line never exceeds `max_cols` — one row, no wrap. If
     the tail alone exceeds the budget (e.g. a long error summary on a narrow
-    terminal), the tail is truncated too. When ``None``, no whole-line
+    terminal), the tail is truncated too. When `None`, no whole-line
     truncation occurs (preserves prior behavior for tests and unmounted widgets).
     """
     tail = format_step_tool_activity_status_tail(

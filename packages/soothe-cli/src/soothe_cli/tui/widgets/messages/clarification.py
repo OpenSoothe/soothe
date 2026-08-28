@@ -71,21 +71,21 @@ def _strip_plan_frontmatter(markdown: str) -> str:
 
 
 class ClarificationInputMessage(Vertical):
-    """Inline answer-collection widget for HITL ``ask_user`` steps (RFC-622).
+    """Inline answer-collection widget for HITL `ask_user` steps.
 
-    Mounted when ``soothe.loop.clarification.requested`` arrives for
+    Mounted when `soothe.loop.clarification.requested` arrives for
     plan-review or tool-approval origins. Generic (execute) ask_user
-    questions are handled by ``StructuredAskUserWidget`` (§9c).
+    questions are handled by `StructuredAskUserWidget` (§9c).
 
-    Two render modes, keyed on ``origin_node``:
+    Two render modes, keyed on `origin_node`:
 
-    - **Plan review** (``plan_mode_review``): full draft plan, saved-path
-      footer, and Approve / Refine / Reject action buttons.
-    - **Tool approval** (``tool_approval``): the question already carries the
-      pending tool call (name + args); render an Approve / Edit / Reject
-      option selector — no free-text Input for the answer itself. The ``Edit``
-      row keeps an inline comments Input (the host maps it to the HITL
-      ``edit`` decision, which re-invokes the tool with revised args).
+    - **Plan review** (`plan_mode_review`): full draft plan, saved-path
+    footer, and Approve / Refine / Reject action buttons.
+    - **Tool approval** (`tool_approval`): the question already carries the
+    pending tool call (name + args); render an Approve / Edit / Reject
+    option selector — no free-text Input for the answer itself. The `Edit`
+    row keeps an inline comments Input (the host maps it to the HITL
+    `edit` decision, which re-invokes the tool with revised args).
     """
 
     # Focusable so the Enter binding (expand/collapse plan body) lands on the
@@ -343,8 +343,8 @@ class ClarificationInputMessage(Vertical):
     def _action_label(self, action: _PlanReviewAction) -> str:
         """Display label for an action button, origin-aware.
 
-        Plan review uses ``Refine``; tool approval uses ``Edit`` (maps to the
-        HITL ``edit`` decision). Both share the same wire action key.
+        Plan review uses `Refine`; tool approval uses `Edit` (maps to the
+        HITL `edit` decision). Both share the same wire action key.
         """
         if self._is_tool_approval:
             return _TOOL_APPROVAL_ACTION_LABELS.get(action, _ACTION_LABELS[action])
@@ -377,11 +377,11 @@ class ClarificationInputMessage(Vertical):
     def _refresh_answered_summary(self) -> None:
         """Update the collapsed answered view with the actual action label.
 
-        Called after ``_submitted`` is set. Also used on resume to populate the
-        answered card from persisted ``MessageData`` fields.
+        Called after `_submitted` is set. Also used on resume to populate the
+        answered card from persisted `MessageData` fields.
 
-        Each answered-view row carries the ``⎿`` tree gutter (parity with the
-        goal→step tree in ``CognitionGoalTreeMessage``), so the action and the
+        Each answered-view row carries the `⎿` tree gutter (parity with the
+        goal→step tree in `CognitionGoalTreeMessage`), so the action and the
         plan-body toggle hang off one aligned branch instead of stacking as
         disconnected stubs. Refine/Edit keeps its comment beside the action label.
         """
@@ -426,9 +426,9 @@ class ClarificationInputMessage(Vertical):
     def _toggle_body_expanded(self) -> None:
         """Expand or collapse the plan body in the answered view.
 
-        Uses an ``is-expanded`` class on the body box so the CSS rule for the
-        submitted state (``display: none``) is overridden only while expanded.
-        This avoids a Python ``display`` assignment fighting the submitted-state
+        Uses an `is-expanded` class on the body box so the CSS rule for the
+        submitted state (`display: none`) is overridden only while expanded.
+        This avoids a Python `display` assignment fighting the submitted-state
         CSS, which previously left the branch unexpandable.
         """
         self._body_expanded = not self._body_expanded
@@ -450,7 +450,7 @@ class ClarificationInputMessage(Vertical):
     def _compose_option_selector(self) -> Any:
         """Render the 3-button Approve / Edit(Refine) / Reject selector.
 
-        Shared by ``plan_mode_review`` and ``tool_approval``. Plan review adds
+        Shared by `plan_mode_review` and `tool_approval`. Plan review adds
         the draft plan body, saved-path footer, and an expand/collapse toggle in
         the answered view; tool approval shows only the question(s) + buttons.
         """
@@ -502,10 +502,10 @@ class ClarificationInputMessage(Vertical):
     def _compose_answered_summary(self) -> Any:
         """Collapsed answered view: action row + (plan review only) body toggle.
 
-        Hidden by CSS (``display: none``) until ``is-submitted`` is added; then
+        Hidden by CSS (`display: none`) until `is-submitted` is added; then
         the active review body / buttons / hint are hidden and this is shown.
 
-        Each row carries the ``⎿`` tree gutter (parity with the goal→step tree),
+        Each row carries the `⎿` tree gutter (parity with the goal→step tree),
         so the action and the plan-body toggle hang off one aligned branch — no
         stray empty stub, no repeated disconnected connectors. Tool-approval
         cards have no plan body, so the toggle is omitted there.
@@ -572,15 +572,15 @@ class ClarificationInputMessage(Vertical):
             body_widget.update(text)
 
     def _schedule_focus(self, widget: Any) -> None:
-        """Focus ``widget`` after layout settles.
+        """Focus `widget` after layout settles.
 
-        Uses ``call_after_refresh`` alone — Textual fires it exactly once
+        Uses `call_after_refresh` alone — Textual fires it exactly once
         after the next render cycle, after layout has settled. The previous
-        implementation added a 50 ms ``set_timer`` fallback to win a focus
-        race against ChatInput's app-level ``on_click`` / ``on_app_focus``
+        implementation added a 50 ms `set_timer` fallback to win a focus
+        race against ChatInput's app-level `on_click` / `on_app_focus`
         handlers, but those handlers now guard against stealing focus from
-        focusable widgets (``_click_landed_on_focusable`` and the
-        ``focused is not None`` check in ``on_app_focus``), so the race no
+        focusable widgets (`_click_landed_on_focusable` and the
+        `focused is not None` check in `on_app_focus`), so the race no
         longer exists. Removing the timer also eliminates stale callbacks
         that re-focused the previously-selected menu item (block flash).
         """
@@ -621,7 +621,7 @@ class ClarificationInputMessage(Vertical):
         when Refine/Edit is the selected action.
 
         Even though the input is disabled unless selected (see
-        ``_set_selected_action``), an external focus handler (e.g. an app-level
+        `_set_selected_action`), an external focus handler (e.g. an app-level
         focus routine) could still try to land on it. Redirect that focus back
         to the selected action button so the cursor never sits in the input box
         while Approve (or Reject) is the active choice.
@@ -656,7 +656,7 @@ class ClarificationInputMessage(Vertical):
         Before submission, clicks are left for the action buttons. After
         submission the active review elements are hidden, so a click anywhere on
         the card flips the plan body open/closed — the same action Enter
-        performs via ``action_plan_review_confirm``. Only plan-review cards have
+        performs via `action_plan_review_confirm`. Only plan-review cards have
         a body to toggle; tool-approval cards have nothing to expand.
         """
         if not self._is_plan_review or not self._submitted:
@@ -748,7 +748,7 @@ class ClarificationInputMessage(Vertical):
 
         Called when the user types text after selecting Refine (plan review) or
         Edit (tool approval). The comments become the second answer so the
-        daemon's refinement re-synthesis (plan) or HITL ``edit`` decision
+        daemon's refinement re-synthesis (plan) or HITL `edit` decision
         (tool approval) picks them up.
         """
         if self._submitted:

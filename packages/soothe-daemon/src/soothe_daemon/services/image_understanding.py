@@ -39,14 +39,14 @@ def normalize_mime_type(mime: str) -> str | None:
 
 
 def validate_and_normalize_image_attachments(raw: Any) -> tuple[list[dict[str, str]], str | None]:
-    """Validate wire ``attachments`` and return normalized dicts for the queue.
+    """Validate wire `attachments` and return normalized dicts for the queue.
 
     Args:
-        raw: ``msg["attachments"]`` from client (may be missing / invalid).
+    raw: `msg["attachments"]` from client (may be missing / invalid).
 
     Returns:
-        Tuple of (normalized list of ``{"mime_type", "data"}``, error message).
-        On success the error message is ``None``.
+    Tuple of (normalized list of `{"mime_type", "data"}`, error message).
+    On success the error message is `None`.
     """
     if raw is None:
         return [], None
@@ -116,16 +116,16 @@ async def enrich_user_text_with_vision(
     """Run the configured image-role model on images and merge output into user text.
 
     Args:
-        config: ``SootheConfig`` with providers for role ``image``.
-        text: User text (may be empty).
-        attachments: Normalized list from ``validate_and_normalize_image_attachments``.
-        session_id: Thread id for Langfuse session correlation.
+    config: `SootheConfig` with providers for role `image`.
+    text: User text (may be empty).
+    attachments: Normalized list from `validate_and_normalize_image_attachments`.
+    session_id: Thread id for Langfuse session correlation.
 
     Returns:
-        Text passed to ``SootheRunner.astream`` (user text plus vision block).
+    Text passed to `SootheRunner.astream` (user text plus vision block).
 
     Raises:
-        Exception: Propagated from the vision model if the call fails.
+    Exception: Propagated from the vision model if the call fails.
     """
     if not attachments:
         return text

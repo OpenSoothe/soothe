@@ -1,10 +1,4 @@
-"""Daemon-owned wire event type string constants (centralized).
-
-Re-export of :mod:`soothe_daemon.events.constants` for a single import
-surface. Event *infrastructure* (bus, topic, reattachment) lives in
-:mod:`soothe_daemon.event` (singular); this package owns only the wire
-type-string constants for daemon-defined events.
-"""
+"""Daemon-owned wire event type string constants (centralized)."""
 
 from soothe_daemon.events.constants import (
     CHANNEL_MESSAGE_RECEIVED,

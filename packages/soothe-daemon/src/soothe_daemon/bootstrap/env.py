@@ -1,4 +1,4 @@
-"""Load ``.env`` before YAML parsing so ``${VAR}`` placeholders resolve (providers, Langfuse)."""
+"""Load `.env` before YAML parsing so `${VAR}` placeholders resolve (providers, Langfuse)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _soothe_home_dir() -> Path:
 
 
 def _find_dotenv_from_path(start_path: Path) -> Path | None:
-    """Find the nearest ``.env`` file walking up from *start_path*."""
+    """Find the nearest `.env` file walking up from *start_path*."""
     current = start_path.expanduser().resolve()
     for parent in [current, *list(current.parents)]:
         candidate = parent / ".env"
@@ -29,7 +29,7 @@ def _find_dotenv_from_path(start_path: Path) -> Path | None:
 
 
 def _dotenv_start_path() -> Path:
-    """Directory to search for a project ``.env`` (invocation dir or cwd)."""
+    """Directory to search for a project `.env` (invocation dir or cwd)."""
     for name in _INVOCATION_DIR_ENV_VARS:
         raw = os.environ.get(name, "").strip()
         if raw:
@@ -38,18 +38,18 @@ def _dotenv_start_path() -> Path:
 
 
 def bootstrap_dotenv(*, start_path: Path | str | None = None) -> bool:
-    """Load project and global ``.env`` files before config/YAML parsing.
+    """Load project and global `.env` files before config/YAML parsing.
 
-    Precedence (``override=False`` throughout; shell exports win):
+    Precedence (`override=False` throughout; shell exports win):
 
-    1. Nearest project ``.env`` from *start_path*, invocation env, or cwd
-    2. ``$SOOTHE_HOME/.env`` global defaults
+    1. Nearest project `.env` from *start_path*, invocation env, or cwd
+    2. `$SOOTHE_HOME/.env` global defaults
 
     Args:
-        start_path: Optional directory to begin the upward ``.env`` search.
+    start_path: Optional directory to begin the upward `.env` search.
 
     Returns:
-        ``True`` when at least one dotenv file was loaded.
+    `True` when at least one dotenv file was loaded.
     """
     loaded = False
     search_root = Path(start_path).expanduser() if start_path is not None else _dotenv_start_path()
@@ -65,7 +65,7 @@ def bootstrap_dotenv(*, start_path: Path | str | None = None) -> bool:
 
 
 def load_dotenv_adjacent_to_yaml(*yaml_paths: str | Path | None) -> None:
-    """Load ``.env`` next to any existing YAML file path (e.g. repo ``config/`` + root ``.env``)."""
+    """Load `.env` next to any existing YAML file path (e.g. repo `config/` + root `.env`)."""
     seen: set[Path] = set()
     for raw in yaml_paths:
         if raw is None:

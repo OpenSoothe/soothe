@@ -1,13 +1,4 @@
-"""Conversation history loading, daemon event consumption, and thin binder delegation.
-
-Pure event → card binding logic lives in ``soothe_sdk.display.card_binder``
-(RFC-413). The static methods on ``_HistoryMixin`` are kept as thin
-wrappers so the existing ``SootheApp._convert_messages_to_data(...)`` API
-(used by tests and other mixins) continues to work.
-
-Passive background consumption applies daemon ``soothe.card.*`` frames only —
-structural mounts no longer come from raw ``messages`` stream chunks.
-"""
+"""Conversation history loading, daemon event consumption, and thin binder delegation."""
 
 from __future__ import annotations
 
@@ -55,7 +46,7 @@ class _HistoryMixin:
         *,
         cognition_card_replay: list[MessageData] | None = None,
     ) -> list[MessageData]:
-        """Delegate to ``soothe_sdk.display.card_binder.convert_messages_to_data``."""
+        """Delegate to `soothe_sdk.display.card_binder.convert_messages_to_data`."""
         return _binder.convert_messages_to_data(
             messages,
             cognition_card_replay=cognition_card_replay,
@@ -63,16 +54,16 @@ class _HistoryMixin:
 
     @staticmethod
     def _convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
-        """Delegate to ``soothe_sdk.display.card_binder.convert_event_to_message_data``."""
+        """Delegate to `soothe_sdk.display.card_binder.convert_event_to_message_data`."""
         return _binder.convert_event_to_message_data(event)
 
     @staticmethod
     def _collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageData]:
-        """Delegate to ``soothe_sdk.display.card_binder.collect_cognition_card_replay``."""
+        """Delegate to `soothe_sdk.display.card_binder.collect_cognition_card_replay`."""
         return _binder.collect_cognition_card_replay(events)
 
     def _convert_loop_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
-        """Delegate to ``soothe_sdk.display.card_binder.convert_loop_events_to_data``."""
+        """Delegate to `soothe_sdk.display.card_binder.convert_loop_events_to_data`."""
         return _binder.convert_loop_events_to_data(events)
 
     def _merge_history_sources(
@@ -80,7 +71,7 @@ class _HistoryMixin:
         checkpoint_messages: list[Any],
         activity_events: list[dict[str, Any]],
     ) -> list[tuple[str, Any]]:
-        """Delegate to ``soothe_sdk.display.card_binder.merge_history_sources``."""
+        """Delegate to `soothe_sdk.display.card_binder.merge_history_sources`."""
         return _binder.merge_history_sources(checkpoint_messages, activity_events)
 
     # ------------------------------------------------------------------
@@ -93,11 +84,11 @@ class _HistoryMixin:
         """Fetch conversation history from goal snapshots + live card tail.
 
         Args:
-            loop_id: Loop id.
+        loop_id: Loop id.
 
         Returns:
-            Payload containing converted message data and the persisted
-            context-token count.
+        Payload containing converted message data and the persisted
+        context-token count.
         """
         if self._daemon_session is None:
             return _LoopHistoryPayload([], 0)
@@ -148,7 +139,7 @@ class _HistoryMixin:
         return _LoopHistoryPayload(data, context_tokens, goal_dicts)
 
     async def _show_goal_history(self) -> None:
-        """Render structured goal history from RFC-631 snapshots."""
+        """Render structured goal history snapshots."""
         loop_id = self._lc_loop_id or (self._session_state.loop_id if self._session_state else None)
         if not loop_id:
             await self._mount_message(AppMessage("No active loop."))
@@ -188,9 +179,9 @@ class _HistoryMixin:
         """Upgrade a plain status message to a linked one when URL resolves.
 
         Args:
-            widget: The already-mounted app message.
-            prefix: Text prefix before the loop id.
-            loop_id: Loop id.
+        widget: The already-mounted app message.
+        prefix: Text prefix before the loop id.
+        loop_id: Loop id.
         """
         try:
             loop_msg = await self._build_loop_status_line(prefix, loop_id)
@@ -226,9 +217,9 @@ class _HistoryMixin:
         """Schedule loop URL link resolution and apply updates in the background.
 
         Args:
-            widget: The message widget to update.
-            prefix: Text prefix before the loop id.
-            loop_id: Loop id.
+        widget: The message widget to update.
+        prefix: Text prefix before the loop id.
+        loop_id: Loop id.
         """
         self.run_worker(
             self._upgrade_loop_message_link(
@@ -242,7 +233,7 @@ class _HistoryMixin:
     async def _consume_daemon_events_background(self) -> None:
         """Consume daemon websocket events for an already-running loop subscription.
 
-        Applies ``soothe.card.*`` frames so a detached/attached TUI stays in sync with the
+        Applies `soothe.card.*` frames so a detached/attached TUI stays in sync with the
         display ledger without rebinding structural cards from raw stream chunks.
         """
         if not self._daemon_session:

@@ -15,7 +15,7 @@ class CLIConfig:
     Full config available via daemon RPC when needed.
     CLI package can be installed independently without full SootheConfig.
 
-    Values are supplied via global CLI flags on the root ``soothe`` command.
+    Values are supplied via global CLI flags on the root `soothe` command.
     """
 
     # WebSocket connection

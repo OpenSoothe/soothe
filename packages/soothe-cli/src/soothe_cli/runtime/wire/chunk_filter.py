@@ -15,7 +15,7 @@ _MSG_PAIR_LEN = 2
 
 
 def updates_chunk_is_noop(data: Any) -> bool:
-    """True when an ``updates`` chunk carries no LangGraph interrupt."""
+    """True when an `updates` chunk carries no LangGraph interrupt."""
     if not isinstance(data, dict):
         return True
     return "__interrupt__" not in data
@@ -63,7 +63,7 @@ def message_has_tool_invocation_metadata(msg: Any) -> bool:
 
 
 def message_chunk_is_non_actionable(data: Any) -> bool:
-    """True when a ``messages`` pair has no tool, text, or loop phase payload."""
+    """True when a `messages` pair has no tool, text, or loop phase payload."""
     if not isinstance(data, (list, tuple)) or len(data) != _MSG_PAIR_LEN:
         return False
     msg = data[0]

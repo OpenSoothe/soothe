@@ -128,11 +128,11 @@ class CompletionOption(Static):
         """Initialize the completion option.
 
         Args:
-            label: The main label text (e.g., command name or file path)
-            description: Secondary description text
-            index: Index of this option in the suggestions list
-            is_selected: Whether this option is currently selected
-            **kwargs: Additional arguments for parent
+        label: The main label text (e.g., command name or file path)
+        description: Secondary description text
+        index: Index of this option in the suggestions list
+        is_selected: Whether this option is currently selected
+        **kwargs: Additional arguments for parent
         """
         super().__init__(**kwargs)
         self._label = label
@@ -234,7 +234,7 @@ class CompletionPopup(VerticalScroll):
         a full teardown/mount cycle while the popup is visible.
 
         Args:
-            generation: Caller's generation counter; skipped if superseded.
+        generation: Caller's generation counter; skipped if superseded.
         """
         if generation != self._rebuild_generation:
             return
@@ -412,7 +412,7 @@ class ChatTextArea(TextArea):
             """Initialize clipboard-image paste request.
 
             Args:
-                notify_if_empty: Whether to toast when no image is available.
+            notify_if_empty: Whether to toast when no image is available.
             """
             self.notify_if_empty = notify_if_empty
             super().__init__()
@@ -455,11 +455,11 @@ class ChatTextArea(TextArea):
         caller of `_recompute_cursor_offset`.
 
         Args:
-            center: Whether the cursor should be scrolled to the center.
-            animate: Whether to animate while scrolling.
+        center: Whether the cursor should be scrolled to the center.
+        animate: Whether to animate while scrolling.
 
         Returns:
-            The scroll offset applied, or `Offset(0, 0)` on desync.
+        The scroll offset applied, or `Offset(0, 0)` on desync.
         """
         try:
             return super().scroll_cursor_visible(center=center, animate=animate)
@@ -475,7 +475,7 @@ class ChatTextArea(TextArea):
         """Set whether the app should show the cursor as active.
 
         Args:
-            has_focus: Whether the app input should be focused.
+        has_focus: Whether the app input should be focused.
         """
         self._backslash_pending_time = None
         if has_focus and not self.has_focus:
@@ -489,7 +489,7 @@ class ChatTextArea(TextArea):
         """Set whether the leading command token should be color-highlighted.
 
         Args:
-            active: Whether the input is in command mode.
+        active: Whether the input is in command mode.
         """
         if self._command_highlight == active:
             return
@@ -502,10 +502,10 @@ class ChatTextArea(TextArea):
         """Return the styled line, coloring the command token in command mode.
 
         Args:
-            line_index: The index of the line.
+        line_index: The index of the line.
 
         Returns:
-            A `rich.Text` object for the requested line.
+        A `rich.Text` object for the requested line.
         """
         line = super().get_line(line_index)
         if line_index != 0 or not self._command_highlight:
@@ -605,7 +605,7 @@ class ChatTextArea(TextArea):
         method verifies the character before deleting it.
 
         Returns:
-            `True` if a backslash was found and deleted, `False` otherwise.
+        `True` if a backslash was found and deleted, `False` otherwise.
         """
         row, col = self.cursor_location
         if col > 0:
@@ -783,11 +783,11 @@ class ChatTextArea(TextArea):
         """Delete a full image placeholder token in one keypress.
 
         Args:
-            backwards: Whether the delete action is backwards (`backspace`) or
-                forwards (`delete`).
+        backwards: Whether the delete action is backwards (`backspace`) or
+        forwards (`delete`).
 
         Returns:
-            `True` when a placeholder token was deleted.
+        `True` when a placeholder token was deleted.
         """
         if not self.text or not self.selection.is_empty:
             return False
@@ -810,9 +810,9 @@ class ChatTextArea(TextArea):
         """Return placeholder span to delete for current cursor and key direction.
 
         Args:
-            cursor_offset: Character offset of the cursor from the start of text.
-            backwards: Whether the delete action is backwards (backspace) or
-                forwards (delete).
+        cursor_offset: Character offset of the cursor from the start of text.
+        backwards: Whether the delete action is backwards (backspace) or
+        forwards (delete).
         """
         text = self.text
         # Check both image and video placeholders
@@ -1028,11 +1028,11 @@ class ChatInput(Vertical):
     def scroll_visible(self, animate: bool = True, **_kwargs: Any) -> None:  # noqa: ARG002
         """No-op: bottom chrome is Screen-docked above the status bar.
 
-        The default ``Widget.scroll_visible`` scrolls the Screen to reveal this
+        The default `Widget.scroll_visible` scrolls the Screen to reveal this
         widget. When the input (or plan panel + input) is taller than the
-        viewport, that Screen scroll clips ``#thinking-status`` above the
+        viewport, that Screen scroll clips `#thinking-status` above the
         chat box. Cursor visibility inside the text area still uses
-        ``ChatTextArea.scroll_cursor_visible``.
+        `ChatTextArea.scroll_cursor_visible`.
         """
         return
 
@@ -1046,10 +1046,10 @@ class ChatInput(Vertical):
         """Initialize the chat input widget.
 
         Args:
-            cwd: Current working directory for file completion
-            history_file: Path to history file (default: ~/SOOTHE_HOME/history.jsonl)
-            image_tracker: Optional tracker for attached images
-            **kwargs: Additional arguments for parent
+        cwd: Current working directory for file completion
+        history_file: Path to history file (default: ~/SOOTHE_HOME/history.jsonl)
+        image_tracker: Optional tracker for attached images
+        **kwargs: Additional arguments for parent
         """
         super().__init__(**kwargs)
         self._cwd = Path(cwd) if cwd else Path.cwd()
@@ -1102,7 +1102,7 @@ class ChatInput(Vertical):
         """Compose the chat input layout.
 
         Yields:
-            Widgets for the input row and completion popup.
+        Widgets for the input row and completion popup.
         """
         newline_hint = f"{newline_shortcut()} for new line"
         yield CompletionPopup(id="completion-popup")
@@ -1146,7 +1146,7 @@ class ChatInput(Vertical):
         commands with dynamic `/skill:` entries.
 
         Args:
-            commands: Full list of `(command, description, hidden_keywords)` tuples.
+        commands: Full list of `(command, description, hidden_keywords)` tuples.
         """
         if self._slash_controller:
             self._slash_controller.update_commands(commands)
@@ -1239,7 +1239,7 @@ class ChatInput(Vertical):
         """Parse dropped-path payload text through a single parser entrypoint.
 
         Returns:
-            Parsed payload details, otherwise `None`.
+        Parsed payload details, otherwise `None`.
         """
         from soothe_cli.tui.input import parse_pasted_path_payload
 
@@ -1251,11 +1251,11 @@ class ChatInput(Vertical):
         """Parse payload and recover stripped leading slash in command mode.
 
         Args:
-            text: Input text to parse.
-            allow_leading_path: Whether to parse leading path + suffix payloads.
+        text: Input text to parse.
+        allow_leading_path: Whether to parse leading path + suffix payloads.
 
         Returns:
-            Tuple of `(candidate_text, parsed_payload)`.
+        Tuple of `(candidate_text, parsed_payload)`.
         """
         candidate = text
         parsed = self._parse_dropped_path_payload(text, allow_leading_path=allow_leading_path)
@@ -1280,11 +1280,11 @@ class ChatInput(Vertical):
         """Extract a leading dropped-path token with command-mode recovery.
 
         Args:
-            text: Input text to parse.
+        text: Input text to parse.
 
         Returns:
-            Tuple of `(candidate_text, leading_match)`, where `leading_match` is
-            `(path, token_end)` when extraction succeeds, otherwise `None`.
+        Tuple of `(candidate_text, leading_match)`, where `leading_match` is
+        `(path, token_end)` when extraction succeeds, otherwise `None`.
         """
         from soothe_cli.tui.input import extract_leading_pasted_file_path
 
@@ -1388,10 +1388,10 @@ class ChatInput(Vertical):
         """Translate completion-space index into text-area index.
 
         Args:
-            index: Cursor/index position in completion space.
+        index: Cursor/index position in completion space.
 
         Returns:
-            Clamped index in text-area space.
+        Clamped index in text-area space.
         """
         if not self._text_area:
             return 0
@@ -1413,12 +1413,12 @@ class ChatInput(Vertical):
         """Return text to submit, expanding abbreviated paste tokens to full text.
 
         Args:
-            display_value: Stripped text currently shown in the input widget.
+        display_value: Stripped text currently shown in the input widget.
 
         Returns:
-            Text with each intact ``[Pasted text #N]`` token replaced by its
-            full payload. Edits around the tokens are preserved; a token that
-            the user modified or removed no longer expands.
+        Text with each intact `[Pasted text #N]` token replaced by its
+        full payload. Edits around the tokens are preserved; a token that
+        the user modified or removed no longer expands.
         """
         if self._pending_paste_texts:
             resolved = display_value
@@ -1475,7 +1475,7 @@ class ChatInput(Vertical):
         history + post + clear + mode-reset logic stays in one place.
 
         Args:
-            value: The stripped text to submit (without mode prefix).
+        value: The stripped text to submit (without mode prefix).
         """
         value = self._resolve_submit_text(value)
         if not value:
@@ -1509,7 +1509,7 @@ class ChatInput(Vertical):
         """Keep tracked media aligned with placeholder tokens in input text.
 
         Args:
-            text: Current text in the input area.
+        text: Current text in the input area.
         """
         if not self._image_tracker:
             return
@@ -1592,10 +1592,10 @@ class ChatInput(Vertical):
         """Attach an image from the OS clipboard as an `[image N]` placeholder.
 
         Args:
-            notify_if_empty: Whether to show a toast when no image is found.
+        notify_if_empty: Whether to show a toast when no image is found.
 
         Returns:
-            `True` when a placeholder was inserted, else `False`.
+        `True` when a placeholder was inserted, else `False`.
         """
         if not self._text_area:
             return False
@@ -1638,11 +1638,11 @@ class ChatInput(Vertical):
         are attached as images, and plain text is inserted directly.
 
         Args:
-            pasted: Raw pasted text payload.
+        pasted: Raw pasted text payload.
 
         Returns:
-            `True` when the text area is mounted and the paste was inserted,
-                `False` if the widget is not yet composed.
+        `True` when the text area is mounted and the paste was inserted,
+        `False` if the widget is not yet composed.
         """
         if not self._text_area:
             return False
@@ -1673,10 +1673,10 @@ class ChatInput(Vertical):
         text inline to `[image N]` placeholders.
 
         Args:
-            text: Current text area content.
+        text: Current text area content.
 
         Returns:
-            `True` if text was rewritten inline, otherwise `False`.
+        `True` if text was rewritten inline, otherwise `False`.
         """
         if not self._text_area:
             return False
@@ -1701,8 +1701,8 @@ class ChatInput(Vertical):
         """Insert pasted path payload, attaching images when possible.
 
         Args:
-            raw_text: Original paste payload text.
-            paths: Resolved file paths parsed from the payload.
+        raw_text: Original paste payload text.
+        paths: Resolved file paths parsed from the payload.
         """
         if not self._text_area:
             return
@@ -1724,14 +1724,14 @@ class ChatInput(Vertical):
         """Build replacement text for dropped paths and attach any images.
 
         Args:
-            raw_text: Original paste payload text.
-            paths: Resolved file paths parsed from the payload.
-            add_trailing_space: Whether to append a trailing space after the
-                last token when paths are separated by spaces.
+        raw_text: Original paste payload text.
+        paths: Resolved file paths parsed from the payload.
+        add_trailing_space: Whether to append a trailing space after the
+        last token when paths are separated by spaces.
 
         Returns:
-            Tuple of `(replacement, attached)` where `attached` indicates whether
-            at least one media attachment (image or video) was created.
+        Tuple of `(replacement, attached)` where `attached` indicates whether
+        at least one media attachment (image or video) was created.
         """
         if not self._image_tracker:
             return raw_text, False
@@ -1795,10 +1795,10 @@ class ChatInput(Vertical):
         restored before giving up.
 
         Args:
-            value: Stripped submitted text (without mode prefix).
+        value: Stripped submitted text (without mode prefix).
 
         Returns:
-            Submitted text with image placeholders when attachment succeeded.
+        Submitted text with image placeholders when attachment succeeded.
         """
         candidate, parsed = self._parse_dropped_path_payload_with_command_recovery(
             value, allow_leading_path=True
@@ -1839,11 +1839,11 @@ class ChatInput(Vertical):
         """Return mode and stripped display text for a history entry.
 
         Args:
-            entry: Raw entry value read from history storage.
+        entry: Raw entry value read from history storage.
 
         Returns:
-            Tuple of `(mode, display_text)` where mode-trigger prefixes are
-                removed from `display_text`.
+        Tuple of `(mode, display_text)` where mode-trigger prefixes are
+        removed from `display_text`.
         """
         for prefix, mode in PREFIX_TO_MODE.items():
             # Small dict; loop is fine. No need to over-engineer right now
@@ -1896,7 +1896,7 @@ class ChatInput(Vertical):
         """Get the cursor offset as a single integer.
 
         Returns:
-            Cursor position as character offset from start of text.
+        Cursor position as character offset from start of text.
         """
         if not self._text_area:
             return 0
@@ -1954,7 +1954,7 @@ class ChatInput(Vertical):
         """Get the current input value.
 
         Returns:
-            Current text in the input field.
+        Current text in the input field.
         """
         if self._text_area:
             return self._text_area.text
@@ -1971,7 +1971,7 @@ class ChatInput(Vertical):
         """Get the underlying TextArea widget.
 
         Returns:
-            The ChatTextArea widget or None if not mounted.
+        The ChatTextArea widget or None if not mounted.
         """
         return self._text_area
 
@@ -1988,7 +1988,7 @@ class ChatInput(Vertical):
         """Toggle input focus state (e.g., unfocus while agent is working).
 
         Args:
-            active: Whether the input should be focused and accepting input.
+        active: Whether the input should be focused and accepting input.
         """
         if self._text_area:
             self._text_area.set_app_focus(has_focus=active)
@@ -1997,7 +1997,7 @@ class ChatInput(Vertical):
         """Exit the current input mode (command/shell) back to normal.
 
         Returns:
-            True if mode was non-normal and has been reset.
+        True if mode was non-normal and has been reset.
         """
         if self.mode == "normal":
             return False
@@ -2020,7 +2020,7 @@ class ChatInput(Vertical):
         """Dismiss completion: clear view and reset controller state.
 
         Returns:
-            True if completion was active and has been dismissed.
+        True if completion was active and has been dismissed.
         """
         if not self._current_suggestions:
             return False

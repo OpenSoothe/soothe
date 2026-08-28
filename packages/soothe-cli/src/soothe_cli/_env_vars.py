@@ -1,24 +1,4 @@
-"""Canonical registry of `SOOTHE_CLI_*` environment variables.
-
-Every env var the CLI reads whose name starts with `SOOTHE_CLI_` must
-be defined here as a module-level constant.  An env-var coverage test
-fails when a bare string literal like `"SOOTHE_CLI_FOO"` appears in
-source code instead of a constant imported from this module.
-
-Import the short-name constants (e.g. `AUTO_UPDATE`, `DEBUG`) and pass them
-to `os.environ.get()` instead of using raw string literals. If the env var is
-ever renamed, only the value here changes.
-
-!!! note
-
-    `resolve_env_var` also supports a dynamic prefix override for API keys
-    and provider credentials: setting `SOOTHE_CLI_{NAME}` takes priority
-    over `{NAME}`.  For example, `SOOTHE_CLI_OPENAI_API_KEY` overrides
-    `OPENAI_API_KEY`. Only call sites that use `resolve_env_var` benefit from
-    this -- direct `os.environ.get` lookups (like the constants below) do not.
-    Dynamic overrides are not listed here because they mirror third-party
-    variable names.
-"""
+"""Canonical registry of `SOOTHE_CLI_*` environment variables."""
 
 from __future__ import annotations
 
@@ -69,12 +49,12 @@ OMIT_WORKSPACE = "SOOTHE_CLI_OMIT_WORKSPACE"
 
 
 def resolve_cli_loop_workspace() -> str | None:
-    """Return the workspace path to send on ``loop_new``, or ``None`` to omit it.
+    """Return the workspace path to send on `loop_new`, or `None` to omit it.
 
-    By default sends ``cwd``. The daemon ignores host paths that are not present
+    By default sends `cwd`. The daemon ignores host paths that are not present
     on the daemon filesystem (falls back to persisted layout) unless
-    ``workspace_mount`` is configured (RFC-621). ``SOOTHE_CLI_OMIT_WORKSPACE`` is
-    optional — use it only to skip sending ``workspace`` on the wire.
+    `workspace_mount` is configured. `SOOTHE_CLI_OMIT_WORKSPACE` is
+    optional — use it only to skip sending `workspace` on the wire.
     """
     import os
 

@@ -1,4 +1,4 @@
-"""Reconcile filesystem loop directories with ``agentloop_loops`` rows."""
+"""Reconcile filesystem loop directories with `agentloop_loops` rows."""
 
 from __future__ import annotations
 
@@ -18,14 +18,14 @@ async def reconcile_orphan_loop_directories(
     *,
     limit: int = 200,
 ) -> int:
-    """Delete ``data/loops/{loop_id}/`` trees with no matching DB row.
+    """Delete `data/loops/{loop_id}/` trees with no matching DB row.
 
     Args:
-        persistence_manager: Daemon persistence manager with ``list_loops``.
-        limit: Maximum orphan directories to delete per invocation.
+    persistence_manager: Daemon persistence manager with `list_loops`.
+    limit: Maximum orphan directories to delete per invocation.
 
     Returns:
-        Number of directories removed.
+    Number of directories removed.
     """
     loops_dir = PersistenceDirectoryManager.get_loops_directory()
     if not loops_dir.is_dir():

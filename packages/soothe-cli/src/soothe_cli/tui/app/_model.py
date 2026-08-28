@@ -38,7 +38,7 @@ class _ModelMixin:
         """Show interactive model selector as a modal screen.
 
         Args:
-            extra_kwargs: Extra constructor kwargs from `--model-params`.
+        extra_kwargs: Extra constructor kwargs from `--model-params`.
         """
         from functools import partial
 
@@ -307,7 +307,7 @@ class _ModelMixin:
         """Submit an autopilot job via WebSocket (like CLI `soothe autopilot submit`).
 
         Args:
-            task: Task description for autonomous execution.
+        task: Task description for autonomous execution.
         """
         from soothe_client import (
             async_command_client_from_config,
@@ -351,11 +351,11 @@ class _ModelMixin:
             await self._mount_message(ErrorMessage("No goal_id returned from daemon"))
 
     async def _submit_cron_job(self, text: str, *, slash_input: str | None = None) -> None:
-        """Submit a cron job via WebSocket (like CLI ``soothe cron add``).
+        """Submit a cron job via WebSocket (like CLI `soothe cron add`).
 
         Args:
-            text: Natural language schedule and task description.
-            slash_input: Original slash command for chat display.
+        text: Natural language schedule and task description.
+        slash_input: Original slash command for chat display.
         """
         from soothe_client import (
             async_command_client_from_config,
@@ -443,13 +443,13 @@ class _ModelMixin:
         self.push_screen(screen, handle_result)
 
     async def _resume_loop_via_daemon(self, loop_id: str) -> None:
-        """Resume a loop by subscribing to daemon events (RFC-503).
+        """Resume a loop by subscribing to daemon events.
 
-        Similar to continuing a loop in the CLI, but uses ``loop_subscribe`` RPC to attach
+        Similar to continuing a loop in the CLI, but uses `loop_subscribe` RPC to attach
         to the loop's event stream.
 
         Args:
-            loop_id: The loop ID to resume/attach.
+        loop_id: The loop ID to resume/attach.
         """
         if not self._daemon_session:
             await self._mount_message(AppMessage("Cannot switch loops: no daemon connection"))
@@ -546,9 +546,9 @@ class _ModelMixin:
         """Update the welcome banner when the banner is mounted.
 
         Args:
-            loop_id: Active loop id to display on the banner.
-            missing_message: Log message template when banner is missing.
-            warn_if_missing: Whether to log missing-banner cases at warning level.
+        loop_id: Active loop id to display on the banner.
+        missing_message: Log message template when banner is missing.
+        warn_if_missing: Whether to log missing-banner cases at warning level.
         """
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
@@ -576,7 +576,7 @@ class _ModelMixin:
         self._router_profile_override = None
 
     def _clear_loop_session_overrides(self) -> None:
-        """Clear per-loop ``/model`` and ``/model-router`` session overrides."""
+        """Clear per-loop `/model` and `/model-router` session overrides."""
         self._clear_loop_model_override()
         self._clear_loop_router_profile_override()
 
@@ -584,7 +584,7 @@ class _ModelMixin:
         """Set the loop-scoped router profile override.
 
         Args:
-            profile_name: Name from daemon ``router_profiles``.
+        profile_name: Name from daemon `router_profiles`.
         """
         name = profile_name.strip()
         if not name:
@@ -668,17 +668,17 @@ class _ModelMixin:
     ) -> None:
         """Switch model for the current loop without changing `nano.yml`.
 
-        The override is sent on each websocket ``input`` (resolved on the daemon
-        host). Global ``settings`` and on-disk defaults are not updated; use
-        ``/model --default`` to persist a new default.
+        The override is sent on each websocket `input` (resolved on the daemon
+        host). Global `settings` and on-disk defaults are not updated; use
+        `/model --default` to persist a new default.
 
         Args:
-            model_spec: The model specification to switch to.
+        model_spec: The model specification to switch to.
 
-                Can be in `provider:model` format
-                (e.g., `'anthropic:claude-sonnet-4-5'`) or just the model name
-                for auto-detection.
-            extra_kwargs: Extra constructor kwargs from `--model-params`.
+        Can be in `provider:model` format
+        (e.g., `'anthropic:claude-sonnet-4-5'`) or just the model name
+        for auto-detection.
+        extra_kwargs: Extra constructor kwargs from `--model-params`.
         """
         from soothe_cli.model_config import ModelSpec
         from soothe_cli.settings import detect_provider, settings
@@ -755,7 +755,7 @@ class _ModelMixin:
         future CLI launches use this model. Does not affect the running session.
 
         Args:
-            model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
+        model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
         """
         from soothe_cli.model_config import ModelSpec, save_default_model
         from soothe_cli.settings import detect_provider

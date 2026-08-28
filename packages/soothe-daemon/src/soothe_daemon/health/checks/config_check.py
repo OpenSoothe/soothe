@@ -177,10 +177,10 @@ async def check_config(config: SootheConfig | None = None) -> CategoryResult:
     """Check configuration format and values.
 
     Args:
-        config: SootheConfig instance to check
+    config: SootheConfig instance to check
 
     Returns:
-        CategoryResult with config check results
+    CategoryResult with config check results
     """
     checks = [
         _check_config_file(config),

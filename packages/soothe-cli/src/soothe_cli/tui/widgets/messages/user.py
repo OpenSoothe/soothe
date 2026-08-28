@@ -41,8 +41,8 @@ class UserMessage(Static):
         """Initialize a user message.
 
         Args:
-            content: The message content
-            **kwargs: Additional arguments passed to parent
+        content: The message content
+        **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
         self._content = content
@@ -56,7 +56,7 @@ class UserMessage(Static):
         """Render the styled user message with role indicator.
 
         Returns:
-            Styled Content with role header, mode prefix, and highlighted mentions.
+        Styled Content with role header, mode prefix, and highlighted mentions.
         """
         colors = theme.get_theme_colors(self)
         parts: list[str | tuple[str, str]] = []
@@ -133,8 +133,8 @@ class QueuedUserMessage(Static):
         """Initialize a queued user message.
 
         Args:
-            content: The message content
-            **kwargs: Additional arguments passed to parent
+        content: The message content
+        **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
         self._content = content
@@ -156,7 +156,7 @@ class QueuedUserMessage(Static):
         """Render the queued user message (greyed out).
 
         Returns:
-            Styled Content with dimmed prefix and body matching the welcome banner.
+        Styled Content with dimmed prefix and body matching the welcome banner.
         """
         content = self._content
         colors = theme.get_theme_colors(self)

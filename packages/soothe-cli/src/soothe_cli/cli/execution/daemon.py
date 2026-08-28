@@ -1,8 +1,4 @@
-"""Daemon-based execution for headless mode.
-
-Uses EventProcessor with HeadlessCliRenderer (stdout: loop-tagged answers only).
-Session lifecycle goes through ``soothe_client.appkit.DaemonSession``.
-"""
+"""Daemon-based execution for headless mode."""
 
 from __future__ import annotations
 
@@ -55,13 +51,13 @@ async def _send_cancel_to_daemon(session: DaemonSession) -> None:
 
 
 def _parse_cron_slash_prompt(prompt: str) -> str | None:
-    """Return natural-language cron text if ``prompt`` is a ``/cron`` slash command.
+    """Return natural-language cron text if `prompt` is a `/cron` slash command.
 
     Args:
-        prompt: User input (e.g. ``/cron in 1 hour remind me to deploy``).
+    prompt: User input (e.g. `/cron in 1 hour remind me to deploy`).
 
     Returns:
-        Text after ``/cron``, or ``None`` if not a cron slash command.
+    Text after `/cron`, or `None` if not a cron slash command.
     """
     stripped = prompt.strip()
     if not stripped.lower().startswith("/cron"):
@@ -76,7 +72,7 @@ async def _run_headless_session_once(
     *,
     resume_loop_id: str | None = None,
 ) -> tuple[int, bool]:
-    """Run one headless daemon session; return ``(exit_code, retry_on_worker_loss)``."""
+    """Run one headless daemon session; return `(exit_code, retry_on_worker_loss)`."""
     # Track whether the daemon was notified of cancellation.
     cancel_sent = False
     sigint_received = False

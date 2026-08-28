@@ -1,9 +1,4 @@
-"""Lazy bootstrap: dotenv loading and start-path detection.
-
-Deferred until first access of ``settings`` (via module ``__getattr__``).
-This avoids disk I/O and path traversal during import for callers that
-never touch ``settings`` (e.g. ``Soothe --help``).
-"""
+"""Lazy bootstrap: dotenv loading and start-path detection."""
 
 from __future__ import annotations
 
@@ -33,10 +28,10 @@ def _find_dotenv_from_start_path(start_path: Path) -> Path | None:
     """Find the nearest `.env` file from an explicit start path upward.
 
     Args:
-        start_path: Directory to start searching from.
+    start_path: Directory to start searching from.
 
     Returns:
-        Path to the nearest `.env` file, or `None` if not found.
+    Path to the nearest `.env` file, or `None` if not found.
     """
     current = start_path.expanduser().resolve()
     for parent in [current, *list(current.parents)]:
@@ -70,20 +65,20 @@ def _load_dotenv(*, start_path: Path | None = None) -> bool:
     Because project loads first, the effective precedence is:
 
     ```text
-    shell env (incl. inline `VAR=x`)  >  project `.env`  >  global `.env`
+    shell env (incl. inline `VAR=x`) > project `.env` > global `.env`
     ```
 
     !!! note
 
-        To scope credentials to the CLI without colliding with
-        identically-named shell exports, use the `SOOTHE_` env-var
-        prefix (see `resolve_env_var` in `soothe.model_config`).
+    To scope credentials to the CLI without colliding with
+    identically-named shell exports, use the `SOOTHE_` env-var
+    prefix (see `resolve_env_var` in `soothe.model_config`).
 
     Args:
-        start_path: Directory to use for project `.env` discovery.
+    start_path: Directory to use for project `.env` discovery.
 
     Returns:
-        `True` when at least one dotenv file was loaded, `False` otherwise.
+    `True` when at least one dotenv file was loaded, `False` otherwise.
     """
     import dotenv
 

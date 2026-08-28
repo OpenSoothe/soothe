@@ -31,13 +31,13 @@ async def _cancel_and_detach_loop(daemon: Any, loop_id: str) -> None:
 
 
 async def _collect_loop_thread_ids(daemon: Any, loop_id: str) -> list[str]:
-    """Find all thread ids belonging to ``loop_id`` for GC deletion.
+    """Find all thread ids belonging to `loop_id` for GC deletion.
 
     Per, loop metadata no longer indexes fork threads. The main thread
-    is the bare ``loop_id``; every fork (execute-step, synth, intake) shares
-    the ``{loop_id}__`` prefix. Query the LangGraph checkpoint tables directly
+    is the bare `loop_id`; every fork (execute-step, synth, intake) shares
+    the `{loop_id}__` prefix. Query the LangGraph checkpoint tables directly
     (the durability index does not register fork threads). Falls back to
-    ``[loop_id]`` when the runner or checkpoint scan is unavailable.
+    `[loop_id]` when the runner or checkpoint scan is unavailable.
     """
     runner = getattr(daemon, "_runner", None)
     if runner is None:
@@ -83,7 +83,7 @@ async def _delete_loop_threads(daemon: Any, thread_ids: list[str]) -> None:
 
 
 async def _delete_loop_filesystem(loop_id: str) -> None:
-    """Remove loop-scoped data under ``data/loops/{loop_id}`` (not workspace sandboxes)."""
+    """Remove loop-scoped data under `data/loops/{loop_id}` (not workspace sandboxes)."""
     loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
     if loop_dir.exists():
         shutil.rmtree(loop_dir)
@@ -94,18 +94,18 @@ async def purge_loop_execution_data(daemon: Any, loop_id: str, metadata: dict[st
     """Remove execution persistence for a loop; keep workspace directories.
 
     Args:
-        daemon: ``SootheDaemon`` instance.
-        loop_id: Loop identifier.
-        metadata: Loop metadata dict (thread ids, status).
+    daemon: `SootheDaemon` instance.
+    loop_id: Loop identifier.
+    metadata: Loop metadata dict (thread ids, status).
 
     Returns:
-        True if purge completed, False if skipped (e.g. still running).
+    True if purge completed, False if skipped (e.g. still running).
 
-    The purge gate is liveness-aware: a row still marked ``status="running"``
+    The purge gate is liveness-aware: a row still marked `status="running"`
     is only protected when an active runner can be confirmed for the loop.
     This reclaims zombie loops whose persisted status was never flipped to
-    ``idle`` because the runner died without a teardown hook. The liveness
-    check mirrors ``auto_resume._loop_has_active_runner``.
+    `idle` because the runner died without a teardown hook. The liveness
+    check mirrors `auto_resume._loop_has_active_runner`.
     """
     from soothe_daemon.runtime.auto_resume import _loop_has_active_runner
 
@@ -123,7 +123,7 @@ async def purge_loop_execution_data(daemon: Any, loop_id: str, metadata: dict[st
 
 
 async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] | None) -> None:
-    """Full loop deletion (same persistence teardown as ``loop_delete`` RPC)."""
+    """Full loop deletion (same persistence teardown as `loop_delete` RPC)."""
     try:
         await daemon._query_engine.cancel_loop(loop_id)
     except Exception:

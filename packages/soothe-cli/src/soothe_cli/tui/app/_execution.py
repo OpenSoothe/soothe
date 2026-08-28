@@ -61,11 +61,11 @@ _TOOL_APPROVAL_ACTIONS = frozenset({"Approve", "Reject", "Edit"})
 def clarification_wire_content(answers: list[str], *, origin_node: str = "") -> str:
     """Human-readable turn content for a clarification submit (not a new goal).
 
-    Option-selector actions use a stable ``<prefix>: …`` header so a dropped
-    ``clarification_answer`` flag cannot turn a bare action into Pass1 TASK.
-    Plan review → ``Plan review:`` (Refine carries refinement text in
-    ``answers[1]``). Tool approval → ``Tool approval:`` (Edit carries revised
-    instructions in ``answers[1]``). When ``origin_node`` is empty (legacy
+    Option-selector actions use a stable `<prefix>: …` header so a dropped
+    `clarification_answer` flag cannot turn a bare action into Pass1 TASK.
+    Plan review → `Plan review:` (Refine carries refinement text in
+    `answers[1]`). Tool approval → `Tool approval:` (Edit carries revised
+    instructions in `answers[1]`). When `origin_node` is empty (legacy
     callers) the action label alone selects the prefix, preserving the safety
     net for any selector-origin submit.
     """
@@ -96,8 +96,8 @@ class _ExecutionMixin:
         """Route a message to the appropriate handler based on mode.
 
         Args:
-            value: The message text to process.
-            mode: The input mode that determines message routing.
+        value: The message text to process.
+        mode: The input mode that determines message routing.
         """
         if mode == "shell":
             await self._handle_shell_command(value.removeprefix("!"))
@@ -119,7 +119,7 @@ class _ExecutionMixin:
         """Schedule the startup prompt or skill after the next refresh.
 
         Returns:
-            `True` when a startup submission was queued, `False` otherwise.
+        `True` when a startup submission was queued, `False` otherwise.
         """
         if not self._has_initial_submission():
             return False
@@ -158,10 +158,10 @@ class _ExecutionMixin:
         """Check if a slash command can skip the message queue.
 
         Args:
-            value: The lowered, stripped command string (e.g. `/model`).
+        value: The lowered, stripped command string (e.g. `/model`).
 
         Returns:
-            `True` if the command should bypass the busy-state queue.
+        `True` if the command should bypass the busy-state queue.
         """
         from soothe_cli.commands.command_registry import (
             BYPASS_WHEN_CONNECTING,
@@ -243,11 +243,11 @@ class _ExecutionMixin:
     ) -> None:
         """Forward a HITL clarification answer to the daemon and refresh the step card.
 
-        Wired to ``ClarificationInputMessage.Submitted`` (RFC-622). The inline
+        Wired to `ClarificationInputMessage.Submitted`. The inline
         widget collects per-question answers; here we render them on the
         matching step card and trigger the standard turn pipeline with the
-        answer text. ``execute_task_textual`` reads ``adapter._clarification_pending``
-        and attaches ``clarification_answer=True`` to the wire so the daemon
+        answer text. `execute_task_textual` reads `adapter._clarification_pending`
+        and attaches `clarification_answer=True` to the wire so the daemon
         resumes the suspended loop graph rather than starting a new turn.
         """
         event.stop()
@@ -262,10 +262,10 @@ class _ExecutionMixin:
         self,
         event: StructuredAskUserWidget.Submitted,
     ) -> None:
-        """Forward structured ``ask_user`` answers to the daemon (RFC-622 §9c).
+        """Forward structured `ask_user` answers to the daemon.
 
-        Same forwarding pipeline as the HITL handler; ``questions`` are
-        ``QuestionSpec`` dicts here, so extract the question text for the
+        Same forwarding pipeline as the HITL handler; `questions` are
+        `QuestionSpec` dicts here, so extract the question text for the
         step-card rendering.
         """
         event.stop()
@@ -287,10 +287,10 @@ class _ExecutionMixin:
         answers: list[str],
         origin_node: str = "",
     ) -> None:
-        """Shared clarification-answer forwarding (RFC-622).
+        """Shared clarification-answer forwarding.
 
         Renders the answers on the matching step card, disarms stale inline
-        widgets, and hands the answers to ``_send_to_agent`` so the daemon
+        widgets, and hands the answers to `_send_to_agent` so the daemon
         resumes the suspended loop graph with one answer per question
         instead of starting a new turn.
         """
@@ -391,13 +391,13 @@ class _ExecutionMixin:
     async def _resolve_default_clarification_mode(self) -> str:
         """Fetch the daemon's default clarification mode for plan approval.
 
-        Reads ``agent.clarification.default_mode`` from the daemon config via
-        a one-shot WebSocket RPC. Falls back to ``"auto"`` when the daemon is
+        Reads `agent.clarification.default_mode` from the daemon config via
+        a one-shot WebSocket RPC. Falls back to `"auto"` when the daemon is
         unreachable, the section is missing, or the value is not
-        ``auto``/``manual``.
+        `auto`/`manual`.
 
         Returns:
-            Normalized composer mode (``"auto"`` or ``"manual"``).
+        Normalized composer mode (`"auto"` or `"manual"`).
         """
         from soothe_cli.tui.composer_mode import normalize_composer_mode
 
@@ -428,13 +428,13 @@ class _ExecutionMixin:
     async def _seed_composer_mode_from_daemon(self) -> None:
         """Seed the composer mode from the daemon's configured default.
 
-        When the operator did not pass ``--mode`` explicitly, the TUI badge
-        must reflect ``agent.clarification.default_mode`` from the daemon
-        config (e.g. ``manual``) rather than a hard-coded ``auto``. This runs
+        When the operator did not pass `--mode` explicitly, the TUI badge
+        must reflect `agent.clarification.default_mode` from the daemon
+        config (e.g. `manual`) rather than a hard-coded `auto`. This runs
         once after the daemon is ready so subsequent turns send the correct
-        ``clarification_mode`` wire field.
+        `clarification_mode` wire field.
 
-        When ``--mode`` was passed, ``CLIConfig.clarification_mode`` is set
+        When `--mode` was passed, `CLIConfig.clarification_mode` is set
         and we keep that choice instead.
         """
         cli_mode = getattr(self._daemon_config, "clarification_mode", None)
@@ -462,7 +462,7 @@ class _ExecutionMixin:
         so the event loop stays free for key events (Esc/Ctrl+C).
 
         Args:
-            command: The shell command to execute.
+        command: The shell command to execute.
         """
         await self._mount_message(UserMessage(f"!{command}"))
         self._shell_running = True
@@ -483,10 +483,10 @@ class _ExecutionMixin:
         `CancelledError` -> kill the process.
 
         Args:
-            command: The shell command to execute.
+        command: The shell command to execute.
 
         Raises:
-            CancelledError: If the command is interrupted by the user.
+        CancelledError: If the command is interrupted by the user.
         """
         try:
             proc = await asyncio.create_subprocess_shell(
@@ -610,8 +610,8 @@ class _ExecutionMixin:
         + clickable link) replaces it after the current task finishes.
 
         Args:
-            command: The raw command text (displayed as user message).
-            cmd: The normalized slash command used to look up the URL.
+        command: The raw command text (displayed as user message).
+        cmd: The normalized slash command used to look up the URL.
         """
         url = _COMMAND_URLS[cmd]
         await asyncio.to_thread(webbrowser.open, url)
@@ -646,11 +646,11 @@ class _ExecutionMixin:
         """Build a status line with the loop id.
 
         Args:
-            prefix: Label before the id (e.g. ``'Resumed loop'``).
-            loop_id: Loop id.
+        prefix: Label before the id (e.g. `'Resumed loop'`).
+        loop_id: Loop id.
 
         Returns:
-            Plain status line.
+        Plain status line.
         """
         return f"{prefix}: {loop_id}"
 
@@ -658,7 +658,7 @@ class _ExecutionMixin:
         """Handle a slash command.
 
         Args:
-            command: The slash command (including /)
+        command: The slash command (including /)
         """
         from soothe_cli.commands.command_router import (
             parse_slash_command,
@@ -923,7 +923,7 @@ class _ExecutionMixin:
         """Handle a `/skill:<name>` command via daemon RPC.
 
         Args:
-            command: The full command string (e.g., `/skill:web-research find X`).
+        command: The full command string (e.g., `/skill:web-research find X`).
         """
         from soothe_cli.commands.command_registry import parse_skill_command
 
@@ -944,7 +944,7 @@ class _ExecutionMixin:
         """Handle a user message to send to the agent.
 
         Args:
-            message: The user's message
+        message: The user's message
         """
         # Mount the user message
         await self._mount_message(UserMessage(message))
@@ -964,9 +964,9 @@ class _ExecutionMixin:
         (e.g., `UserMessage`, `SkillMessage`) before calling this method.
 
         Args:
-            message: The prompt to send to the agent.
-            skip_daemon_send_turn: When using a daemon session, only attach to
-                the in-flight stream (prompt already queued on the daemon).
+        message: The prompt to send to the agent.
+        skip_daemon_send_turn: When using a daemon session, only attach to
+        the in-flight stream (prompt already queued on the daemon).
         """
         # Anchor to bottom so streaming response stays visible
         with suppress(NoMatches, ScreenStackError):
@@ -1011,16 +1011,16 @@ class _ExecutionMixin:
     async def _daemon_loop_is_live(self) -> bool:
         """Return True when the subscribed daemon loop has a live runner now.
 
-        Used to attach with ``skip_daemon_send_turn`` instead of enqueueing a
-        duplicate ``loop_input`` (stale-reader / ghost follow-on goals).
+        Used to attach with `skip_daemon_send_turn` instead of enqueueing a
+        duplicate `loop_input` (stale-reader / ghost follow-on goals).
 
-        The active-runner signal (``active_runner``) is authoritative: a loop's
-        metadata ``status`` field can lag ``"running"`` for up to the 5-minute
+        The active-runner signal (`active_runner`) is authoritative: a loop's
+        metadata `status` field can lag `"running"` for up to the 5-minute
         reconciliation window after its runner exits, so status alone produces
         false positives that leave the TUI attached to a phantom follow-on turn
-        for minutes. When the daemon exposes ``active_runner`` we require it;
+        for minutes. When the daemon exposes `active_runner` we require it;
         only as a fallback for daemons without the field do we fall back to the
-        status check, and even then we treat a ``None`` (unknown) signal as
+        status check, and even then we treat a `None` (unknown) signal as
         not-live to avoid the stale-status hang.
         """
         session = self._daemon_session
@@ -1064,9 +1064,9 @@ class _ExecutionMixin:
         This runs in a Textual worker so the main event loop stays responsive.
 
         Args:
-            message: The prompt to send to the agent.
-            skip_daemon_send_turn: When ``True`` with a daemon session, only
-                consume the daemon stream (prompt already queued server-side).
+        message: The prompt to send to the agent.
+        skip_daemon_send_turn: When `True` with a daemon session, only
+        consume the daemon stream (prompt already queued server-side).
         """
         # Caller ensures _ui_adapter is set (checked in _handle_user_message)
         if self._ui_adapter is None:
@@ -1328,7 +1328,7 @@ class _ExecutionMixin:
         """Attach the TUI reader to an already-running daemon turn.
 
         When a local queue head exists, mount it as the user echo then attach
-        with ``skip_daemon_send_turn`` (prompt already on the daemon). Otherwise
+        with `skip_daemon_send_turn` (prompt already on the daemon). Otherwise
         attach with an empty prompt so activity keeps streaming.
         """
         prompt = ""

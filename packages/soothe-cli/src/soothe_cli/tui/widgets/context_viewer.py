@@ -1,8 +1,4 @@
-"""Context Engine viewer screen for /context command.
-
-Displays token usage, goal DAG, and status for the current loop via the
-daemon session (loop history RPC), plus token usage callbacks from the TUI.
-"""
+"""Context Engine viewer screen for /context command."""
 
 from __future__ import annotations
 
@@ -60,12 +56,12 @@ STATUS_ICONS: dict[str, str] = {
 
 
 def _abbreviate_loop_id(loop_id: str) -> str:
-    """Render loop id in ``prefix...suffix`` form for compact status lines."""
+    """Render loop id in `prefix...suffix` form for compact status lines."""
     return abbreviate_compact_id(loop_id, empty="unknown")
 
 
 def _truncate_text(value: str, *, max_len: int) -> str:
-    """Truncate ``value`` to ``max_len`` characters with ellipsis."""
+    """Truncate `value` to `max_len` characters with ellipsis."""
     normalized = value.strip()
     if max_len <= 3:
         return normalized[:max_len]
@@ -75,7 +71,7 @@ def _truncate_text(value: str, *, max_len: int) -> str:
 
 
 def _abbreviate_goal_id(goal_id: str) -> str:
-    """Render verbose goal ids in compact ``prefix...suffix`` form."""
+    """Render verbose goal ids in compact `prefix...suffix` form."""
     raw = str(goal_id or "").strip()
     if len(raw) <= 14:
         return raw
@@ -83,7 +79,7 @@ def _abbreviate_goal_id(goal_id: str) -> str:
 
 
 def _join_with_wrap(segments: list[str], *, width: int, prefix: str = "  ") -> list[str]:
-    """Join segments into wrapped status lines using `` | `` separators."""
+    """Join segments into wrapped status lines using ` | ` separators."""
     if not segments:
         return [prefix.rstrip()]
     max_width = max(28, width)
@@ -357,11 +353,11 @@ class ContextViewerScreen(ModalScreen[None]):
         """Initialize the ContextViewerScreen.
 
         Args:
-            loop_id: Current loop ID to read goal / token context for.
-            daemon_session: Active TUI daemon session used to fetch goal history.
-            load_token_snapshot: Optional async callback to refresh token usage.
-            initial_token_snapshot: Seed token snapshot before the first refresh.
-            **kwargs: Passed to parent.
+        loop_id: Current loop ID to read goal / token context for.
+        daemon_session: Active TUI daemon session used to fetch goal history.
+        load_token_snapshot: Optional async callback to refresh token usage.
+        initial_token_snapshot: Seed token snapshot before the first refresh.
+        **kwargs: Passed to parent.
         """
         super().__init__()
         self._loop_id = loop_id or "unknown"
@@ -404,7 +400,7 @@ class ContextViewerScreen(ModalScreen[None]):
         self.dismiss(None)
 
     def _scroll(self, *, delta: int) -> None:
-        """Scroll the goal list by ``delta`` lines."""
+        """Scroll the goal list by `delta` lines."""
         body = self.query_one(ScrollableContainer)
         body.scroll_relative(y=delta, animate=False)
 

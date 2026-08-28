@@ -7,12 +7,12 @@ def format_duration(seconds: float) -> str:
     """Format a completed duration in seconds into a human-readable string.
 
     Args:
-        seconds: Duration in seconds.
+    seconds: Duration in seconds.
 
     Returns:
-        Formatted string like ``5s``, ``2.3s``, ``5m 12s``, or ``1h 23m 4s``.
-        For live running timers that tick in whole seconds, use
-        :func:`format_running_elapsed` instead.
+    Formatted string like `5s`, `2.3s`, `5m 12s`, or `1h 23m 4s`.
+    For live running timers that tick in whole seconds, use
+    :func:`format_running_elapsed` instead.
     """
     rounded = round(seconds, 1)
     if rounded < 60:  # noqa: PLR2004
@@ -27,12 +27,12 @@ def format_duration(seconds: float) -> str:
 
 
 def format_running_elapsed(seconds: float) -> str:
-    """Format a live running timer using whole-second ticks (e.g. ``20s``, ``1m 5s``)."""
+    """Format a live running timer using whole-second ticks (e.g. `20s`, `1m 5s`)."""
     return format_duration(float(max(0, int(seconds))))
 
 
 def format_running_elapsed_compact(seconds: float) -> str:
-    """Compact live elapsed for step titles (e.g. ``20s``, ``1m5s`` — no spaces)."""
+    """Compact live elapsed for step titles (e.g. `20s`, `1m5s` — no spaces)."""
     return format_running_elapsed(seconds).replace(" ", "")
 
 
@@ -43,10 +43,10 @@ def format_duration_ms(milliseconds: int) -> str:
     reuse :func:`format_duration` (seconds, minutes, hours).
 
     Args:
-        milliseconds: Elapsed time in milliseconds (negative values are treated as 0).
+    milliseconds: Elapsed time in milliseconds (negative values are treated as 0).
 
     Returns:
-        Strings such as ``\"0ms\"``, ``\"240ms\"``, ``\"1.5s\"``, or ``\"2m 15s\"``.
+    Strings such as `\"0ms\"`, `\"240ms\"`, `\"1.5s\"`, or `\"2m 15s\"`.
     """
     ms = max(0, int(milliseconds))
     if ms < 1000:  # noqa: PLR2004

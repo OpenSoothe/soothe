@@ -136,7 +136,7 @@ def _detect_charset_mode() -> CharsetMode:
     """Auto-detect terminal charset capabilities.
 
     Returns:
-        The detected CharsetMode based on environment and terminal encoding.
+    The detected CharsetMode based on environment and terminal encoding.
     """
     env_mode = os.environ.get("UI_CHARSET_MODE", "auto").lower()
     if env_mode == "unicode":
@@ -158,7 +158,7 @@ def get_glyphs() -> Glyphs:
     """Get the glyph set for the current charset mode.
 
     Returns:
-        The appropriate Glyphs instance based on charset mode detection.
+    The appropriate Glyphs instance based on charset mode detection.
     """
     global _glyphs_cache  # noqa: PLW0603  # Module-level cache requires global statement
     if _glyphs_cache is not None:
@@ -176,7 +176,7 @@ def is_ascii_mode() -> bool:
     both `_detect_charset_mode` and `CharsetMode`.
 
     Returns:
-        `True` when the detected charset mode is ASCII.
+    `True` when the detected charset mode is ASCII.
     """
     return _detect_charset_mode() == CharsetMode.ASCII
 
@@ -188,7 +188,7 @@ def newline_shortcut() -> str:
     as the most reliable cross-terminal shortcut.
 
     Returns:
-        A human-readable shortcut string, e.g. `'Option+Enter'` or `'Ctrl+J'`.
+    A human-readable shortcut string, e.g. `'Option+Enter'` or `'Ctrl+J'`.
     """
     return "Option+Enter" if sys.platform == "darwin" else "Ctrl+J"
 
@@ -214,7 +214,7 @@ def get_banner() -> str:
     """Get the appropriate banner for the current charset mode.
 
     Returns:
-        The text art banner string (Unicode or ASCII based on charset mode).
+    The text art banner string (Unicode or ASCII based on charset mode).
     """
     if _detect_charset_mode() == CharsetMode.ASCII:
         return _ASCII_BANNER

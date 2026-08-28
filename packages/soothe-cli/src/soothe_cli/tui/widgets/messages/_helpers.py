@@ -32,7 +32,7 @@ def _get_tui_refresh_interval_ms() -> int:
     """Get the TUI refresh interval from environment or default.
 
     Returns:
-        Minimum interval between refreshes in milliseconds.
+    Minimum interval between refreshes in milliseconds.
     """
     global _global_refresh_interval_ms
     if _global_refresh_interval_ms is not None:
@@ -56,10 +56,10 @@ def _should_refresh_now(last_refresh_time: float | None) -> bool:
     """Check if enough time has passed since last refresh for throttling.
 
     Args:
-        last_refresh_time: Monotonic time of last refresh, or None if never refreshed.
+    last_refresh_time: Monotonic time of last refresh, or None if never refreshed.
 
     Returns:
-        True if refresh should proceed, False if throttled.
+    True if refresh should proceed, False if throttled.
     """
     if last_refresh_time is None:
         return True
@@ -88,7 +88,7 @@ def request_deferred_tools_refresh(widget: Any) -> None:
 
 
 def flush_deferred_tools_refreshes(*, force: bool = False) -> None:
-    """Repaint queued tool cards (global budget unless ``force``)."""
+    """Repaint queued tool cards (global budget unless `force`)."""
     global _global_tools_list_refresh_at
     pending = list(_DEFERRED_TOOL_REFRESH_WIDGETS)
     if not pending:
@@ -127,10 +127,10 @@ def _is_widget_animation_visible(widget: object) -> bool:
 def _display_width(text: str) -> int:
     """Terminal display width of *text* (wide chars count as 2 columns).
 
-    Thin wrapper over ``termaid.utils.display_width`` so prefix/gutter math
-    does not each need a lazy import. Falls back to ``len()`` if termaid is
+    Thin wrapper over `termaid.utils.display_width` so prefix/gutter math
+    does not each need a lazy import. Falls back to `len()` if termaid is
     unavailable (e.g. minimal test environments), matching the fallback in
-    ``soothe_cli.display.tool_display.display_width``.
+    `soothe_cli.display.tool_display.display_width`.
     """
     try:
         from termaid.utils import display_width as _dw
@@ -196,8 +196,8 @@ def _card_prefix_width(glyph_override: str | None = None) -> int:
 
     Every body line and tree-branch line must left-align at the right side of
     this prefix, so card content never extends left of the header text. In
-    ASCII mode the prefix is ``"[*] "`` (4 cols) while the tree gutter glyph
-    ``"L"`` is only 1 col; the body gutter is padded to close that gap.
+    ASCII mode the prefix is `"[*] "` (4 cols) while the tree gutter glyph
+    `"L"` is only 1 col; the body gutter is padded to close that gap.
     """
     glyph = glyph_override or get_glyphs().tool_prefix
     return _display_width(glyph) + 1  # +1 for the trailing space
@@ -206,9 +206,9 @@ def _card_prefix_width(glyph_override: str | None = None) -> int:
 def _card_body_gutter(glyph_override: str | None = None) -> str:
     """Body/tree-branch gutter aligned to the right of the card prefix dot.
 
-    The tree glyph (``⎿`` / ``L``) stays at the left edge of the prefix column;
+    The tree glyph (`⎿` / `L`) stays at the left edge of the prefix column;
     trailing spaces pad the gutter so its display width equals the header
-    prefix width (``glyph + " "``). That makes every card line and tree branch
+    prefix width (`glyph + " "`). That makes every card line and tree branch
     start at the right side of the dot space.
     """
     g = get_glyphs()
@@ -226,9 +226,9 @@ def _card_item_indent(
     """Plain-space indent for activity item rows (no tree glyph).
 
     Item rows under a section (tool rows, todo items, notes, "+N more") sit at
-    the card header prefix width plus ``extra_indent`` columns — aligned with
+    the card header prefix width plus `extra_indent` columns — aligned with
     the right side of the dot space so they never extend left of the title
-    text, and indented under the section's ``⎿`` label.
+    text, and indented under the section's `⎿` label.
     """
     prefix_width = _card_prefix_width(glyph_override)
     return f"{' ' * max(0, prefix_width + extra_indent)}"
@@ -251,15 +251,15 @@ def _assemble_card_header(
     :func:`_card_body_gutter`, which aligns to the right of the card prefix dot.
 
     Args:
-        widget: Mounted widget (or any object accepted by ``get_theme_colors``).
-        body_part: Header text (goal, step description, etc.).
-        status: Card lifecycle phase for glyph color/shape.
-        accent: Optional override tone for the glyph (e.g. skill/error accent).
-        spinner_position: Toggles gray flash while ``animate_running`` is true.
-        animate_running: Flash the glyph gray while running (step/task/assistant cards).
+    widget: Mounted widget (or any object accepted by `get_theme_colors`).
+    body_part: Header text (goal, step description, etc.).
+    status: Card lifecycle phase for glyph color/shape.
+    accent: Optional override tone for the glyph (e.g. skill/error accent).
+    spinner_position: Toggles gray flash while `animate_running` is true.
+    animate_running: Flash the glyph gray while running (step/task/assistant cards).
 
     Returns:
-        Assembled ``Content`` for a ``Static`` header.
+    Assembled `Content` for a `Static` header.
     """
     try:
         colors = theme.get_theme_colors(widget)
@@ -282,11 +282,11 @@ def _mode_color(mode: str | None, widget_or_app: object | None = None) -> str:
     """Return the hex color string for a mode, falling back to primary.
 
     Args:
-        mode: Mode name (e.g. `'shell'`, `'command'`) or `None`.
-        widget_or_app: Textual widget or `App` for theme-aware lookup.
+    mode: Mode name (e.g. `'shell'`, `'command'`) or `None`.
+    widget_or_app: Textual widget or `App` for theme-aware lookup.
 
     Returns:
-        Color string from the active theme's `ThemeColors`.
+    Color string from the active theme's `ThemeColors`.
     """
     colors = theme.get_theme_colors(widget_or_app)
     if not mode:
@@ -309,10 +309,10 @@ def _strip_success_exit_line(text: str) -> str:
     Non-zero exit codes are left intact (they come through `set_error`).
 
     Args:
-        text: Raw tool output string.
+    text: Raw tool output string.
 
     Returns:
-        Text with the success exit-code trailer removed, if present.
+    Text with the success exit-code trailer removed, if present.
     """
     return _SUCCESS_EXIT_RE.sub("", text)
 

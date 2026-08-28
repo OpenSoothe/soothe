@@ -155,18 +155,18 @@ class EventBus:
     they've subscribed to.
 
     Topic format:
-        ``loop:{loop_id}`` — primary; client subscriptions and daemon ``_broadcast``
-        scoped delivery.
-        ``global`` — daemon-wide frames (e.g. some status, command_response).
+    `loop:{loop_id}` — primary; client subscriptions and daemon `_broadcast`
+    scoped delivery.
+    `global` — daemon-wide frames (e.g. some status, command_response).
 
     Example (loop-scoped):
-        >>> bus = EventBus()
-        >>> queue = asyncio.Queue()
-        >>> await bus.subscribe("loop:abc123", queue)
-        >>> await bus.publish("loop:abc123", {"type": "event", "loop_id": "abc123"})
-        >>> event = await queue.get()
-        >>> print(event["loop_id"])
-        abc123
+    >>> bus = EventBus()
+    >>> queue = asyncio.Queue()
+    >>> await bus.subscribe("loop:abc123", queue)
+    >>> await bus.publish("loop:abc123", {"type": "event", "loop_id": "abc123"})
+    >>> event = await queue.get()
+    >>> print(event["loop_id"])
+    abc123
     """
 
     def __init__(
@@ -177,7 +177,7 @@ class EventBus:
         """Initialize the event bus with lock-free publish (Phase 2).
 
         Args:
-            event_size_stats: Optional collector for streaming wire-size stats.
+        event_size_stats: Optional collector for streaming wire-size stats.
         """
         # Regular dict (atomic read, no lock needed)
         self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {}
@@ -207,9 +207,9 @@ class EventBus:
         - LOW events: Silent drop when queue near capacity (80%)
 
         Args:
-            topic: Topic identifier (e.g., "loop:abc123")
-            event: Event dictionary to broadcast
-            event_meta: Optional EventMeta for filtering and priority
+        topic: Topic identifier (e.g., "loop:abc123")
+        event: Event dictionary to broadcast
+        event_meta: Optional EventMeta for filtering and priority
         """
         if self._event_size_stats is not None:
             self._event_size_stats.record_event_dict(event)
@@ -330,8 +330,8 @@ class EventBus:
         """Subscribe queue to receive events for topic with write lock (Phase 2).
 
         Args:
-            topic: Topic identifier to subscribe to
-            queue: AsyncIO queue to receive events
+        topic: Topic identifier to subscribe to
+        queue: AsyncIO queue to receive events
         """
         # Write lock for subscribe (writer operation) - Phase 2
         async with self._write_lock:
@@ -345,8 +345,8 @@ class EventBus:
         """Unsubscribe queue from topic with write lock (Phase 2).
 
         Args:
-            topic: Topic identifier to unsubscribe from
-            queue: Queue to remove from subscribers
+        topic: Topic identifier to unsubscribe from
+        queue: Queue to remove from subscribers
         """
         # Write lock for unsubscribe (writer operation) - Phase 2
         async with self._write_lock:
@@ -361,7 +361,7 @@ class EventBus:
         """Unsubscribe queue from all topics with write lock (Phase 2).
 
         Args:
-            queue: Queue to remove from all subscribers
+        queue: Queue to remove from all subscribers
         """
         # Write lock for unsubscribe_all (writer operation) - Phase 2
         async with self._write_lock:
@@ -383,7 +383,7 @@ class EventBus:
         removed during unsubscribe (e.g., due to race conditions or early disconnects).
 
         Returns:
-            Number of orphaned topics removed.
+        Number of orphaned topics removed.
         """
         async with self._write_lock:
             orphaned = [topic for topic, queues in self._subscribers.items() if not queues]
@@ -398,10 +398,10 @@ class EventBus:
         """Return number of subscribers for a topic (no lock needed, atomic read).
 
         Args:
-            topic: Topic identifier.
+        topic: Topic identifier.
 
         Returns:
-            Number of active subscriber queues for the topic.
+        Number of active subscriber queues for the topic.
         """
         return len(self._subscribers.get(topic, set()))
 

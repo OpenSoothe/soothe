@@ -1,12 +1,4 @@
-"""Slash command handlers for CLI and TUI (RFC-454).
-
-Unified command registry with metadata-based routing:
-- CLI-only commands: handled locally
-- Daemon RPC commands: structured data rendering
-- Daemon routing commands: behavior indicators
-
-This module provides the COMMANDS registry and rendering functions.
-"""
+"""Slash command handlers for CLI and TUI."""
 
 from __future__ import annotations
 
@@ -127,7 +119,7 @@ def show_review(console: Console, data: dict[str, Any]) -> None:
 
 
 def show_cron_add(console: Console, data: dict[str, Any]) -> None:
-    """Render cron job creation response from daemon RPC (RFC-229)."""
+    """Render cron job creation response from daemon RPC."""
     job = data.get("cron_add", {})
     if not job:
         console.print("[dim]No job created.[/dim]")

@@ -1,8 +1,4 @@
-"""Client connection handling for the daemon.
-
-Heavy logic lives in ``message_router`` and ``query_engine``; this mixin wires
-transport entrypoints and the input queue loop.
-"""
+"""Client connection handling for the daemon."""
 
 from __future__ import annotations
 
@@ -46,7 +42,7 @@ logger = logging.getLogger(__name__)
 class DaemonHandlersMixin:
     """Client connection handling and query execution mixin.
 
-    Mixed into ``SootheDaemon`` -- all ``self.*`` attributes are defined
+    Mixed into `SootheDaemon` -- all `self.*` attributes are defined
     on the concrete class.
     """
 
@@ -111,12 +107,12 @@ class DaemonHandlersMixin:
         await self._message_router.dispatch(client_id, msg)
 
     async def _process_loop_input_message(self, loop_id: str, msg: dict[str, Any]) -> None:
-        """Process one loop-scoped message from ``LoopInputDispatcher``.
+        """Process one loop-scoped message from `LoopInputDispatcher`.
 
-        Supported ``msg["type"]`` values for user turns: ``input`` (normalized queue
-        payload from ``loop_input`` RPC) or ``loop_input`` (wire-shaped dict with
-        ``content``). Other types are ignored with a warning except ``command`` and
-        ``command_request``, which are handled above.
+        Supported `msg["type"]` values for user turns: `input` (normalized queue
+        payload from `loop_input` RPC) or `loop_input` (wire-shaped dict with
+        `content`). Other types are ignored with a warning except `command` and
+        `command_request`, which are handled above.
         """
         from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
 

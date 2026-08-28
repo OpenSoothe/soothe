@@ -1,8 +1,4 @@
-"""Unicode security helpers for deceptive text and URL checks.
-
-This module is intentionally lightweight so it can be imported in display and
-approval paths without affecting startup performance.
-"""
+"""Unicode security helpers for deceptive text and URL checks."""
 
 from __future__ import annotations
 
@@ -81,10 +77,10 @@ class UnicodeIssue:
     """A dangerous Unicode character found in text.
 
     Attributes:
-        position: Zero-based index in the original string.
-        character: The single raw character found in the input.
-        codepoint: Uppercase code point string like ``U+202E``.
-        name: Unicode character name.
+    position: Zero-based index in the original string.
+    character: The single raw character found in the input.
+    codepoint: Uppercase code point string like `U+202E`.
+    name: Unicode character name.
     """
 
     position: int
@@ -111,13 +107,13 @@ class UrlSafetyResult:
     suspicious patterns.
 
     Attributes:
-        safe: `True` if no suspicious patterns were found.
-        decoded_domain: Punycode-decoded hostname when it differs from the
-            original hostname.
+    safe: `True` if no suspicious patterns were found.
+    decoded_domain: Punycode-decoded hostname when it differs from the
+    original hostname.
 
-            `None` when unchanged or no hostname exists.
-        warnings: Human-readable warning strings (immutable).
-        issues: Dangerous Unicode issues found in the full URL (immutable).
+    `None` when unchanged or no hostname exists.
+    warnings: Human-readable warning strings (immutable).
+    issues: Dangerous Unicode issues found in the full URL (immutable).
     """
 
     safe: bool
@@ -130,10 +126,10 @@ def detect_dangerous_unicode(text: str) -> list[UnicodeIssue]:
     """Detect deceptive or hidden Unicode code points in text.
 
     Args:
-        text: Input text to inspect.
+    text: Input text to inspect.
 
     Returns:
-        A list of `UnicodeIssue` entries in source order.
+    A list of `UnicodeIssue` entries in source order.
     """
     issues: list[UnicodeIssue] = []
     for position, character in enumerate(text):
@@ -154,10 +150,10 @@ def strip_dangerous_unicode(text: str) -> str:
     """Remove known dangerous/invisible Unicode characters from text.
 
     Args:
-        text: Input text to sanitize.
+    text: Input text to sanitize.
 
     Returns:
-        Sanitized text with dangerous characters removed.
+    Sanitized text with dangerous characters removed.
     """
     return "".join(ch for ch in text if ch not in _DANGEROUS_CHARACTERS)
 
@@ -169,12 +165,12 @@ def summarize_issues(issues: list[UnicodeIssue], *, max_items: int = 3) -> str:
     the summary is truncated with a `+N more entries` suffix.
 
     Args:
-        issues: A list of detected issues.
-        max_items: Max unique code points to include in output.
+    issues: A list of detected issues.
+    max_items: Max unique code points to include in output.
 
     Returns:
-        Comma-separated summary, e.g.
-            `U+202E RIGHT-TO-LEFT OVERRIDE, U+200B ZERO WIDTH SPACE`.
+    Comma-separated summary, e.g.
+    `U+202E RIGHT-TO-LEFT OVERRIDE, U+200B ZERO WIDTH SPACE`.
     """
     unique_entries: list[str] = []
     seen: set[str] = set()
@@ -198,10 +194,10 @@ def check_url_safety(url: str) -> UrlSafetyResult:
     """Check a URL for suspicious Unicode and domain spoofing patterns.
 
     Args:
-        url: URL string to inspect.
+    url: URL string to inspect.
 
     Returns:
-        `UrlSafetyResult` including decoded domain and warning details.
+    `UrlSafetyResult` including decoded domain and warning details.
     """
     warnings: list[str] = []
     suspicious = False
@@ -261,7 +257,7 @@ def _decode_hostname(hostname: str) -> tuple[str, list[str]]:
     """Decode `xn--` punycode labels into Unicode labels when possible.
 
     Returns:
-        Tuple of (decoded hostname, list of labels that failed to decode).
+    Tuple of (decoded hostname, list of labels that failed to decode).
     """
     decoded_labels: list[str] = []
     failed_labels: list[str] = []
@@ -281,7 +277,7 @@ def _split_hostname_labels(hostname: str) -> list[str]:
     """Split a hostname into non-empty labels.
 
     Returns:
-        Hostname labels without empty entries.
+    Hostname labels without empty entries.
     """
     return [label for label in hostname.split(".") if label]
 
@@ -290,7 +286,7 @@ def _is_local_or_ip_hostname(hostname: str) -> bool:
     """Return whether hostname is localhost or an IP address literal.
 
     Returns:
-        `True` when hostname is localhost or an IP literal, else `False`.
+    `True` when hostname is localhost or an IP literal, else `False`.
     """
     host = hostname.strip().rstrip(".")
     if not host:
@@ -310,7 +306,7 @@ def _scripts_in_label(label: str) -> set[str]:
     """Collect non-common scripts used by a domain label.
 
     Returns:
-        Set of script names used by the label, excluding common/inherited.
+    Set of script names used by the label, excluding common/inherited.
     """
     scripts: set[str] = set()
     for character in label:
@@ -329,7 +325,7 @@ def _label_has_suspicious_confusable_mix(label: str) -> bool:
     because they represent legitimate use of that script.
 
     Returns:
-        `True` when the label mixes scripts and contains confusable characters.
+    `True` when the label mixes scripts and contains confusable characters.
     """
     if not any(character in CONFUSABLES for character in label):
         return False
@@ -342,8 +338,8 @@ def _char_script(character: str) -> str:
     """Classify a character into a coarse Unicode script bucket.
 
     Returns:
-        One of: `'Fullwidth'`, `'Latin'`, `'Cyrillic'`, `'Greek'`, `'Armenian'`,
-            `'EastAsian'`, `'Inherited'`, `'Common'`, or `'Other'`.
+    One of: `'Fullwidth'`, `'Latin'`, `'Cyrillic'`, `'Greek'`, `'Armenian'`,
+    `'EastAsian'`, `'Inherited'`, `'Common'`, or `'Other'`.
     """
     name = unicodedata.name(character, "")
     category = unicodedata.category(character)
@@ -383,7 +379,7 @@ def _format_codepoint(character: str) -> str:
     """Format character code point in `U+XXXX` uppercase form.
 
     Returns:
-        Uppercase `U+XXXX` codepoint string.
+    Uppercase `U+XXXX` codepoint string.
     """
     return f"U+{ord(character):04X}"
 
@@ -392,7 +388,7 @@ def _unicode_name(character: str) -> str:
     """Return a stable Unicode name with a fallback for unknown code points.
 
     Returns:
-        Unicode name string for the character.
+    Unicode name string for the character.
     """
     return unicodedata.name(character, "UNKNOWN CHARACTER")
 
@@ -410,7 +406,7 @@ def iter_string_values(
     """Flatten nested dict/list structures into key-path/string pairs.
 
     Returns:
-        List of ``(path, value)`` tuples for all string leaves.
+    List of `(path, value)` tuples for all string leaves.
     """
     values: list[tuple[str, str]] = []
     for key, value in data.items():
@@ -434,7 +430,7 @@ def _iter_string_values_from_list(
     """Flatten nested list values into key-path/string pairs.
 
     Returns:
-        List of `(path, value)` tuples for all string leaves.
+    List of `(path, value)` tuples for all string leaves.
     """
     entries: list[tuple[str, str]] = []
     for index, value in enumerate(values):

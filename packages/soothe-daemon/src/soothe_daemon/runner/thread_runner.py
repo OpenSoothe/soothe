@@ -1,14 +1,4 @@
-"""Thread pool for loop execution.
-
-Uses threads instead of subprocesses for lower overhead (~ms vs ~8s spawn).
-Each thread maintains a dedicated asyncio event loop for LangGraph streaming.
-One reused SootheRunner per worker (``prepare_for_request`` between turns) keeps
-startup cost low while isolating per-request state.
-
-ARCHITECTURE: Each worker thread has queues for cross-thread communication:
-    - request_queue: main process → worker thread (dispatch requests)
-    - response_queue: worker thread → main process (stream responses)
-"""
+"""Thread pool for loop execution."""
 
 from __future__ import annotations
 
@@ -148,24 +138,24 @@ def _thread_worker_body(
     """Thread worker body: maintains event loop, executes requests.
 
     Behavior:
-        - Creates dedicated asyncio event loop at startup
-        - Wait for requests on request_queue (with idle timeout)
-        - Reuse one SootheRunner per worker when ``reuse_runner``
-        - Execute request, stream results to response_queue
-        - Check cancel_event between chunks for cooperative cancellation
-        - Exit on stop_event, idle timeout (scaled workers only), or max requests
+    - Creates dedicated asyncio event loop at startup
+    - Wait for requests on request_queue (with idle timeout)
+    - Reuse one SootheRunner per worker when `reuse_runner`
+    - Execute request, stream results to response_queue
+    - Check cancel_event between chunks for cooperative cancellation
+    - Exit on stop_event, idle timeout (scaled workers only), or max requests
 
     Args:
-        config: SootheConfig (shared memory, no pickling needed).
-        worker_id: Unique worker identifier for logging.
-        request_queue: threading.Queue for receiving requests.
-        response_queue: threading.Queue for sending responses.
-        cancel_event: threading.Event for cooperative cancellation.
-        stop_event: threading.Event for shutdown signal.
-        idle_timeout_seconds: Exit after this many seconds idle (scaled workers only).
-        max_requests: Exit after this many requests completed.
-        default_timeout_seconds: Default per-request timeout if not specified.
-        is_baseline_worker: When True, wait indefinitely for work (min pool slot).
+    config: SootheConfig (shared memory, no pickling needed).
+    worker_id: Unique worker identifier for logging.
+    request_queue: threading.Queue for receiving requests.
+    response_queue: threading.Queue for sending responses.
+    cancel_event: threading.Event for cooperative cancellation.
+    stop_event: threading.Event for shutdown signal.
+    idle_timeout_seconds: Exit after this many seconds idle (scaled workers only).
+    max_requests: Exit after this many requests completed.
+    default_timeout_seconds: Default per-request timeout if not specified.
+    is_baseline_worker: When True, wait indefinitely for work (min pool slot).
     """
     # Create dedicated event loop for this thread
     loop = asyncio.new_event_loop()
@@ -489,19 +479,19 @@ class ThreadPool:
     """Singleton pool of worker threads for loop execution.
 
     Pre-warms N worker threads at daemon startup. Each thread has:
-        - Dedicated asyncio event loop (threads cannot share loops)
-        - request_queue for receiving requests from main
-        - response_queue for sending responses back
-        - cancel_event for cooperative cancellation
+    - Dedicated asyncio event loop (threads cannot share loops)
+    - request_queue for receiving requests from main
+    - response_queue for sending responses back
+    - cancel_event for cooperative cancellation
 
-    Workers reuse one SootheRunner per thread  and stream results tagged
+    Workers reuse one SootheRunner per thread and stream results tagged
     with request_id for routing to the correct pending request.
 
     Lifecycle:
-        - Startup: pre-warm min_pool_size baseline threads (no idle timeout)
-        - Runtime: threads pull requests, execute, return to pool
-        - Scaling: spawn extra threads when needed; scaled threads idle out and shrink
-        - Shutdown: signal all threads to exit, wait, cleanup
+    - Startup: pre-warm min_pool_size baseline threads (no idle timeout)
+    - Runtime: threads pull requests, execute, return to pool
+    - Scaling: spawn extra threads when needed; scaled threads idle out and shrink
+    - Shutdown: signal all threads to exit, wait, cleanup
     """
 
     _shared_pool: ThreadPool | None = None
@@ -801,14 +791,14 @@ class ThreadPool:
         *,
         last_error: str | None = None,
     ) -> bool:
-        """Recover when a worker exited cleanly but main never received ``done``.
+        """Recover when a worker exited cleanly but main never received `done`.
 
-        Typical when the worker thread finishes while ``ThreadPool.submit()`` is
+        Typical when the worker thread finishes while `ThreadPool.submit()` is
         still waiting on the response queue (crash, forced exit, or delivery gap).
 
         Returns:
-            True if recovery ran (synthetic ``done`` or stale bookkeeping cleared)
-            and the caller should skip the generic dead-worker error path.
+        True if recovery ran (synthetic `done` or stale bookkeeping cleared)
+        and the caller should skip the generic dead-worker error path.
         """
         req_id = worker.current_request_id
         if req_id is None or worker.dead_failure_routed:
@@ -1031,7 +1021,7 @@ class ThreadPool:
         start_time: datetime,
         ready_already_received: bool = False,
     ) -> None:
-        """Release worker only after cleanup completes (``ready`` signal)."""
+        """Release worker only after cleanup completes (`ready` signal)."""
         worker.status = WorkerThreadStatus.CLEANING_UP
         if not ready_already_received:
             try:
@@ -1303,8 +1293,8 @@ class ThreadPool:
         will handle cleanup on the next iteration.
 
         Args:
-            worker_id: Worker thread to cancel.
-            timeout: Seconds to wait for thread self-termination.
+        worker_id: Worker thread to cancel.
+        timeout: Seconds to wait for thread self-termination.
         """
         worker = self._workers.get(worker_id)
         if worker is None:
@@ -1353,11 +1343,11 @@ class ThreadPool:
         logger.info("Thread worker %s force cancelled", worker_id)
 
     async def force_cancel_worker_by_loop_id(self, loop_id: str, timeout: float = 10.0) -> None:
-        """Force-cancel the worker mapped to ``loop_id`` (cancel backstop).
+        """Force-cancel the worker mapped to `loop_id` (cancel backstop).
 
-        Mirrors ``WorkerPool.force_kill_worker_by_loop_id`` for the thread
-        runtime: resolves ``loop_id`` → ``worker_id`` then delegates to
-        ``force_cancel_worker``. No-op when no worker is mapped.
+        Mirrors `WorkerPool.force_kill_worker_by_loop_id` for the thread
+        runtime: resolves `loop_id` → `worker_id` then delegates to
+        `force_cancel_worker`. No-op when no worker is mapped.
         """
         worker_id = self._workers_by_loop_id.get(loop_id)
         if worker_id is None:
@@ -1373,14 +1363,14 @@ class ThreadPool:
         return self._workers_by_loop_id.get(loop_id)
 
     def is_loop_busy(self, loop_id: str) -> bool:
-        """Return True when a non-idle worker is mapped to ``loop_id``."""
+        """Return True when a non-idle worker is mapped to `loop_id`."""
         worker_id = self._workers_by_loop_id.get(loop_id)
         if worker_id is None:
             return False
         return not self.is_worker_idle(worker_id)
 
     async def await_loop_dispatchable(self, loop_id: str) -> None:
-        """Block until no in-flight worker request is mapped to ``loop_id``."""
+        """Block until no in-flight worker request is mapped to `loop_id`."""
         cond = self._worker_available
         if cond is None:
             return
@@ -1519,7 +1509,7 @@ class ThreadLoopRunner:
             yield chunk
 
     async def _resolve_pool(self) -> ThreadPool:
-        """Return the shared pool, fetching it if ``run`` hasn't yet bound it."""
+        """Return the shared pool, fetching it if `run` hasn't yet bound it."""
         if self._pool is None:
             self._pool = await ThreadPool.get_shared_instance(
                 self._config,
@@ -1536,9 +1526,9 @@ class ThreadLoopRunner:
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap clarification mode on the running goal.
 
-        Reaches the live ``SootheRunner`` inside the worker thread via the
-        pool's ``_live_runners`` registry and calls ``set_clarification_mode``
-        on it. Returns ``False`` when no goal is currently running for this
+        Reaches the live `SootheRunner` inside the worker thread via the
+        pool's `_live_runners` registry and calls `set_clarification_mode`
+        on it. Returns `False` when no goal is currently running for this
         loop — the caller may retry on the next turn.
         """
         pool = self._pool

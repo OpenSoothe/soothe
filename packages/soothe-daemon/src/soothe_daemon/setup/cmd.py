@@ -1,4 +1,4 @@
-"""Orchestrate ``soothed setup`` phases."""
+"""Orchestrate `soothed setup` phases."""
 
 from __future__ import annotations
 

@@ -35,7 +35,7 @@ class Spinner:
         """Get next animation frame.
 
         Returns:
-            The next spinner character in the animation sequence.
+        The next spinner character in the animation sequence.
         """
         frames = self.frames
         frame = frames[self._position]
@@ -46,7 +46,7 @@ class Spinner:
         """Get current frame without advancing.
 
         Returns:
-            The current spinner character.
+        The current spinner character.
         """
         return self.frames[self._position]
 
@@ -54,7 +54,7 @@ class Spinner:
 class LoadingWidget(Static):
     """Animated loading indicator with status text and elapsed time.
 
-    Displays: <spinner> Thinking...  (12s · 1.2K tokens)
+    Displays: <spinner> Thinking... (12s · 1.2K tokens)
 
     Renders as a single Static so elapsed-time ticks do not relayout sibling
     widgets (which caused the spinner to flash on each second boundary).
@@ -80,12 +80,12 @@ class LoadingWidget(Static):
         """Initialize loading widget.
 
         Args:
-            status: Initial status text to display.
-            turn_start_monotonic: Start of the current query/turn (``time.monotonic()``). When
-                omitted, the first mount time is used so elapsed still advances monotonically.
-            show_interrupt_hint: When ``True``, append an esc-to-interrupt hint (off by default).
-            hint_extra: Optional hint segment before elapsed time (e.g. ``attempt 2/3``).
-            on_tick: Optional callback invoked on animation ticks to refresh token display.
+        status: Initial status text to display.
+        turn_start_monotonic: Start of the current query/turn (`time.monotonic()`). When
+        omitted, the first mount time is used so elapsed still advances monotonically.
+        show_interrupt_hint: When `True`, append an esc-to-interrupt hint (off by default).
+        hint_extra: Optional hint segment before elapsed time (e.g. `attempt 2/3`).
+        on_tick: Optional callback invoked on animation ticks to refresh token display.
         """
         super().__init__()
         self._status = status
@@ -184,7 +184,7 @@ class LoadingWidget(Static):
         """Stop animation before delegating DOM removal to Textual.
 
         Returns:
-            Awaitable that completes once the widget is removed from the DOM.
+        Awaitable that completes once the widget is removed from the DOM.
         """
         self._stop_timer()
         return super().remove()
@@ -235,7 +235,7 @@ class LoadingWidget(Static):
         """Update the status text.
 
         Args:
-            status: New status text
+        status: New status text
         """
         self._status = status
         if self.is_mounted:
@@ -275,7 +275,7 @@ class LoadingWidget(Static):
         """Pause the animation and update status.
 
         Args:
-            status: Status to show while paused
+        status: Status to show while paused
         """
         if not self._paused:
             self._resume_status = self._status

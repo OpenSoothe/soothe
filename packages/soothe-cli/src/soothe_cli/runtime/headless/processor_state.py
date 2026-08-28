@@ -1,8 +1,4 @@
-"""Processor state for unified event handling.
-
-This module defines the internal state managed by EventProcessor.
-Renderers should not modify this state directly.
-"""
+"""Processor state for unified event handling."""
 
 from __future__ import annotations
 

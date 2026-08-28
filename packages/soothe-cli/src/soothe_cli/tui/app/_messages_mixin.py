@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 def _widget_is_hidden(widget: Any) -> bool:
     """Return True when a widget is CSS-hidden or display-none.
 
-    MagicMock-safe: only treats an explicit ``True`` from ``has_class("hidden")``
-    or a concrete ``classes`` collection containing ``hidden`` as hidden.
+    MagicMock-safe: only treats an explicit `True` from `has_class("hidden")`
+    or a concrete `classes` collection containing `hidden` as hidden.
     """
     has_class = getattr(widget, "has_class", None)
     if callable(has_class):
@@ -101,7 +101,7 @@ class _MessagesMixin:
         """Cancel the running goal so queued head can start immediately.
 
         Returns:
-            `True` when an interrupt was triggered, otherwise `False`.
+        `True` when an interrupt was triggered, otherwise `False`.
         """
         if not self._can_run_queued_goal_now_from_enter():
             return False
@@ -142,11 +142,11 @@ class _MessagesMixin:
         transcripts.
 
         Args:
-            loop_id: Optional loop id.
+        loop_id: Optional loop id.
 
-                Defaults to current.
-            preloaded_payload: Optional pre-fetched history payload for the
-                loop.
+        Defaults to current.
+        preloaded_payload: Optional pre-fetched history payload for the
+        loop.
         """
         history_loop_id = loop_id or self._lc_loop_id
         if not history_loop_id:
@@ -237,7 +237,7 @@ class _MessagesMixin:
                 await self._mount_message(AppMessage(f"Could not load history: {e}"))
 
     async def _apply_card_wire_frame(self, data: Any) -> bool:
-        """Apply one custom-mode ``soothe.card.*`` payload. Returns True if handled."""
+        """Apply one custom-mode `soothe.card.*` payload. Returns True if handled."""
 
         from soothe_sdk.display.transcript_types import MessageType
 
@@ -327,7 +327,7 @@ class _MessagesMixin:
         return True
 
     def _find_existing_card_widget(self, card: Any) -> Any | None:
-        """Return an already-mounted widget for ``card``, if any."""
+        """Return an already-mounted widget for `card`, if any."""
         from soothe_sdk.display.transcript_types import MessageType
 
         if getattr(card, "id", None):
@@ -436,7 +436,7 @@ class _MessagesMixin:
 
     @staticmethod
     def _dedupe_message_data_by_id(messages: list[Any]) -> list[Any]:
-        """Return messages in order, keeping the last entry per ``MessageData.id``."""
+        """Return messages in order, keeping the last entry per `MessageData.id`."""
         seen: set[str] = set()
         deduped_reversed: list[Any] = []
         for msg in reversed(messages):
@@ -470,12 +470,12 @@ class _MessagesMixin:
         This method also stores the message data and handles pruning
         when the widget count exceeds the maximum.
 
-        If the ``#messages`` container is not present (e.g. the screen has
+        If the `#messages` container is not present (e.g. the screen has
         been torn down during an interruption), the call is silently skipped
         to avoid cascading `NoMatches` errors.
 
         Args:
-            widget: The message widget to mount
+        widget: The message widget to mount
         """
         try:
             messages = self.query_one("#messages", Container)
@@ -569,7 +569,7 @@ class _MessagesMixin:
         """Set the active streaming message (won't be pruned).
 
         Args:
-            message_id: The ID of the active message, or None to clear.
+        message_id: The ID of the active message, or None to clear.
         """
         self._message_store.set_active_message(message_id)
 
@@ -580,8 +580,8 @@ class _MessagesMixin:
         instead of the empty string captured at mount time.
 
         Args:
-            message_id: The ID of the message to update.
-            content: The final content after streaming.
+        message_id: The ID of the message to update.
+        content: The final content after streaming.
         """
         self._message_store.update_message(
             message_id,
@@ -592,7 +592,7 @@ class _MessagesMixin:
     async def _clear_messages(self) -> None:
         """Clear the messages area, message store, and live plan/turn UI.
 
-        The plan panel is backed by adapter state outside ``#messages``, so a
+        The plan panel is backed by adapter state outside `#messages`, so a
         transcript wipe must also drop the live goal tree or /clear leaves a
         stale plan panel.
         """
@@ -690,7 +690,7 @@ class _MessagesMixin:
         final selection runs.
 
         Args:
-            action: The deferred action to queue.
+        action: The deferred action to queue.
         """
         self._deferred_actions = [a for a in self._deferred_actions if a.kind != action.kind]
         self._deferred_actions.append(action)
@@ -741,10 +741,10 @@ class _MessagesMixin:
         """Cancel an active worker, optionally discarding the pending message queue.
 
         Args:
-            worker: The worker to cancel.
-            discard_queue: When ``True`` (default), clear queued messages and
-                deferred actions. Set ``False`` on user interrupt (Ctrl+C)
-                so a queued goal starts after the running one is cancelled.
+        worker: The worker to cancel.
+        discard_queue: When `True` (default), clear queued messages and
+        deferred actions. Set `False` on user interrupt (Ctrl+C)
+        so a queued goal starts after the running one is cancelled.
         """
         if discard_queue:
             self._discard_queue()
@@ -759,9 +759,9 @@ class _MessagesMixin:
         long execute steps).
 
         Args:
-            discard_queue: When ``False``, preserve queued user goals so they
-                run after the cancelled turn finishes cleanup. In this mode,
-                the local worker is left running when daemon cancel succeeds.
+        discard_queue: When `False`, preserve queued user goals so they
+        run after the cancelled turn finishes cleanup. In this mode,
+        the local worker is left running when daemon cancel succeeds.
         """
         await self._tear_down_interrupt_ui()
         session = self._daemon_session
@@ -965,9 +965,9 @@ class _MessagesMixin:
         termination.
 
         Args:
-            result: Return value passed to the app runner.
-            return_code: Exit code (non-zero for errors).
-            message: Optional message to display on exit.
+        result: Return value passed to the app runner.
+        return_code: Exit code (non-zero for errors).
+        message: Optional message to display on exit.
         """
         self._prepare_shutdown()
         _write_iterm_escape(_ITERM_CURSOR_GUIDE_ON)
@@ -989,14 +989,14 @@ class _MessagesMixin:
     def cycle_composer_mode(self) -> None:
         """Advance composer mode and refresh the status-bar badge.
 
-        The mode is held on the app (``self._composer_mode``). Auto/Manual map
-        to the ``clarification_mode`` wire field; Plan sets
-        ``interaction_mode=plan`` on subsequent turns. The badge updates
+        The mode is held on the app (`self._composer_mode`). Auto/Manual map
+        to the `clarification_mode` wire field; Plan sets
+        `interaction_mode=plan` on subsequent turns. The badge updates
         immediately; no toast is emitted because the badge is the feedback.
 
         When a goal is running and the new mode is Auto or Manual, the mode is
-        also hot-swapped on the daemon's live ``LoopRuntimeContext`` via the
-        ``loop_set_clarification_mode`` RPC so the next clarification uses the
+        also hot-swapped on the daemon's live `LoopRuntimeContext` via the
+        `loop_set_clarification_mode` RPC so the next clarification uses the
         new policy without waiting for the next turn.
         """
         from soothe_cli.tui.composer_mode import next_composer_mode
@@ -1090,7 +1090,7 @@ class _MessagesMixin:
         return None
 
     def _non_chat_focusable_inputs(self) -> list[Input]:
-        """Return enabled, focusable ``Input`` widgets other than the chat prompt."""
+        """Return enabled, focusable `Input` widgets other than the chat prompt."""
         from textual.widgets import Input
 
         return [
@@ -1122,7 +1122,7 @@ class _MessagesMixin:
         return None
 
     def _schedule_widget_focus(self, widget: Widget) -> None:
-        """Focus ``widget`` after layout settles, winning races with chat refocus."""
+        """Focus `widget` after layout settles, winning races with chat refocus."""
 
         def _focus() -> None:
             try:
@@ -1150,7 +1150,7 @@ class _MessagesMixin:
         """Check if a primary text input widget currently has focus.
 
         Returns:
-            True if chat input or an inline clarification field has focus.
+        True if chat input or an inline clarification field has focus.
         """
         focused = self.focused
         if focused is None:
@@ -1278,8 +1278,8 @@ class _MessagesMixin:
     def on_text_selected(self, _event: TextSelected) -> None:
         """Copy selected transcript text on mouse release.
 
-        Must run synchronously here: ``TextSelected`` is posted before the
-        synthesized ``Click``, but ``call_after_refresh`` would run after card
+        Must run synchronously here: `TextSelected` is posted before the
+        synthesized `Click`, but `call_after_refresh` would run after card
         collapse handlers clear the selection.
         """
         from soothe_cli.tui.widgets.clipboard import (

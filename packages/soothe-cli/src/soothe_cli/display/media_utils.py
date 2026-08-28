@@ -62,7 +62,7 @@ def _import_pil() -> tuple[type, type] | None:
     """Import Pillow types when available.
 
     Returns:
-        `(Image, UnidentifiedImageError)` when Pillow is installed, else `None`.
+    `(Image, UnidentifiedImageError)` when Pillow is installed, else `None`.
     """
     try:
         from PIL import Image, UnidentifiedImageError
@@ -98,11 +98,11 @@ def image_data_from_bytes(
     """Validate raw image bytes and wrap them as `ImageData`.
 
     Args:
-        image_bytes: Encoded image payload (PNG/JPEG/…).
-        fallback_format: Format hint when Pillow cannot detect one.
+    image_bytes: Encoded image payload (PNG/JPEG/…).
+    fallback_format: Format hint when Pillow cannot detect one.
 
     Returns:
-        `ImageData` when bytes are a valid image under size limits, else `None`.
+    `ImageData` when bytes are a valid image under size limits, else `None`.
     """
     if not image_bytes:
         return None
@@ -145,10 +145,10 @@ def get_image_from_path(path: pathlib.Path) -> ImageData | None:
     """Read and encode an image file from disk.
 
     Args:
-        path: Path to the image file.
+    path: Path to the image file.
 
     Returns:
-        `ImageData` when the file is a valid image, otherwise `None`.
+    `ImageData` when the file is a valid image, otherwise `None`.
     """
     suffix = path.suffix.lower()
     if suffix not in IMAGE_EXTENSIONS:
@@ -186,7 +186,7 @@ def get_image_from_clipboard() -> ImageData | None:
     the local OS clipboard via Pillow and/or platform tools.
 
     Returns:
-        `ImageData` when the clipboard holds a usable image, else `None`.
+    `ImageData` when the clipboard holds a usable image, else `None`.
     """
     raw = _read_clipboard_image_bytes()
     if not raw:
@@ -198,7 +198,7 @@ def _read_clipboard_image_bytes() -> bytes | None:
     """Return raw image bytes from the OS clipboard, if any.
 
     Returns:
-        Encoded image bytes, or `None` when no image is available.
+    Encoded image bytes, or `None` when no image is available.
     """
     readers = (
         _read_clipboard_image_pillow,
@@ -222,7 +222,7 @@ def _read_clipboard_image_pillow() -> bytes | None:
     """Try Pillow `ImageGrab.grabclipboard()` when available.
 
     Returns:
-        PNG-encoded bytes, a path-backed image payload, or `None`.
+    PNG-encoded bytes, a path-backed image payload, or `None`.
     """
     if _import_pil() is None:
         return None
@@ -267,7 +267,7 @@ def _read_clipboard_image_macos() -> bytes | None:
     """Read clipboard image bytes on macOS via pngpaste or osascript.
 
     Returns:
-        Image bytes when available on Darwin, else `None`.
+    Image bytes when available on Darwin, else `None`.
     """
     if sys.platform != "darwin":
         return None
@@ -306,7 +306,7 @@ def _read_clipboard_image_wayland() -> bytes | None:
     """Read clipboard image bytes via `wl-paste` when available.
 
     Returns:
-        Image bytes when available, else `None`.
+    Image bytes when available, else `None`.
     """
     if not shutil.which("wl-paste"):
         return None
@@ -322,7 +322,7 @@ def _read_clipboard_image_x11() -> bytes | None:
     """Read clipboard image bytes on X11 via `xclip`.
 
     Returns:
-        Image bytes when available, else `None`.
+    Image bytes when available, else `None`.
     """
     if not shutil.which("xclip"):
         return None
@@ -349,7 +349,7 @@ def _read_clipboard_image_wsl() -> bytes | None:
     """Read Windows clipboard image bytes from WSL via PowerShell.
 
     Returns:
-        PNG bytes when WSL interop succeeds, else `None`.
+    PNG bytes when WSL interop succeeds, else `None`.
     """
     if not _is_wsl():
         return None
@@ -380,7 +380,7 @@ def _is_wsl() -> bool:
     """Return whether the current Linux host appears to be WSL.
 
     Returns:
-        `True` when `/proc/version` mentions Microsoft/WSL.
+    `True` when `/proc/version` mentions Microsoft/WSL.
     """
     if sys.platform != "linux":
         return False
@@ -395,10 +395,10 @@ def _run_clipboard_command(cmd: list[str]) -> subprocess.CompletedProcess[bytes]
     """Run a clipboard helper command with a short timeout.
 
     Args:
-        cmd: Argument vector to execute.
+    cmd: Argument vector to execute.
 
     Returns:
-        Completed process, or `None` on timeout / OS error.
+    Completed process, or `None` on timeout / OS error.
     """
     try:
         return subprocess.run(
@@ -416,10 +416,10 @@ def _detect_video_format(data: bytes) -> str | None:
     """Detect video MIME subtype from magic bytes.
 
     Args:
-        data: Raw file bytes (at least 12 bytes for reliable detection).
+    data: Raw file bytes (at least 12 bytes for reliable detection).
 
     Returns:
-        MIME subtype (e.g. "mp4", "webm") or `None` if unrecognized.
+    MIME subtype (e.g. "mp4", "webm") or `None` if unrecognized.
     """
     min_avi_len = 12
     if data[4:8] == b"ftyp":
@@ -441,10 +441,10 @@ def get_video_from_path(path: pathlib.Path) -> VideoData | None:
     """Read and encode a video file from disk.
 
     Args:
-        path: Path to the video file.
+    path: Path to the video file.
 
     Returns:
-        `VideoData` when the file is a valid video, otherwise `None`.
+    `VideoData` when the file is a valid video, otherwise `None`.
     """
     suffix = path.suffix.lower()
     if suffix not in VIDEO_EXTENSIONS:
@@ -500,10 +500,10 @@ def get_media_from_path(path: pathlib.Path) -> ImageData | VideoData | None:
     """Try to load a file as an image first, then as a video.
 
     Args:
-        path: Path to the media file.
+    path: Path to the media file.
 
     Returns:
-        `ImageData` or `VideoData` if the file is valid media, otherwise `None`.
+    `ImageData` or `VideoData` if the file is valid media, otherwise `None`.
     """
     result: ImageData | VideoData | None = get_image_from_path(path)
     if result is not None:
@@ -515,9 +515,9 @@ def encode_to_base64(data: bytes) -> str:
     """Encode raw bytes to a base64 string.
 
     Args:
-        data: Raw bytes to encode.
+    data: Raw bytes to encode.
 
     Returns:
-        Base64-encoded string.
+    Base64-encoded string.
     """
     return base64.b64encode(data).decode("utf-8")

@@ -66,7 +66,7 @@ def _plan_quick_view_step_summary(
 ) -> str:
     """Return a Ctrl+T-safe step summary tail.
 
-    Hides redundant ``Done [N tools]`` text (stats already show tool count) and
+    Hides redundant `Done [N tools]` text (stats already show tool count) and
     legacy success payloads that still carry error-shaped summary strings.
     """
     tail = (summary or "").strip()
@@ -139,7 +139,7 @@ class _StepLineState:
 class CognitionGoalTreeMessage(Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
-    Title line matches ``CognitionStepMessage`` / ``CognitionReasonMessage``:
+    Title line matches `CognitionStepMessage` / `CognitionReasonMessage`:
     stateful card-prefix glyph plus goal text.
     """
 
@@ -182,9 +182,9 @@ class CognitionGoalTreeMessage(Vertical):
         """Initialize an empty goal tree (steps render as events arrive).
 
         Args:
-            goal: Primary goal text (clipped for header).
-            max_iterations: Retained for snapshot/restore parity; not rendered.
-            **kwargs: Passed to ``Vertical``.
+        goal: Primary goal text (clipped for header).
+        max_iterations: Retained for snapshot/restore parity; not rendered.
+        **kwargs: Passed to `Vertical`.
         """
         super().__init__(**kwargs)
         self._goal_text = goal.strip()
@@ -275,8 +275,8 @@ class CognitionGoalTreeMessage(Vertical):
     def _goal_footer_styled_content(self) -> Content:
         """Footer content for loop finished / interrupted (parity with step/tool status lines).
 
-        The ``done`` (success) footer shares the title line's de-emphasized
-        ``SECONDARY_TEXT_STYLE`` so the completion status blends with the
+        The `done` (success) footer shares the title line's de-emphasized
+        `SECONDARY_TEXT_STYLE` so the completion status blends with the
         "Orchestrating ..." header instead of using the cognition accent.
         """
         try:
@@ -301,9 +301,9 @@ class CognitionGoalTreeMessage(Vertical):
         return format_running_elapsed(time() - started)
 
     def goal_token_totals(self) -> tuple[int, int]:
-        """Cumulative ``(input_tokens, output_tokens)`` across all step rows.
+        """Cumulative `(input_tokens, output_tokens)` across all step rows.
 
-        Includes goal-level orphan usage (parallel-wave ``usage_metadata``
+        Includes goal-level orphan usage (parallel-wave `usage_metadata`
         chunks that arrived before any step card was bound) so no usage chunk
         is silently dropped from the totals.
         """
@@ -317,11 +317,11 @@ class CognitionGoalTreeMessage(Vertical):
     def record_goal_token_usage(self, input_tokens: int, output_tokens: int) -> None:
         """Accumulate orphan LLM token usage at the goal level.
 
-        Used by the adapter fallback path in ``_resolve_token_target_card``
-        when a ``usage_metadata`` chunk arrives under a namespace that cannot
+        Used by the adapter fallback path in `_resolve_token_target_card`
+        when a `usage_metadata` chunk arrives under a namespace that cannot
         be bound to a step card (parallel waves where usage precedes any tool
         call). Routes the chunk to the goal-level accumulator instead of
-        dropping it, so it surfaces in ``goal_token_totals`` / the done footer.
+        dropping it, so it surfaces in `goal_token_totals` / the done footer.
         """
         in_t = max(0, int(input_tokens))
         out_t = max(0, int(output_tokens))
@@ -331,7 +331,7 @@ class CognitionGoalTreeMessage(Vertical):
         self._goal_out_tokens += out_t
 
     def goal_token_suffix(self) -> str:
-        """Compact ``in:1.2K out:345`` suffix for the plan panel title.
+        """Compact `in:1.2K out:345` suffix for the plan panel title.
 
         Returns an empty string when no step has recorded any tokens.
         """
@@ -390,7 +390,7 @@ class CognitionGoalTreeMessage(Vertical):
 
     @staticmethod
     def _step_token_parts(st: _StepLineState) -> list[str]:
-        """In/out token labels for a step row, e.g. ``in:1.2K out:345``."""
+        """In/out token labels for a step row, e.g. `in:1.2K out:345`."""
         if not (st.input_tokens or st.output_tokens):
             return []
         from soothe_cli.runtime.state.session_stats import format_token_count
@@ -419,7 +419,7 @@ class CognitionGoalTreeMessage(Vertical):
         icon: str,
         max_line_width: int | None,
     ) -> str:
-        """Build a single-line step row, clipping description to fit ``max_line_width``."""
+        """Build a single-line step row, clipping description to fit `max_line_width`."""
         step_label = display_step_id(st.step_id)
         step_prefix = f"{step_label}: " if step_label else ""
         dep_suffix = _dependency_suffix(st.dependencies)
@@ -453,7 +453,7 @@ class CognitionGoalTreeMessage(Vertical):
         *,
         max_line_width: int | None = None,
     ) -> Content:
-        """One goal→step row: dim tree gutter, foreground body (parity with ``CognitionStepMessage`` tool rows)."""
+        """One goal→step row: dim tree gutter, foreground body (parity with `CognitionStepMessage` tool rows)."""
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
@@ -538,7 +538,7 @@ class CognitionGoalTreeMessage(Vertical):
     ) -> None:
         """Update in-flight tool counts, start times, and token counts from step cards.
 
-        Each value is ``(tool_count, started_at, input_tokens, output_tokens)``.
+        Each value is `(tool_count, started_at, input_tokens, output_tokens)`.
         """
         for sid, (tool_count, started_at, input_tokens, output_tokens) in stats.items():
             st = self._steps.get(sid)
@@ -553,7 +553,7 @@ class CognitionGoalTreeMessage(Vertical):
     def tick_running_spinner(self) -> None:
         """Advance spinner frames for goal-header and running step icons.
 
-        Live trees stay unmounted (Ctrl+t panel snapshots ``plan_quick_view_content``);
+        Live trees stay unmounted (Ctrl+t panel snapshots `plan_quick_view_content`);
         only the spinner index is updated here. Ticks for the whole goal loop so the
         goal glyph keeps animating between steps.
         """
@@ -792,12 +792,12 @@ class CognitionGoalTreeMessage(Vertical):
         """Show a compact footer when the agentic loop completes.
 
         Args:
-            status: Terminal status label (``done``, ``failed``, …).
-            goal_progress: Descriptive progress level mapped to a percent badge.
-            completion_summary: Short free-text summary clipped for the footer.
-            total_steps: Completed step count shown when greater than zero.
-            duration_ms: Optional wall-clock goal duration. When omitted, falls
-                back to the sum of completed step durations.
+        status: Terminal status label (`done`, `failed`, …).
+        goal_progress: Descriptive progress level mapped to a percent badge.
+        completion_summary: Short free-text summary clipped for the footer.
+        total_steps: Completed step count shown when greater than zero.
+        duration_ms: Optional wall-clock goal duration. When omitted, falls
+        back to the sum of completed step durations.
         """
         # Map descriptive levels to percentage display
         progress_map = {

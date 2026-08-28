@@ -52,14 +52,14 @@ class ModelOption(Static):
         """Initialize a model option.
 
         Args:
-            label: Display content — a `Content` object (preferred) or a
-                plain string that `Static` will parse as markup.
-            model_spec: The model specification (provider:model format).
-            provider: The provider name.
-            index: The index of this option in the filtered list.
-            has_creds: Whether the provider has valid credentials. True if
-                confirmed, False if missing, None if unknown.
-            classes: CSS classes for styling.
+        label: Display content — a `Content` object (preferred) or a
+        plain string that `Static` will parse as markup.
+        model_spec: The model specification (provider:model format).
+        provider: The provider name.
+        index: The index of this option in the filtered list.
+        has_creds: Whether the provider has valid credentials. True if
+        confirmed, False if missing, None if unknown.
+        classes: CSS classes for styling.
         """
         super().__init__(label, classes=classes)
         self.model_spec = model_spec
@@ -74,9 +74,9 @@ class ModelOption(Static):
             """Initialize the Clicked message.
 
             Args:
-                model_spec: The model specification.
-                provider: The provider name.
-                index: The index of the clicked option.
+            model_spec: The model specification.
+            provider: The provider name.
+            index: The index of the clicked option.
             """
             super().__init__()
             self.model_spec = model_spec
@@ -87,7 +87,7 @@ class ModelOption(Static):
         """Handle click on this option.
 
         Args:
-            event: The click event.
+        event: The click event.
         """
         event.stop()
         self.post_message(self.Clicked(self.model_spec, self.provider, self.index))
@@ -223,17 +223,17 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         so the screen pushes instantly and populates asynchronously.
 
         Args:
-            current_model: The currently active model name (to highlight).
-            current_provider: The provider of the current model.
-            cli_profile_override: Extra profile fields from `--profile-override`.
+        current_model: The currently active model name (to highlight).
+        current_provider: The provider of the current model.
+        cli_profile_override: Extra profile fields from `--profile-override`.
 
-                Merged on top of upstream + nano.yml profiles so that CLI
-                overrides appear with `*` markers in the detail footer.
-            preloaded: When set, skip local config discovery and use this
-                ``(models, default_spec, profiles)`` tuple (e.g. from daemon ``models_list``).
-            wire_credential_map: Optional per-provider credential hints from the
-                daemon host (``has_credentials`` rows); when unset, uses local
-                ``has_provider_credentials``.
+        Merged on top of upstream + nano.yml profiles so that CLI
+        overrides appear with `*` markers in the detail footer.
+        preloaded: When set, skip local config discovery and use this
+        `(models, default_spec, profiles)` tuple (e.g. from daemon `models_list`).
+        wire_credential_map: Optional per-provider credential hints from the
+        daemon host (`has_credentials` rows); when unset, uses local
+        `has_provider_credentials`.
         """
         super().__init__()
         self._current_model = current_model
@@ -260,7 +260,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Find the index of the current model in the filtered list.
 
         Returns:
-            Index of the current model, or 0 if not found.
+        Index of the current model, or 0 if not found.
         """
         if not self._current_model or not self._current_provider:
             return 0
@@ -275,7 +275,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Compose the screen layout.
 
         Yields:
-            Widgets for the model selector UI.
+        Widgets for the model selector UI.
         """
         glyphs = get_glyphs()
 
@@ -327,10 +327,10 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         `get_available_models` does not block the event loop.
 
         Returns:
-            Tuple of (all_models, default_spec, profiles) where
-                `all_models` is a list of `(provider:model spec, provider)`
-                pairs, `default_spec` is the configured default model or
-                `None`, and `profiles` maps spec strings to profile entries.
+        Tuple of (all_models, default_spec, profiles) where
+        `all_models` is a list of `(provider:model spec, provider)`
+        pairs, `default_spec` is the configured default model or
+        `None`, and `profiles` maps spec strings to profile entries.
         """
         all_models: list[tuple[str, str]] = []
         for entry in get_available_models():
@@ -417,7 +417,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Filter models as user types.
 
         Args:
-            event: The input changed event.
+        event: The input changed event.
         """
         self._filter_text = event.value
         if not self._loaded:
@@ -429,7 +429,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Handle Enter key when filter input is focused.
 
         Args:
-            event: The input submitted event.
+        event: The input submitted event.
         """
         event.stop()
         self.action_select()
@@ -438,7 +438,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Handle click on a model option.
 
         Args:
-            event: The click event with model info.
+        event: The click event with model info.
         """
         self._selected_index = event.index
         self.dismiss((event.model_spec, event.provider))
@@ -622,17 +622,17 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Build the display label for a model option.
 
         Args:
-            model_spec: The `provider:model` string.
-            selected: Whether this option is currently highlighted.
-            current: Whether this is the active model.
-            has_creds: Credential status (True/False/None).
-            is_default: Whether this is the configured default model.
-            status: Model status from profile (e.g., `'deprecated'`,
-                `'beta'`, `'alpha'`). `'deprecated'` renders in red;
-                other non-None values render in yellow.
+        model_spec: The `provider:model` string.
+        selected: Whether this option is currently highlighted.
+        current: Whether this is the active model.
+        has_creds: Credential status (True/False/None).
+        is_default: Whether this is the configured default model.
+        status: Model status from profile (e.g., `'deprecated'`,
+        `'beta'`, `'alpha'`). `'deprecated'` renders in red;
+        other non-None values render in yellow.
 
         Returns:
-            Styled Content label.
+        Styled Content label.
         """
         colors = theme.get_theme_colors()
         glyphs = get_glyphs()
@@ -661,11 +661,11 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Build the detail footer text for the highlighted model.
 
         Args:
-            profile_entry: Profile data with override tracking, or None.
-            glyphs: Glyph set for display characters.
+        profile_entry: Profile data with override tracking, or None.
+        glyphs: Glyph set for display characters.
 
         Returns:
-            Styled `Content` for the 4-line footer.
+        Styled `Content` for the 4-line footer.
         """
         from soothe_cli.tui.textual_adapter import format_token_count
 
@@ -686,7 +686,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
             """Format a token-count profile key, falling back to the raw value.
 
             Returns:
-                Styled `Content` with override marker, or None if key absent.
+            Styled `Content` with override marker, or None if key absent.
             """
             val = profile.get(key)
             if val is None:
@@ -701,7 +701,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
             """Render boolean profile keys as green (on) or dim (off) labels.
 
             Returns:
-                List of styled `Content` objects for present keys.
+            List of styled `Content` objects for present keys.
             """
             parts: list[Content] = []
             for key, label in keys:
@@ -766,11 +766,11 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Look up the status field for a model from its profile.
 
         Args:
-            model_spec: The `provider:model` string.
+        model_spec: The `provider:model` string.
 
         Returns:
-            Status string (e.g., `'deprecated'`) if the model has a profile
-            with a `status` key, otherwise None.
+        Status string (e.g., `'deprecated'`) if the model has a profile
+        with a `status` key, otherwise None.
         """
         entry = self._profiles.get(model_spec)
         if entry is None:
@@ -800,7 +800,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Move selection by delta, updating only the affected widgets.
 
         Args:
-            delta: Number of positions to move (-1 for up, +1 for down).
+        delta: Number of positions to move (-1 for up, +1 for down).
         """
         if not self._filtered_models or not self._option_widgets:
             return
@@ -868,7 +868,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         """Return the number of model options that fit in one visual page.
 
         Returns:
-            Number of model options per page, at least 1.
+        Number of model options per page, at least 1.
         """
         default_page_size = 10
         try:

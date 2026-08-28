@@ -1,10 +1,4 @@
-"""Daemon auto-resume of interrupted StrangeLoop goals.
-
-Classifies incomplete ``status=running`` loops after a daemon restart and,
-when ``agent.loop.checkpoint.auto_resume_on_start`` is enabled, re-enters
-StrangeLoop on the same ``loop_id`` via ``resume_interrupted`` admission so
-``recovery_valid_resume`` reuses existing threads, CE state, and checkpoints.
-"""
+"""Daemon auto-resume of interrupted StrangeLoop goals."""
 
 from __future__ import annotations
 
@@ -63,7 +57,7 @@ def _age_hours(updated_at: datetime | None, *, now: datetime) -> float | None:
 
 
 def checkpoint_supports_valid_resume(checkpoint: Any | None) -> bool:
-    """True when StrangeLoop would set ``recovery_valid_resume``."""
+    """True when StrangeLoop would set `recovery_valid_resume`."""
     if checkpoint is None:
         return False
     if getattr(checkpoint, "status", None) != "running":
@@ -91,7 +85,7 @@ def classify_incomplete_loop(
     """Classify one incomplete loop for cancel / skip / resume.
 
     Cancel-by-age wins over resume. Autopilot worker loops are always skipped.
-    Clarification-parked loops honor ``clarifications_policy``.
+    Clarification-parked loops honor `clarifications_policy`.
     """
     lid = str(loop_id or "").strip()
     if not lid:
@@ -167,8 +161,8 @@ async def peek_clarification_pending(daemon: Any, loop_id: str) -> bool | None:
     """Best-effort probe: does this loop's graph state have a pending clarification?
 
     Loads the last LangGraph checkpoint tuple for the loop's thread and checks
-    the channel values for ``pending_clarification`` (without a matching
-    ``pending_clarification_answer``). Returns ``None`` when the checkpointer
+    the channel values for `pending_clarification` (without a matching
+    `pending_clarification_answer`). Returns `None` when the checkpointer
     or checkpoint tuple is unavailable.
     """
     runner = getattr(daemon, "_runner", None)
@@ -238,7 +232,7 @@ async def recover_incomplete_loops(daemon: Any) -> list[AutoResumeClassification
     """Classify incomplete loops; optionally enqueue auto-resume.
 
     Always runs cancel-by-age classification; resumes only when
-    ``auto_resume_on_start`` is true.
+    `auto_resume_on_start` is true.
     """
     from soothe_daemon.bootstrap.logging import set_loop_id
 

@@ -1,8 +1,4 @@
-"""WebSocket auth message handler. Message Types.
-
-Handles auth and auth_refresh WebSocket messages for AKSK-based
-authentication and token renewal.
-"""
+"""WebSocket auth message handler. Message Types."""
 
 from __future__ import annotations
 
@@ -34,7 +30,7 @@ class AuthHandler:
         """Initialize AuthHandler.
 
         Args:
-            identity: IdentityProtocol implementation for authentication.
+        identity: IdentityProtocol implementation for authentication.
         """
         self._identity = identity
 
@@ -48,11 +44,11 @@ class AuthHandler:
         AKSK Flow.
 
         Args:
-            access_key: Access key (AK-{16 chars}).
-            secret_key: Secret key (SK-{32 chars}).
+        access_key: Access key (AK-{16 chars}).
+        secret_key: Secret key (SK-{32 chars}).
 
         Returns:
-            auth_response message dict with success/error.
+        auth_response message dict with success/error.
         """
         logger.debug("Processing auth request: access_key=%s", access_key[:6] + "...")
 
@@ -91,10 +87,10 @@ class AuthHandler:
         Refresh Flow.
 
         Args:
-            refresh_token: JWT refresh token.
+        refresh_token: JWT refresh token.
 
         Returns:
-            auth_refresh_response message dict with success/error.
+        auth_refresh_response message dict with success/error.
         """
         logger.debug("Processing token refresh request")
 
@@ -126,11 +122,11 @@ def build_auth_response_error(error_code: str, message: str | None = None) -> di
     Message Types.
 
     Args:
-        error_code: Error code (invalid_credentials, aksk_expired, etc.).
-        message: Optional custom message (generic messages preferred for security).
+    error_code: Error code (invalid_credentials, aksk_expired, etc.).
+    message: Optional custom message (generic messages preferred for security).
 
     Returns:
-        auth_response dict with success=False.
+    auth_response dict with success=False.
     """
     error_messages = {
         "invalid_credentials": "Access key or secret key is invalid",
@@ -154,11 +150,11 @@ def build_refresh_response_error(error_code: str, message: str | None = None) ->
     Message Types.
 
     Args:
-        error_code: Error code (invalid_refresh_token, etc.).
-        message: Optional custom message.
+    error_code: Error code (invalid_refresh_token, etc.).
+    message: Optional custom message.
 
     Returns:
-        auth_refresh_response dict with success=False.
+    auth_refresh_response dict with success=False.
     """
     error_messages = {
         "invalid_refresh_token": "Refresh token is invalid, expired, or revoked",

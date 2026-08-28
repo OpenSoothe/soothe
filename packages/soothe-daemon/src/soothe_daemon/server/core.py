@@ -52,7 +52,7 @@ def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
     """Log a clean startup banner with channel info.
 
     Args:
-        channel_manager: The channel manager with started channels.
+    channel_manager: The channel manager with started channels.
     """
     from soothe_daemon import __version__
 
@@ -72,13 +72,13 @@ def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
 
 
 class SootheDaemon(DaemonHandlersMixin):
-    """Background daemon that runs ``SootheRunner`` and serves TUI clients.
+    """Background daemon that runs `SootheRunner` and serves TUI clients.
 
     Args:
-        config: Agent ``SootheConfig`` (in-proc agent core, ``nano.yml`` [+ ``soothe.yml``]).
-        daemon_config: Daemon-server ``SootheDaemonConfig`` (transports,
-            worker pool, distributed runner, ``daemon.yml``).
-        handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
+    config: Agent `SootheConfig` (in-proc agent core, `nano.yml` [+ `soothe.yml`]).
+    daemon_config: Daemon-server `SootheDaemonConfig` (transports,
+    worker pool, distributed runner, `daemon.yml`).
+    handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
     """
 
     def __init__(
@@ -91,10 +91,10 @@ class SootheDaemon(DaemonHandlersMixin):
         """Initialize the Soothe daemon.
 
         Args:
-            config: Agent ``SootheConfig``.
-            daemon_config: Daemon-server ``SootheDaemonConfig``.
-            handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
-                Disable for detached/background mode to avoid accidental Ctrl+C shutdown.
+        config: Agent `SootheConfig`.
+        daemon_config: Daemon-server `SootheDaemonConfig`.
+        handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
+        Disable for detached/background mode to avoid accidental Ctrl+C shutdown.
         """
         self._config = config or SootheConfig()
         self._daemon_config = daemon_config or SootheDaemonConfig()
@@ -230,10 +230,10 @@ class SootheDaemon(DaemonHandlersMixin):
         """Create IdentityService from daemon identity config.
 
         Returns:
-            IdentityService instance configured with JWT key and SQLite backend.
+        IdentityService instance configured with JWT key and SQLite backend.
 
         Raises:
-            RuntimeError: If JWT signing key is required but not available.
+        RuntimeError: If JWT signing key is required but not available.
         """
 
         from soothe.identity.identity_service import IdentityService
@@ -284,7 +284,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Build identity runtime bundle for agent/runner injection.
 
         Returns:
-            IdentityRuntime when identity service is enabled, else None.
+        IdentityRuntime when identity service is enabled, else None.
         """
         if self._identity_service is None:
             return None
@@ -300,7 +300,7 @@ class SootheDaemon(DaemonHandlersMixin):
     def _make_display_loop_purger(self) -> Callable[[str], None]:
         """Build a purge callable backed by the daemon display card store.
 
-        Injected into ``StrangeLoopCheckpointPersistenceManager`` so the host can
+        Injected into `StrangeLoopCheckpointPersistenceManager` so the host can
         purge a loop's display rows without importing the daemon (PR-2).
         """
         from soothe_daemon.display.display_store import get_display_card_store
@@ -323,7 +323,7 @@ class SootheDaemon(DaemonHandlersMixin):
         Atomically swaps config instances and emits event on the bus.
 
         Args:
-            event: Config reload event with old/new config and error info.
+        event: Config reload event with old/new config and error info.
         """
         if event.error is not None:
             logger.error(
@@ -351,7 +351,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Emit config reload event on the event bus for client notification.
 
         Args:
-            event: Config reload event to emit.
+        event: Config reload event to emit.
         """
         import asyncio
 
@@ -393,12 +393,12 @@ class SootheDaemon(DaemonHandlersMixin):
         """Enable hot-reload for agent and/or daemon config files.
 
         Args:
-            agent_config_path: Path to nano.yml (defaults to ~/.soothe/config/nano.yml).
-            daemon_config_path: Path to daemon.yml (defaults to ~/.soothe/config/daemon.yml).
-            validate_before_reload: Whether to validate config before swapping (default True).
-                When True, the loaded config undergoes Pydantic validation before being swapped
-                into the active config. If validation fails, the swap is skipped and an error
-                is logged with ConfigReloadedEvent emitted with the error field.
+        agent_config_path: Path to nano.yml (defaults to ~/.soothe/config/nano.yml).
+        daemon_config_path: Path to daemon.yml (defaults to ~/.soothe/config/daemon.yml).
+        validate_before_reload: Whether to validate config before swapping (default True).
+        When True, the loaded config undergoes Pydantic validation before being swapped
+        into the active config. If validation fails, the swap is skipped and an error
+        is logged with ConfigReloadedEvent emitted with the error field.
         """
         from pathlib import Path
 
@@ -1015,17 +1015,17 @@ class SootheDaemon(DaemonHandlersMixin):
         accept_proto: list[str] | None = None,
         client_capabilities: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Build a ``connection_ack`` message §8.2.
+        """Build a `connection_ack` message §8.2.
 
         Negotiates protocol version and capabilities, then returns the
         ack envelope with daemon readiness state and heartbeat interval.
 
         Args:
-            accept_proto: Protocol versions the client supports.
-            client_capabilities: Capabilities the client declared.
+        accept_proto: Protocol versions the client supports.
+        client_capabilities: Capabilities the client declared.
 
         Returns:
-            Wire-ready ``connection_ack`` message dict.
+        Wire-ready `connection_ack` message dict.
         """
         from soothe_daemon import __version__
 
@@ -1062,15 +1062,15 @@ class SootheDaemon(DaemonHandlersMixin):
         """Get initial messages for a new client connection.
 
         The protocol-1 handshake is client-initiated: the daemon waits for
-        ``connection_init`` before sending ``connection_ack``. This method
-        returns only the initial ``status`` message; the ack is sent by the
-        router when it processes ``connection_init``.
+        `connection_init` before sending `connection_ack`. This method
+        returns only the initial `status` message; the ack is sent by the
+        router when it processes `connection_init`.
 
         Args:
-            _transport_client: Transport-specific client object (unused).
+        _transport_client: Transport-specific client object (unused).
 
         Returns:
-            List containing the initial status message.
+        List containing the initial status message.
         """
         initial_state = (
             "running" if self._has_active_queries() else ("idle" if self._running else "stopped")
@@ -1090,11 +1090,11 @@ class SootheDaemon(DaemonHandlersMixin):
         Uses socket probe first (fast), falls back to lsof if needed.
 
         Args:
-            host: Host address to check.
-            port: TCP port number.
+        host: Host address to check.
+        port: TCP port number.
 
         Returns:
-            True if port is accepting connections, False otherwise.
+        True if port is accepting connections, False otherwise.
         """
         import socket as sock_mod
 
@@ -1133,7 +1133,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Classify incomplete loops; optionally auto-resume.
 
         Replaces log-only detection. Cancel-by-age still runs via the classifier;
-        resume requires ``agent.loop.checkpoint.auto_resume_on_start``.
+        resume requires `agent.loop.checkpoint.auto_resume_on_start`.
         """
         from soothe_daemon.runtime.auto_resume import recover_incomplete_loops
 
@@ -1146,7 +1146,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Block until the daemon is stopped.
 
         Supports both signal-based shutdown (main thread) and thread-safe
-        shutdown via ``request_stop()`` (background thread).
+        shutdown via `request_stop()` (background thread).
         """
         # Multi-channel architecture: channel manager owns all transports.
         if not self._channel_manager:
@@ -1230,7 +1230,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Periodic loop GC: ephemeral pass + empty-loop pass per tick.
 
         Both passes share the per-loop purge helper. Loops appearing in both
-        listings are purged once via de-duplication by ``loop_id``.
+        listings are purged once via de-duplication by `loop_id`.
         """
         from datetime import UTC, datetime, timedelta
 
@@ -1311,18 +1311,18 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.warning("Loop GC failed", exc_info=True)
 
     async def _reconcile_stale_running_loops(self) -> int:
-        """One-shot: demote stale ``status="running"`` rows whose runner is gone.
+        """One-shot: demote stale `status="running"` rows whose runner is gone.
 
         A loop row qualifies as stale when ALL hold:
-          * ``status == "running"``
-          * ``updated_at`` older than ``stale_running_seconds``
-          * ``loop_id`` is NOT in this daemon's active sets
+        * `status == "running"`
+        * `updated_at` older than `stale_running_seconds`
+        * `loop_id` is NOT in this daemon's active sets
 
-        The runner heartbeat (see ``_runner_strange_loop._start_loop_heartbeat``)
-        ticks ``updated_at`` every ~30s while a goal is in flight, so loops
+        The runner heartbeat (see `_runner_strange_loop._start_loop_heartbeat`)
+        ticks `updated_at` every ~30s while a goal is in flight, so loops
         that miss multiple heartbeat windows are presumed orphaned (daemon
         crash + restart, runner subprocess crash, etc.) and are demoted to
-        ``idle`` so list_loops reflects reality.
+        `idle` so list_loops reflects reality.
 
         Returns the count of demoted loops. Called both by the periodic
         reconciliation task and by the GC tick (before candidate selection)
@@ -1442,7 +1442,7 @@ class SootheDaemon(DaemonHandlersMixin):
         return demoted
 
     async def _periodic_loop_status_reconciliation(self) -> None:
-        """Periodic task wrapper for ``_reconcile_stale_running_loops``.
+        """Periodic task wrapper for `_reconcile_stale_running_loops`.
 
         Runs the one-shot reconciliation on its own interval. The GC tick
         also calls the one-shot method before candidate selection, so this
@@ -1463,7 +1463,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Log EventBus wire-size distribution on a fixed interval.
 
         Stops emitting while no events have been published for
-        ``event_size_stats_idle_pause_seconds`` (window is discarded without logging).
+        `event_size_stats_idle_pause_seconds` (window is discarded without logging).
         """
         stats = self._event_size_stats
         if stats is None:
@@ -1537,7 +1537,7 @@ class SootheDaemon(DaemonHandlersMixin):
         This prevents headless clients from timing out while the LLM is processing
         long requests. The heartbeat is only broadcast when a query is running.
 
-         : Heartbeat is broadcast every 5 seconds.
+        : Heartbeat is broadcast every 5 seconds.
         Skip heartbeat if stream is actively flowing (last broadcast < 5s).
         """
         from datetime import UTC, datetime
@@ -1825,13 +1825,13 @@ class SootheDaemon(DaemonHandlersMixin):
     # -- broadcast ----------------------------------------------------------
 
     def _stamp_active_turn_on_broadcast(self, msg: dict[str, Any]) -> dict[str, Any]:
-        """Attach ``turn_id``/``seq`` when a query turn is actively broadcasting.
+        """Attach `turn_id`/`seq` when a query turn is actively broadcasting.
 
-        Card mutations and other paths call ``_broadcast`` directly and historically
-        omitted ``turn_id``. Bound clients drop those frames (turn-id filter).
-        Only stamp from ``_broadcast_turn_generation`` (active stream), never from
-        the lasting ``_loop_turn_generation`` counter — pre-admit early ``running``
-        must keep an empty ``turn_id``.
+        Card mutations and other paths call `_broadcast` directly and historically
+        omitted `turn_id`. Bound clients drop those frames (turn-id filter).
+        Only stamp from `_broadcast_turn_generation` (active stream), never from
+        the lasting `_loop_turn_generation` counter — pre-admit early `running`
+        must keep an empty `turn_id`.
         """
         lid = str(msg.get("loop_id") or "").strip()
         if not lid or str(msg.get("turn_id") or "").strip():
@@ -1853,8 +1853,8 @@ class SootheDaemon(DaemonHandlersMixin):
     async def _broadcast(self, msg: dict[str, Any]) -> None:
         """Route events to loop subscribers (and global only for explicit daemon-wide messages).
 
-        Client-visible delivery is keyed strictly by ``loop_id`` on the message envelope.
-        Internal CoreAgent ``thread_id`` is not used to infer routing.
+        Client-visible delivery is keyed strictly by `loop_id` on the message envelope.
+        Internal CoreAgent `thread_id` is not used to infer routing.
         """
         # Track last broadcast for smart heartbeat
         from time import monotonic
@@ -1919,8 +1919,8 @@ class SootheDaemon(DaemonHandlersMixin):
         existing message handling logic with concurrency control.
 
         Args:
-            client_id: Unique client identifier
-            msg: Message dict from a transport client.
+        client_id: Unique client identifier
+        msg: Message dict from a transport client.
         """
         # Create a task with semaphore control and tracking
         task = asyncio.create_task(self._dispatch_with_semaphore(client_id, msg))
@@ -1933,13 +1933,13 @@ class SootheDaemon(DaemonHandlersMixin):
         """Dispatch message with semaphore control and proper cleanup.
 
         Validates the message at the transport boundary before
-        dispatching to the router.  This is the final defense-in-depth check;
+        dispatching to the router. This is the final defense-in-depth check;
         transport paths (WebSocket channel, asyncio TCP) also validate before
         reaching this method.
 
         Args:
-            client_id: Unique client identifier
-            msg: Message dict from a transport client.
+        client_id: Unique client identifier
+        msg: Message dict from a transport client.
         """
         async with self._dispatch_semaphore:
             try:
@@ -1969,7 +1969,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Cancel pending dispatch tasks for disconnected client.
 
         Args:
-            client_id: Client identifier being disconnected
+        client_id: Client identifier being disconnected
         """
         # Set client_id context for full ID in daemon.log
         set_client_id(client_id)
@@ -2006,10 +2006,10 @@ class SootheDaemon(DaemonHandlersMixin):
         """Find PID of process listening on a TCP port using lsof.
 
         Args:
-            port: TCP port number.
+        port: TCP port number.
 
         Returns:
-            PID if found, None otherwise.
+        PID if found, None otherwise.
         """
         from soothe_daemon.bootstrap.port_lookup import find_listening_pid
 
@@ -2026,10 +2026,10 @@ class SootheDaemon(DaemonHandlersMixin):
         by port (to handle orphan daemons with missing PID files).
 
         Args:
-            timeout: Maximum seconds to wait before SIGKILL escalation.
+        timeout: Maximum seconds to wait before SIGKILL escalation.
 
         Returns:
-            True if a signal was sent and daemon stopped, False if no daemon found.
+        True if a signal was sent and daemon stopped, False if no daemon found.
         """
         stopped = False
         pid: int | None = None
@@ -2098,11 +2098,11 @@ class SootheDaemon(DaemonHandlersMixin):
         """Wait for a process to exit, escalating to SIGKILL if needed.
 
         Args:
-            pid: Process ID to wait for.
-            timeout: Maximum seconds before SIGKILL escalation.
+        pid: Process ID to wait for.
+        timeout: Maximum seconds before SIGKILL escalation.
 
         Returns:
-            True if process exited, False if still running.
+        True if process exited, False if still running.
         """
         import time
 

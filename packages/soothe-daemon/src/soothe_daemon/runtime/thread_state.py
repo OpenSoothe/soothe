@@ -1,11 +1,4 @@
-"""Per-checkpoint state for daemon isolation.
-
-Registry keys are LangGraph / durability **checkpoint ids** (historically called
-``thread_id`` in code). **Client routing** uses **``loop_id``**; this module maps
-checkpoint ↔ loop via ``set_thread_loop`` / ``get_thread_loop``.
-
- : Identity context (user_id, aksk_id) is stored here for workspace isolation.
-"""
+"""Per-checkpoint state for daemon isolation."""
 
 from __future__ import annotations
 
@@ -21,7 +14,7 @@ from typing import Any
 class ThreadState:
     """Mutable state for a single LangGraph checkpoint row (or draft).
 
-     : user_id and aksk_id populated by IdentityMiddleware for
+    : user_id and aksk_id populated by IdentityMiddleware for
     workspace isolation based on authenticated identity.
     """
 
@@ -40,9 +33,9 @@ class ThreadState:
 
 
 class ThreadStateRegistry:
-    """Registry of per-checkpoint state keyed by LangGraph ``thread_id``.
+    """Registry of per-checkpoint state keyed by LangGraph `thread_id`.
 
-    **Loop-first routing** uses ``loop_id`` on the wire; use ``get_thread_loop`` to
+    **Loop-first routing** uses `loop_id` on the wire; use `get_thread_loop` to
     resolve checkpoint → loop.
     """
 
@@ -57,12 +50,12 @@ class ThreadStateRegistry:
         return self._by_thread.get(thread_id)
 
     def ensure(self, thread_id: str, *, is_draft: bool = False) -> ThreadState:
-        """Get or create ``ThreadState`` for *thread_id*.
+        """Get or create `ThreadState` for *thread_id*.
 
         Safe for concurrent async callers: the dict is checked inside a
         non-blocking check; because asyncio runs on a single thread there is no
-        true data race, but a second ``ensure`` call that arrives before the first
-        write completes would previously create a stale orphan object.  The lock
+        true data race, but a second `ensure` call that arrives before the first
+        write completes would previously create a stale orphan object. The lock
         makes the check-then-create atomic within the event loop.
         """
         existing = self._by_thread.get(thread_id)
@@ -98,8 +91,8 @@ class ThreadStateRegistry:
         Used by /clear command to update thread binding after creating new loop.
 
         Args:
-            thread_id: Thread identifier.
-            loop_id: Loop identifier to bind.
+        thread_id: Thread identifier.
+        loop_id: Loop identifier to bind.
         """
         if loop_id and str(loop_id).strip():
             self._thread_loop[thread_id] = str(loop_id).strip()
@@ -110,12 +103,12 @@ class ThreadStateRegistry:
         Used by /clear command to remove old loop binding before creating new loop.
 
         Args:
-            thread_id: Thread identifier.
-            loop_id: Loop identifier to unbind.
+        thread_id: Thread identifier.
+        loop_id: Loop identifier to unbind.
 
         Note:
-            Only removes binding if it matches the provided loop_id.
-            Does not remove thread state or other associations.
+        Only removes binding if it matches the provided loop_id.
+        Does not remove thread state or other associations.
         """
         current_binding = self._thread_loop.get(thread_id)
         if current_binding == loop_id:
@@ -139,7 +132,7 @@ class ThreadStateRegistry:
         """Remove all threads associated with *loop_id* (loop deletion).
 
         Returns:
-            List of thread_ids that were removed.
+        List of thread_ids that were removed.
         """
         removed: list[str] = []
         for tid, lid in list(self._thread_loop.items()):
@@ -165,9 +158,9 @@ class ThreadStateRegistry:
         Integration: user_id populated for workspace isolation.
 
         Args:
-            thread_id: Thread identifier.
-            user_id: Authenticated user_id (from JWT or external mapping).
-            aksk_id: Optional AKSK ID for audit tracking.
+        thread_id: Thread identifier.
+        user_id: Authenticated user_id (from JWT or external mapping).
+        aksk_id: Optional AKSK ID for audit tracking.
         """
         st = self.ensure(thread_id)
         st.user_id = user_id
@@ -179,10 +172,10 @@ class ThreadStateRegistry:
         Integration.
 
         Args:
-            thread_id: Thread identifier.
+        thread_id: Thread identifier.
 
         Returns:
-            user_id if set, None otherwise.
+        user_id if set, None otherwise.
         """
         st = self.get(thread_id)
         return st.user_id if st else None
@@ -193,10 +186,10 @@ class ThreadStateRegistry:
         Integration.
 
         Args:
-            thread_id: Thread identifier.
+        thread_id: Thread identifier.
 
         Returns:
-            aksk_id if set, None otherwise.
+        aksk_id if set, None otherwise.
         """
         st = self.get(thread_id)
         return st.aksk_id if st else None

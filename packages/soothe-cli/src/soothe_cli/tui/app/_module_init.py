@@ -1,4 +1,4 @@
-"""Textual UI application for Soothe - migrated from Soothe per RFC-606."""
+"""Textual UI application for Soothe - migrated from Soothe."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def _load_theme_preference() -> str:
     """Load the saved theme name from config, or return the default.
 
     Returns:
-        A Textual theme name (e.g., `'langchain'`, `'langchain-light'`).
+    A Textual theme name (e.g., `'langchain'`, `'langchain-light'`).
     """
     import yaml
 
@@ -130,10 +130,10 @@ def save_theme_preference(name: str) -> bool:
     """Persist theme preference to `~/SOOTHE_HOME/config/cli.yml`.
 
     Args:
-        name: Textual theme name to save.
+    name: Textual theme name to save.
 
     Returns:
-        `True` if the preference was saved, `False` if any error occurred.
+    `True` if the preference was saved, `False` if any error occurred.
     """
     if name not in theme.ThemeEntry.REGISTRY:
         logger.warning("Refusing to save unknown theme '%s'", name)
@@ -181,22 +181,22 @@ def _extract_model_params_flag(raw_arg: str) -> tuple[str, dict[str, Any] | None
     braces so that JSON containing spaces works without quoting.
 
     Note:
-        The bare-brace mode counts `{` / `}` characters without awareness of
-        JSON string contents. Values that contain literal braces inside strings
-        (e.g., `{"stop": "end}here"}`) will mis-parse. Users should quote the
-        value in that case.
+    The bare-brace mode counts `{` / `}` characters without awareness of
+    JSON string contents. Values that contain literal braces inside strings
+    (e.g., `{"stop": "end}here"}`) will mis-parse. Users should quote the
+    value in that case.
 
     Args:
-        raw_arg: The argument string after `/model `.
+    raw_arg: The argument string after `/model `.
 
     Returns:
-        Tuple of `(remaining_args, parsed_dict | None)`. Returns `None` for the
-            dict when the flag is absent.
+    Tuple of `(remaining_args, parsed_dict | None)`. Returns `None` for the
+    dict when the flag is absent.
 
     Raises:
-        ValueError: If the value is missing, has unclosed quotes,
-            unbalanced braces, or is not valid JSON.
-        TypeError: If the parsed JSON is not a dict.
+    ValueError: If the value is missing, has unclosed quotes,
+    unbalanced braces, or is not valid JSON.
+    TypeError: If the parsed JSON is not a dict.
     """
     flag = "--model-params"
     idx = raw_arg.find(flag)
@@ -311,7 +311,7 @@ def _new_loop_id() -> str:
     """Deferred-import wrapper around `sessions.generate_loop_id`.
 
     Returns:
-        UUID7 string.
+    UUID7 string.
     """
     from soothe_cli.loops.sessions import generate_loop_id
 
@@ -329,7 +329,7 @@ class TextualSessionState:
         """Initialize session state.
 
         Args:
-            loop_id: Optional loop ID (generates UUID7 if not provided)
+        loop_id: Optional loop ID (generates UUID7 if not provided)
         """
         self.loop_id = loop_id or _new_loop_id()
 
@@ -337,7 +337,7 @@ class TextualSessionState:
         """Reset to a new loop.
 
         Returns:
-            The new loop_id.
+        The new loop_id.
         """
         self.loop_id = _new_loop_id()
         return self.loop_id
@@ -382,17 +382,17 @@ async def run_textual_app(
     """Run the Textual TUI (daemon execution only).
 
     Args:
-        daemon_config: Loaded Soothe configuration used for WebSocket bootstrap.
-        assistant_id: Agent identifier for memory storage.
-        cwd: Current working directory to display.
-        resume_loop_id: Initial loop id when attaching to an existing conversation.
-        initial_prompt: Optional prompt to auto-submit when session starts.
-        initial_skill: Optional skill name to invoke when session starts.
-        mcp_server_info: MCP server metadata for the `/mcp` viewer.
-        profile_override: Extra profile fields from ``--profile-override``.
+    daemon_config: Loaded Soothe configuration used for WebSocket bootstrap.
+    assistant_id: Agent identifier for memory storage.
+    cwd: Current working directory to display.
+    resume_loop_id: Initial loop id when attaching to an existing conversation.
+    initial_prompt: Optional prompt to auto-submit when session starts.
+    initial_skill: Optional skill name to invoke when session starts.
+    mcp_server_info: MCP server metadata for the `/mcp` viewer.
+    profile_override: Extra profile fields from `--profile-override`.
 
     Returns:
-        An `AppResult` with the return code and final loop id.
+    An `AppResult` with the return code and final loop id.
     """
     from soothe_cli.tui.app._app import SootheApp  # deferred to avoid circular import
 
@@ -430,9 +430,9 @@ def run_textual_tui(
     """Launch the Textual TUI with optional loop attachment and initial prompt.
 
     Args:
-        config: Soothe configuration used for daemon-backed startup.
-        resume_loop_id: Loop id to attach to when starting the TUI
-        initial_prompt: Auto-submit prompt on launch
+    config: Soothe configuration used for daemon-backed startup.
+    resume_loop_id: Loop id to attach to when starting the TUI
+    initial_prompt: Auto-submit prompt on launch
     """
 
     # Caller cwd is forwarded as the loop workspace hint.

@@ -1,8 +1,4 @@
-"""Debug tracing for loop token events in the CLI TUI.
-
-Enable with ``logging_level: DEBUG`` in CLI config (``~/.soothe/config/cli.yml``)
-or ``SOOTHE_LOG_LEVEL=DEBUG``. Grep ``cli.log`` for ``[token-events]``.
-"""
+"""Debug tracing for loop token events in the CLI TUI."""
 
 from __future__ import annotations
 

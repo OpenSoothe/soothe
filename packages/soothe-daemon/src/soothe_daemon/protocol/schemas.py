@@ -1,20 +1,4 @@
-"""Pydantic param models for all protocol-1 message types.
-
-Each model defines the *params* schema for a ``(type, method)`` pair in the
-wire envelope.  The models are registered in ``PARAMS_REGISTRY``, which the
-transport layer consults at the validation boundary (before router dispatch).
-
-Design notes
-------------
-- All models allow extra fields (``model_config = {"extra": "allow"}``) so
-  the envelope's ``type``/``method``/``request_id`` keys and any
-  forward-compatible fields pass through without being rejected.
-- Required string identifiers (``loop_id``, ``job_id``, ``goal``, ``content``,
-  ``skill``, ``cmd``) use ``min_length=1`` so empty strings are caught here
-  instead of inside handlers.
-- Models are intentionally permissive about optional fields — the handler is
-  the authority on domain semantics.
-"""
+"""Pydantic param models for all protocol-1 message types."""
 
 from __future__ import annotations
 
@@ -102,10 +86,10 @@ __all__ = [
 class ParamsBase(BaseModel):
     """Base for all param models — allows extra fields for forward compat.
 
-    The protocol envelope carries ``proto``, ``type``, ``method``,
-    ``request_id``, and ``id`` alongside the operation-specific fields.  All
+    The protocol envelope carries `proto`, `type`, `method`,
+    `request_id`, and `id` alongside the operation-specific fields. All
     models validate against the *whole* message dict (or the nested
-    ``params`` dict) so extra keys must be tolerated.
+    `params` dict) so extra keys must be tolerated.
     """
 
     model_config = {"extra": "allow"}
@@ -207,7 +191,7 @@ class LoopExecutionStateFetchParams(ParamsBase):
 
     Returns a focused execution-progress snapshot (plan, step_index,
     iteration, status) for the loop's bound checkpoint thread. Lighter than
-    ``loop_state_get`` (which returns the full channel-value dict) — this RPC
+    `loop_state_get` (which returns the full channel-value dict) — this RPC
     extracts only the fields a client needs to render a progress indicator.
     """
 
@@ -218,8 +202,8 @@ class LoopSetClarificationModeParams(ParamsBase):
     """Params for method=loop_set_clarification_mode, type=request.
 
     Hot-swap the clarification mode on a running goal so the next
-    ``await_clarification`` node entry uses the new policy without waiting
-    for a new turn. Returns ``{"applied": bool}`` — ``False`` when no goal is
+    `await_clarification` node entry uses the new policy without waiting
+    for a new turn. Returns `{"applied": bool}` — `False` when no goal is
     currently running (the caller may retry on the next turn).
     """
 
@@ -295,7 +279,7 @@ class JobDagParams(ParamsBase):
 class JobGuidanceParams(ParamsBase):
     """Params for method=job_guidance, type=request.
 
-    The canonical field name for the guidance text is ``content`` (
+    The canonical field name for the guidance text is `content` (
     §10.1).
     """
 
@@ -366,9 +350,9 @@ class McpStatusParams(EmptyParams):
 class AuthParams(ParamsBase):
     """Params for method=auth, type=request.
 
-    ``access_key`` and ``secret_key`` are optional at the wire level so the
-    handler can return a domain-specific ``missing_credentials`` error rather
-    than a generic ``-32602 INVALID_PARAMS``.
+    `access_key` and `secret_key` are optional at the wire level so the
+    handler can return a domain-specific `missing_credentials` error rather
+    than a generic `-32602 INVALID_PARAMS`.
     """
 
     access_key: str = ""
@@ -378,8 +362,8 @@ class AuthParams(ParamsBase):
 class AuthRefreshParams(ParamsBase):
     """Params for method=auth_refresh, type=request.
 
-    ``refresh_token`` is optional at the wire level so the handler can return
-    a domain-specific ``missing_token`` error.
+    `refresh_token` is optional at the wire level so the handler can return
+    a domain-specific `missing_token` error.
     """
 
     refresh_token: str = ""
@@ -486,8 +470,8 @@ class AutopilotTopParams(ParamsBase):
     """Params for method=autopilot_top, type=request.
 
     Attributes:
-        include_terminal: When true, include completed/failed/cancelled goals
-            and fully terminal jobs (default active-only).
+    include_terminal: When true, include completed/failed/cancelled goals
+    and fully terminal jobs (default active-only).
     """
 
     include_terminal: bool = False
@@ -498,7 +482,7 @@ class ConnectionInitParams(_SdkConnectionInitParams):
 
     Subclasses the SDK wire model (the canonical field-definition source) and
     loosens all fields to optional: the daemon must tolerate clients that omit
-    ``client_version`` / ``client_name`` / ``accept_proto`` / ``capabilities``
+    `client_version` / `client_name` / `accept_proto` / `capabilities`
     rather than reject the handshake. Field *names and types* stay in sync with
     the SDK model via inheritance; only optionality is overridden here.
     """

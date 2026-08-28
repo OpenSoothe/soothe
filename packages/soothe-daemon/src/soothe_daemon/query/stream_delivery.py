@@ -1,32 +1,4 @@
-"""Daemon-side stream delivery shaping for loop event broadcast.
-
-Three goal_completion delivery modes:
-
-- ``batch``: Buffer entire goal_completion synthesis, emit one ``AIMessageChunk``
-  with ``chunk_position="last"`` at ``strange_loop.completed``. No real-time
-  visibility — intended for headless automation.
-
-- ``adaptive`` (default): Two-phase streaming.
-
-  1. *Streaming phase* — every goal_completion chunk is forwarded individually
-     until cumulative emitted chars reach ``adaptive_threshold_chars``.
-  2. *Chunked-streaming phase* — once threshold crossed the coalescer
-     buffers further chunks and emits intermediate ``AIMessageChunk`` blocks
-     when either ``adaptive_block_chars`` of text or ``adaptive_block_interval_s``
-     elapse since the last block. The final block at ``strange_loop.completed``
-     carries ``chunk_position="last"`` and ``stream_terminal=true``. Each block reuses the same
-     ``phase="goal_completion"`` tag so the TUI continues appending to the same
-     ``AssistantMessage`` card (see for chunk identity preservation).
-
-- ``streaming``: Raw passthrough at the LLM's native generation speed. Every
-  goal_completion chunk is forwarded immediately with no buffering. Highest
-  wire-frame count, lowest latency, best for local/low-latency clients that
-  want token-level fidelity (debugging, inline rendering experiments).
-
-When ``file_output_threshold_chars`` > 0 the goal_completion path stays in
-pure-batch buffering regardless of mode/phase so the final file_output
-decision sees the complete text.
-"""
+"""Daemon-side stream delivery shaping for loop event broadcast."""
 
 from __future__ import annotations
 
@@ -82,7 +54,7 @@ class _TextCoalesceBuffer:
 
 @dataclass
 class _ToolBatchBuffer:
-    """Debounced accumulator for ``tool_call_updates_batch`` per namespace."""
+    """Debounced accumulator for `tool_call_updates_batch` per namespace."""
 
     namespace: tuple[str, ...]
     updates: list[dict[str, Any]] = field(default_factory=list)
@@ -106,7 +78,7 @@ def _find_batched_tool_update(
     buf: _ToolBatchBuffer,
     tool_call_id: str,
 ) -> dict[str, Any] | None:
-    """Return the buffered update for ``tool_call_id``, if any."""
+    """Return the buffered update for `tool_call_id`, if any."""
     tid = str(tool_call_id or "").strip()
     if not tid:
         return None
@@ -232,7 +204,7 @@ def _chunk_position_last(msg: Any) -> bool:
 
 
 def _stamp_stream_terminal_wire_data(wire_data: Any) -> Any:
-    """Attach ``stream_terminal=true`` to a passthrough messages wire pair."""
+    """Attach `stream_terminal=true` to a passthrough messages wire pair."""
     if not isinstance(wire_data, (tuple, list)) or not wire_data:
         return wire_data
     msg_wire = wire_data[0]
@@ -269,7 +241,7 @@ class StreamDeliveryCoalescer:
     Supports:
     - goal_completion batching (batch / adaptive modes)
     - plain assistant text coalescing per namespace
-    - dropping noop ``updates`` tuples
+    - dropping noop `updates` tuples
     """
 
     def __init__(
@@ -330,7 +302,7 @@ class StreamDeliveryCoalescer:
 
     @property
     def turn_complete_pending(self) -> bool:
-        """True after ``strange_loop.completed`` was ingested (caller should signal idle)."""
+        """True after `strange_loop.completed` was ingested (caller should signal idle)."""
         return self._turn_complete_pending
 
     @property
@@ -351,9 +323,9 @@ class StreamDeliveryCoalescer:
     def consume_turn_complete_pending(self) -> bool:
         """Return and clear the turn-complete flag.
 
-        Set when ``strange_loop.completed`` is ingested and final flush tuples
+        Set when `strange_loop.completed` is ingested and final flush tuples
         were queued. QueryEngine calls this after the worker stream ends to
-        avoid treating a second ``flush()`` as the authoritative turn boundary.
+        avoid treating a second `flush()` as the authoritative turn boundary.
         """
         pending = self._turn_complete_pending
         self._turn_complete_pending = False
@@ -532,7 +504,7 @@ class StreamDeliveryCoalescer:
         msg: Any,
         out: list[tuple[tuple[str, ...], str, Any]],
     ) -> list[tuple[tuple[str, ...], str, Any]]:
-        """Flush deferred buffers when upstream marks ``chunk_position=last``."""
+        """Flush deferred buffers when upstream marks `chunk_position=last`."""
         if not _chunk_position_last(msg):
             return out
         tail: list[tuple[tuple[str, ...], str, Any]] = []
@@ -547,7 +519,7 @@ class StreamDeliveryCoalescer:
         self,
         tuples: list[tuple[tuple[str, ...], str, Any]],
     ) -> list[tuple[tuple[str, ...], str, Any]]:
-        """Emit ``soothe.stream.end`` after terminal content frames."""
+        """Emit `soothe.stream.end` after terminal content frames."""
         extended = list(tuples)
         for ns, mode, data in tuples:
             if mode != "messages":
@@ -715,14 +687,14 @@ class StreamDeliveryCoalescer:
     ) -> list[tuple[tuple[str, ...], str, Any]]:
         """Route a goal_completion message through the active delivery phase.
 
-        - ``batch``: always accumulate; ``_flush_goal_completion(final=True)``
-          emits a single message at strange_loop.completed.
-        - ``streaming``: passthrough each chunk; track cumulative chars and
-          transition to ``chunked_streaming`` once ``adaptive_threshold_chars``
-          is reached.
-        - ``chunked_streaming``: accumulate into the goal_completion buffer
-          and flush intermediate blocks when char or time thresholds are met
-          .
+        - `batch`: always accumulate; `_flush_goal_completion(final=True)`
+        emits a single message at strange_loop.completed.
+        - `streaming`: passthrough each chunk; track cumulative chars and
+        transition to `chunked_streaming` once `adaptive_threshold_chars`
+        is reached.
+        - `chunked_streaming`: accumulate into the goal_completion buffer
+        and flush intermediate blocks when char or time thresholds are met
+        .
         """
         wire_data = prepare_stream_data_for_wire((msg, metadata))
         msg_wire = wire_data[0] if isinstance(wire_data, (tuple, list)) and wire_data else msg
@@ -791,9 +763,9 @@ class StreamDeliveryCoalescer:
     ) -> list[tuple[tuple[str, ...], str, Any]]:
         """Re-stamp the last emitted frame as terminal when the buffer is empty.
 
-        Short syntheses never cross ``adaptive_threshold_chars`` (and mode
-        ``streaming`` never buffers at all), so the buffer is empty at turn end and
-        upstream does not mark ``chunk_position=last``. A block flush can likewise
+        Short syntheses never cross `adaptive_threshold_chars` (and mode
+        `streaming` never buffers at all), so the buffer is empty at turn end and
+        upstream does not mark `chunk_position=last`. A block flush can likewise
         empty the buffer before completion.
         """
         tail = self._gc_terminal_tail
@@ -817,10 +789,10 @@ class StreamDeliveryCoalescer:
     ) -> list[tuple[tuple[str, ...], str, Any]]:
         """Emit an intermediate goal_completion block if size or time threshold met.
 
-        Called from ``_ingest_goal_completion`` and from periodic ingest entry to
+        Called from `_ingest_goal_completion` and from periodic ingest entry to
         ensure long synthesis streams emit visible progress at least every
-        ``adaptive_block_interval_s`` seconds without crossing
-        ``adaptive_block_chars`` characters.
+        `adaptive_block_interval_s` seconds without crossing
+        `adaptive_block_chars` characters.
         """
         if self._gc_phase != "chunked_streaming":
             return []
@@ -840,9 +812,9 @@ class StreamDeliveryCoalescer:
     ) -> list[tuple[tuple[str, ...], str, Any]]:
         """Flush the goal_completion buffer as an intermediate or final block.
 
-        Each block keeps the same ``phase="goal_completion"`` tag so the TUI
-        appends it onto the same ``AssistantMessage`` card. Only the
-        final block carries ``chunk_position="last"``.
+        Each block keeps the same `phase="goal_completion"` tag so the TUI
+        appends it onto the same `AssistantMessage` card. Only the
+        final block carries `chunk_position="last"`.
         """
         if self._gc is None or not self._gc.parts:
             return []
@@ -933,7 +905,7 @@ class StreamDeliveryCoalescer:
     def _flush_goal_completion(self, *, final: bool) -> list[tuple[tuple[str, ...], str, Any]]:
         """Flush remaining buffered goal_completion text.
 
-        Called at stream end (``flush``) and on ``strange_loop.completed``. The
+        Called at stream end (`flush`) and on `strange_loop.completed`. The
         text may be empty if the entire synthesis was already streamed (pure
         adaptive streaming phase) or if the chunked-streaming blocks emptied
         the buffer between block flushes. file_output_threshold short-circuits

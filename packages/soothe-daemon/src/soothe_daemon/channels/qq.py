@@ -1,20 +1,4 @@
-"""QQ channel implementation using botpy SDK.
-
-Inbound:
-- Parse QQ botpy messages (C2C / Group)
-- Download attachments to media dir using chunked streaming write (memory-safe)
-- Publish to ChannelManager via Channel._handle_message()
-- Content includes a clear, actionable "Received files:" list with local paths
-
-Outbound:
-- Send attachments (message.media) first via QQ rich media API (base64 upload + msg_type=7)
-- Then send text (plain or markdown)
-- message.media supports local paths, file:// paths, and http(s) URLs
-
-Notes:
-- QQ restricts many audio/video formats. We conservatively classify as image vs file.
-- Attachment structures differ across botpy versions; we try multiple field candidates.
-"""
+"""QQ channel implementation using botpy SDK."""
 
 from __future__ import annotations
 

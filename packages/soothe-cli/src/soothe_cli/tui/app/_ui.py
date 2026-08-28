@@ -51,8 +51,8 @@ class _UIMixin:
         """Update the token count in the status bar.
 
         Args:
-            count: Accumulated loop token usage total.
-            approximate: Append "+" to signal a stale/interrupted count.
+        count: Accumulated loop token usage total.
+        approximate: Append "+" to signal a stale/interrupted count.
         """
         if self._status_bar:
             self._status_bar.set_tokens(count, approximate=approximate)
@@ -97,7 +97,7 @@ class _UIMixin:
             trace.note_display_refresh(display_total=total, target=target)
 
     def _loop_token_breakdown(self) -> tuple[int, int, int]:
-        """Return ``(baseline, goal_run, display_total)`` for debug tracing."""
+        """Return `(baseline, goal_run, display_total)` for debug tracing."""
         baseline = self._loop_baseline_tokens
         goal_run = self._loop_input_tokens + self._loop_output_tokens
         return baseline, goal_run, self._display_token_total()
@@ -373,8 +373,8 @@ class _UIMixin:
         or appends at the end when the queue is empty.
 
         Args:
-            container: The `#messages` container to mount into.
-            widget: The widget to mount.
+        container: The `#messages` container to mount into.
+        widget: The widget to mount.
         """
         if not container.is_attached:
             return
@@ -403,12 +403,12 @@ class _UIMixin:
         """Show, update, or hide the loading spinner.
 
         Args:
-            status: The spinner status to display, or `None` to hide.
-            show_interrupt_hint: When ``True``, append an esc-to-interrupt hint on the row.
-            hint_extra: Optional hint segment before elapsed time (e.g. ``attempt 2/3``).
-            turn_start_mono: Optional monotonic anchor for elapsed time on the thinking row.
-            reset_turn_start_only: When ``True``, only re-anchor elapsed time without changing
-                the visible status or hiding the row.
+        status: The spinner status to display, or `None` to hide.
+        show_interrupt_hint: When `True`, append an esc-to-interrupt hint on the row.
+        hint_extra: Optional hint segment before elapsed time (e.g. `attempt 2/3`).
+        turn_start_mono: Optional monotonic anchor for elapsed time on the thinking row.
+        reset_turn_start_only: When `True`, only re-anchor elapsed time without changing
+        the visible status or hiding the row.
         """
         if reset_turn_start_only:
             if turn_start_mono is not None and self._loading_widget is not None:
@@ -524,7 +524,7 @@ class _UIMixin:
     def _sync_pinned_goal_visibility(self) -> None:
         """Evaluate scroll position and update the pinned goal bar.
 
-        Deferred from ``_on_chat_scroll_y_changed`` so that widget regions
+        Deferred from `_on_chat_scroll_y_changed` so that widget regions
         are up to date after the scroll-layout pass.
         """
         self._pinned_goal_check_scheduled = False
@@ -555,10 +555,10 @@ class _UIMixin:
         conversation.
 
         Args:
-            chat: The chat VerticalScroll widget.
+        chat: The chat VerticalScroll widget.
 
         Returns:
-            The content of the most recent in-view UserMessage, or ``None``.
+        The content of the most recent in-view UserMessage, or `None`.
         """
         try:
             messages = self.query_one("#messages", Container)
@@ -591,7 +591,7 @@ class _UIMixin:
         (e.g., all pruned during aggressive scroll).
 
         Args:
-            text: The user message content to pin at the top.
+        text: The user message content to pin at the top.
         """
         try:
             bar = self.query_one("#pinned-goal", PinnedGoalBar)

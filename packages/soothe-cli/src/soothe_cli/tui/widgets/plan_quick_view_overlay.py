@@ -37,7 +37,7 @@ def _plan_quick_view_title(
     elapsed: str | None = None,
     tokens: str | None = None,
 ) -> str:
-    """Compose the panel title: ``Orchestrating [8d26] · complex · 37s · in:1.2K out:345``."""
+    """Compose the panel title: `Orchestrating [8d26] · complex · 37s · in:1.2K out:345`."""
     title = "Orchestrating"
     short_id = compact_id_suffix(loop_id or "")
     if short_id:
@@ -68,10 +68,10 @@ def _plan_quick_view_header(
     id, intake complexity, and live elapsed — so the panel needs no separate
     goal line. It is rendered with the same `SECONDARY_TEXT_STYLE` dim style
     used by the welcome-area Loop ID, then bolded via `bold dim` so the title
-    stands out while staying de-emphasized. ``prefix`` is the goal lifecycle
+    stands out while staying de-emphasized. `prefix` is the goal lifecycle
     glyph from the live goal tree.
 
-    ``max_cols`` truncates the whole header to one line so it never wraps.
+    `max_cols` truncates the whole header to one line so it never wraps.
     Hints are dropped first (right-to-left) to preserve the title; if even the
     title exceeds the budget it is ellipsized.
     """
@@ -133,12 +133,12 @@ def _goal_tree_running_live_stats(
 class PlanQuickViewOverlay(Vertical):
     """In-flow plan panel above the thinking row and chat input.
 
-    Auto-shows while a goal is executing (``_loop_executing()``) when the
-    preferred visibility is on (``CLIConfig.plan_panel_default_visible``,
+    Auto-shows while a goal is executing (`_loop_executing()`) when the
+    preferred visibility is on (`CLIConfig.plan_panel_default_visible`,
     default False). Auto-hides once the loop reaches a terminal footer
-    (``set_loop_finished`` / ``set_interrupted``). Toggle with ``Ctrl+t``.
-    Mounted as a Screen sibling between ``#chat`` and
-    ``#bottom-app-container`` so expanding it shrinks the transcript
+    (`set_loop_finished` / `set_interrupted`). Toggle with `Ctrl+t`.
+    Mounted as a Screen sibling between `#chat` and
+    `#bottom-app-container` so expanding it shrinks the transcript
     instead of floating over the sticky bottom chrome. Snapshots in-memory
     goal tree state on the UI adapter (not mounted in the main message list).
     """
@@ -250,9 +250,9 @@ class PlanQuickViewOverlay(Vertical):
         """Hide the overlay.
 
         Args:
-            forget_preference: When True (Ctrl+t / Esc), stay hidden until the
-                user opts in again. When False (no active plan), keep watching
-                so a new plan can auto-show.
+        forget_preference: When True (Ctrl+t / Esc), stay hidden until the
+        user opts in again. When False (no active plan), keep watching
+        so a new plan can auto-show.
         """
         if forget_preference:
             self._preferred_visible = False
@@ -283,7 +283,7 @@ class PlanQuickViewOverlay(Vertical):
         - No live goal tree → hide.
         - Executing goal (loop open, no terminal footer) → auto-expand.
         - Completed/interrupted goal (terminal footer visible) → auto-hide,
-          unless the user pinned the panel open with Ctrl+t.
+        unless the user pinned the panel open with Ctrl+t.
         """
         tree = get_live_goal_tree(self.app)
         if tree is None:
@@ -348,7 +348,7 @@ class PlanQuickViewOverlay(Vertical):
             self._content.update(Content.styled(f"{gutter}(plan view unavailable)", "dim"))
 
     def _panel_content_width(self, reserved: int = 0) -> int:
-        """Columns available inside the overlay chrome, minus ``reserved``.
+        """Columns available inside the overlay chrome, minus `reserved`.
 
         Expanded chrome takes the left tall border (1) plus horizontal
         padding (2).

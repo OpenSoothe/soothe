@@ -20,10 +20,10 @@ def safe_filename(name: str) -> str:
     """Replace unsafe path characters with underscores.
 
     Args:
-        name: Original filename.
+    name: Original filename.
 
     Returns:
-        Sanitized filename safe for filesystem use.
+    Sanitized filename safe for filesystem use.
     """
     return _UNSAFE_CHARS.sub("_", name).strip()
 
@@ -32,11 +32,11 @@ def split_message(content: str, max_len: int = 2000) -> list[str]:
     """Split content into chunks within max_len, preferring line breaks.
 
     Args:
-        content: The text content to split.
-        max_len: Maximum length per chunk (default 2000 for Discord compatibility).
+    content: The text content to split.
+    max_len: Maximum length per chunk (default 2000 for Discord compatibility).
 
     Returns:
-        List of message chunks, each within max_len.
+    List of message chunks, each within max_len.
     """
     if not content:
         return []
@@ -63,11 +63,11 @@ def truncate_text(text: str, max_chars: int) -> str:
     """Truncate text with a stable suffix.
 
     Args:
-        text: Text to truncate.
-        max_chars: Maximum character limit.
+    text: Text to truncate.
+    max_chars: Maximum character limit.
 
     Returns:
-        Truncated text with suffix if needed.
+    Truncated text with suffix if needed.
     """
     if max_chars <= 0 or len(text) <= max_chars:
         return text
@@ -78,10 +78,10 @@ def detect_image_mime(data: bytes) -> str | None:
     """Detect image MIME type from magic bytes.
 
     Args:
-        data: Image binary data.
+    data: Image binary data.
 
     Returns:
-        MIME type string or None if unrecognized.
+    MIME type string or None if unrecognized.
     """
     if data[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
@@ -100,13 +100,13 @@ def build_image_content_blocks(
     """Build native image blocks plus a short text label.
 
     Args:
-        raw: Image binary data.
-        mime: MIME type.
-        path: File path for metadata.
-        label: Text label to append.
+    raw: Image binary data.
+    mime: MIME type.
+    path: File path for metadata.
+    label: Text label to append.
 
     Returns:
-        List of content blocks for LLM vision input.
+    List of content blocks for LLM vision input.
     """
     b64 = base64.b64encode(raw).decode()
     return [
@@ -125,10 +125,10 @@ def strip_think(text: str) -> str:
     Handles Anthropic-style thinking blocks and other model-specific formats.
 
     Args:
-        text: Text with potential thinking blocks.
+    text: Text with potential thinking blocks.
 
     Returns:
-        Cleaned text without thinking blocks.
+    Cleaned text without thinking blocks.
     """
     # Remove well-formed <thought> blocks
     text = re.sub(r"<thought>[\s\S]*?</thought>", "", text)
@@ -155,10 +155,10 @@ def extract_think(text: str) -> tuple[str | None, str]:
     """Extract thinking content from inline blocks.
 
     Args:
-        text: Text with potential thinking blocks.
+    text: Text with potential thinking blocks.
 
     Returns:
-        Tuple of (thinking_text, cleaned_text).
+    Tuple of (thinking_text, cleaned_text).
     """
     parts: list[str] = []
     for m in re.finditer(r"<thought>([\s\S]*?)</thought>", text):
@@ -171,10 +171,10 @@ def escape_html(text: str) -> str:
     """Escape HTML special characters.
 
     Args:
-        text: Text to escape.
+    text: Text to escape.
 
     Returns:
-        HTML-safe text.
+    HTML-safe text.
     """
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -183,10 +183,10 @@ def strip_markdown_inline(text: str) -> str:
     """Strip markdown inline formatting from text.
 
     Args:
-        text: Markdown formatted text.
+    text: Markdown formatted text.
 
     Returns:
-        Plain text without markdown syntax.
+    Plain text without markdown syntax.
     """
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"__(.+?)__", r"\1", text)
@@ -199,10 +199,10 @@ def strip_markdown_block(text: str) -> str:
     """Strip block-level and inline markdown for readable plain-text preview.
 
     Args:
-        text: Markdown formatted text.
+    text: Markdown formatted text.
 
     Returns:
-        Plain text suitable for display during streaming edits.
+    Plain text suitable for display during streaming edits.
     """
     # Code blocks -> just the code
     text = re.sub(r"```[\w]*\n?([\s\S]*?)```", r"\1", text)

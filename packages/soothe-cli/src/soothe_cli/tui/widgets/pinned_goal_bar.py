@@ -57,7 +57,7 @@ class PinnedGoalBar(Static):
         """Initialize the pinned goal bar.
 
         Args:
-            **kwargs: Additional arguments passed to parent.
+        **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
         self._content: str = ""
@@ -76,7 +76,7 @@ class PinnedGoalBar(Static):
         the bar based on scroll position.
 
         Args:
-            text: The user message content to pin.
+        text: The user message content to pin.
         """
         self._content = text
         self.refresh()
@@ -89,7 +89,7 @@ class PinnedGoalBar(Static):
         stays hidden regardless.
 
         Args:
-            visible: Whether the chat is scrolled away from the bottom.
+        visible: Whether the chat is scrolled away from the bottom.
         """
         if self._user_override or not self._content:
             return
@@ -103,7 +103,7 @@ class PinnedGoalBar(Static):
         should re-evaluate scroll position and call `set_visible`).
 
         Returns:
-            The new override state: `True` if the bar is now force-hidden.
+        The new override state: `True` if the bar is now force-hidden.
         """
         self._user_override = not self._user_override
         if self._user_override:
@@ -114,8 +114,8 @@ class PinnedGoalBar(Static):
         """Render the pinned user message in compact form.
 
         Returns:
-            Styled `Content` with role indicator, mode prefix, highlighted
-            mentions, and ellipsis truncation for long messages.
+        Styled `Content` with role indicator, mode prefix, highlighted
+        mentions, and ellipsis truncation for long messages.
         """
         if not self._content:
             return Content("")
@@ -170,7 +170,7 @@ class PinnedGoalBar(Static):
         Accounts for the padding (0 1 = 2 columns).
 
         Returns:
-            Column count available for text content.
+        Column count available for text content.
         """
         try:
             size = self.size

@@ -1,16 +1,4 @@
-"""Transport-agnostic message validation.
-
-Provides Pydantic-based schema validation at the transport boundary.  Every
-incoming message is validated against a params model from ``PARAMS_REGISTRY``
-*before* router dispatch, so handlers receive pre-validated, typed params and
-do not need inline ``if not loop_id:`` checks.
-
-Public API:
-    validate_message      -- validate a decoded message dict; returns list of
-                             error strings (empty = valid)
-    validate_message_size -- check encoded message size is within the limit
-    VALID_TYPES           -- frozenset of all protocol-1 ``type`` values
-"""
+"""Transport-agnostic message validation."""
 
 from __future__ import annotations
 
@@ -44,21 +32,21 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
     """Validate a wire message against the schema registry.
 
     Performs three checks:
-    1. Envelope: ``type`` field is present and known.
-    2. Schema lookup: a Pydantic model exists for ``(type, method)``.
-    3. Params validation: ``model_validate`` succeeds.
+    1. Envelope: `type` field is present and known.
+    2. Schema lookup: a Pydantic model exists for `(type, method)`.
+    3. Params validation: `model_validate` succeeds.
 
-    The daemon accepts protocol-1 envelopes (``{proto, type, method, params,
-    id}``) plus the three non-envelope control types (``connection_init``,
-    ``ping``, ``pong``). Legacy flat-form messages are rejected.
+    The daemon accepts protocol-1 envelopes (`{proto, type, method, params,
+    id}`) plus the three non-envelope control types (`connection_init`,
+    `ping`, `pong`). Legacy flat-form messages are rejected.
 
     Args:
-        msg: Raw decoded message dict.
+    msg: Raw decoded message dict.
 
     Returns:
-        List of validation error strings.  Empty list if the message is
-        valid.  Each string is of the form ``"field: message"`` for params
-        errors, or a descriptive sentence for envelope / lookup errors.
+    List of validation error strings. Empty list if the message is
+    valid. Each string is of the form `"field: message"` for params
+    errors, or a descriptive sentence for envelope / lookup errors.
     """
     # 1. Envelope validation ------------------------------------------------
     msg_type = msg.get("type")
@@ -103,11 +91,11 @@ def validate_message_size(msg: dict[str, Any], max_size_bytes: int = 10 * 1024 *
     """Validate that message size is within limits.
 
     Args:
-        msg: Message dict to validate.
-        max_size_bytes: Maximum size in bytes (default: 10MB).
+    msg: Message dict to validate.
+    max_size_bytes: Maximum size in bytes (default: 10MB).
 
     Returns:
-        True if message is within size limit, False otherwise.
+    True if message is within size limit, False otherwise.
     """
     import json
 

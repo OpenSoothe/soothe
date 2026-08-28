@@ -32,7 +32,7 @@ def _load_dotenv_if_needed() -> None:
 
 
 def _ensure_cli_dotenv() -> None:
-    """Load local project ``.env`` for every ``soothed`` subcommand."""
+    """Load local project `.env` for every `soothed` subcommand."""
     from soothe_daemon.bootstrap.env import bootstrap_dotenv
 
     bootstrap_dotenv()
@@ -86,10 +86,10 @@ def _find_port_pid(port: int) -> int | None:
     """Find PID of process listening on a TCP port using lsof.
 
     Args:
-        port: TCP port number.
+    port: TCP port number.
 
     Returns:
-        PID if found, None otherwise.
+    PID if found, None otherwise.
     """
     from soothe_daemon.bootstrap.port_lookup import find_listening_pid
 
@@ -103,8 +103,8 @@ def _fast_is_running() -> tuple[bool, bool]:
     to detect orphan daemons (PID file missing but process alive on port).
 
     Returns:
-        Tuple of (is_running, is_orphan). is_orphan is True when the
-        daemon is running but the PID file is missing or stale.
+    Tuple of (is_running, is_orphan). is_orphan is True when the
+    daemon is running but the PID file is missing or stale.
     """
     pf = _fast_pid_path()
     if pf.exists():
@@ -653,7 +653,7 @@ def _apply_dotenv_for_daemon_paths(
     explicit_daemon_yaml: str | None,
     load_dotenv_adjacent_to_yaml,
 ) -> None:
-    """Load ``.env`` beside daemon YAML and beside ``soothe_config_path`` before parsing agent config."""
+    """Load `.env` beside daemon YAML and beside `soothe_config_path` before parsing agent config."""
     from soothe_daemon.config import default_daemon_config_path
 
     paths: list[str | Path | None] = [explicit_daemon_yaml]
@@ -665,15 +665,15 @@ def _apply_dotenv_for_daemon_paths(
 
 
 def _load_daemon_config(config_path: str | None, daemon_config_cls, default_config_path_func):
-    """Load ``SootheDaemonConfig`` from explicit path or default location.
+    """Load `SootheDaemonConfig` from explicit path or default location.
 
     Args:
-        config_path: Optional path passed from CLI (``daemon.yml``).
-        daemon_config_cls: SootheDaemonConfig class (passed to avoid import).
-        default_config_path_func: Function to get default config path.
+    config_path: Optional path passed from CLI (`daemon.yml`).
+    daemon_config_cls: SootheDaemonConfig class (passed to avoid import).
+    default_config_path_func: Function to get default config path.
 
     Returns:
-        Parsed ``SootheDaemonConfig`` (defaults if no file found).
+    Parsed `SootheDaemonConfig` (defaults if no file found).
     """
     if config_path:
         return daemon_config_cls.from_yaml_file(config_path)

@@ -1,13 +1,4 @@
-"""Personal WeChat (微信) channel using HTTP long-poll API.
-
-Uses the ilinkai.weixin.qq.com API for personal WeChat messaging.
-No WebSocket, no local WeChat client needed — just HTTP requests with a
-bot token obtained via QR code login.
-
-Protocol reverse-engineered from ``@tencent-weixin/openclaw-weixin`` v1.0.3.
-
-Migrated from nanoBot with adaptations for soothe-daemon Channel architecture.
-"""
+"""Personal WeChat (微信) channel using HTTP long-poll API."""
 
 from __future__ import annotations
 
@@ -172,8 +163,8 @@ class WeixinChannel(Channel):
         """Initialize Weixin channel.
 
         Args:
-            config: Weixin configuration (dict or WeixinConfig).
-            manager: ChannelManager for inbound routing.
+        config: Weixin configuration (dict or WeixinConfig).
+        manager: ChannelManager for inbound routing.
         """
         super().__init__(config, manager)
         if isinstance(config, dict):
@@ -272,7 +263,7 @@ class WeixinChannel(Channel):
     def _random_wechat_uin() -> str:
         """X-WECHAT-UIN: random uint32 → decimal string → base64.
 
-        Matches the reference plugin's ``randomWechatUin()`` in api.ts.
+        Matches the reference plugin's `randomWechatUin()` in api.ts.
         Generated fresh for **every** request (same as reference).
         """
         uint32 = int.from_bytes(os.urandom(4), "big")
@@ -1033,7 +1024,7 @@ class WeixinChannel(Channel):
         """Send any buffered tool hints for *chat_id* as a single message.
 
         Tool hints are coalesced to reduce message count and avoid hitting the
-        WeChat iLink rate limit (~7 msgs / 5 min).  Failures are logged but
+        WeChat iLink rate limit (~7 msgs / 5 min). Failures are logged but
         not raised so that the main message send is never blocked.
         """
         hints = self._pending_tool_hints.pop(chat_id, None)
@@ -1090,8 +1081,8 @@ class WeixinChannel(Channel):
         """Send a message through WeChat.
 
         Args:
-            chat_id: WeChat user ID.
-            message: ChannelMessage to send.
+        chat_id: WeChat user ID.
+        message: ChannelMessage to send.
         """
         if not self._client or not self._token:
             raise RuntimeError("WeChat client not initialized or not authenticated")
@@ -1231,8 +1222,8 @@ class WeixinChannel(Channel):
     ) -> None:
         """Weixin iLink does not support native streaming deltas.
 
-        We only hook ``_stream_end`` so buffered tool hints are flushed even
-        when the final answer carries the ``_streamed`` flag and bypasses
+        We only hook `_stream_end` so buffered tool hints are flushed even
+        when the final answer carries the `_streamed` flag and bypasses
         :meth:`send`.
         """
         if metadata and metadata.get("_stream_end"):
@@ -1336,12 +1327,12 @@ class WeixinChannel(Channel):
     ) -> None:
         """Upload a local file to WeChat CDN and send it as a media message.
 
-        Follows the exact protocol from ``@tencent-weixin/openclaw-weixin`` v1.0.3:
+        Follows the exact protocol from `@tencent-weixin/openclaw-weixin` v1.0.3:
         1. Generate a random 16-byte AES key (client-side).
-        2. Call ``getuploadurl`` with file metadata + hex-encoded AES key.
-        3. AES-128-ECB encrypt the file and POST to CDN (``{cdnBaseUrl}/upload``).
-        4. Read ``x-encrypted-param`` header from CDN response as the download param.
-        5. Send a ``sendmessage`` with the appropriate media item referencing the upload.
+        2. Call `getuploadurl` with file metadata + hex-encoded AES key.
+        3. AES-128-ECB encrypt the file and POST to CDN (`{cdnBaseUrl}/upload`).
+        4. Read `x-encrypted-param` header from CDN response as the download param.
+        5. Send a `sendmessage` with the appropriate media item referencing the upload.
         """
         p = Path(media_path)
         if not p.is_file():
@@ -1489,10 +1480,10 @@ class WeixinChannel(Channel):
 def _parse_aes_key(aes_key_b64: str) -> bytes:
     """Parse a base64-encoded AES key, handling both encodings seen in the wild.
 
-    From ``pic-decrypt.ts parseAesKey``:
+    From `pic-decrypt.ts parseAesKey`:
 
-    * ``base64(raw 16 bytes)``            → images (media.aes_key)
-    * ``base64(hex string of 16 bytes)``  → file / voice / video
+    * `base64(raw 16 bytes)` → images (media.aes_key)
+    * `base64(hex string of 16 bytes)` → file / voice / video
 
     In the second case base64-decoding yields 32 ASCII hex chars which must
     then be parsed as hex to recover the actual 16-byte key.
@@ -1540,7 +1531,7 @@ def _encrypt_aes_ecb(data: bytes, aes_key_b64: str) -> bytes:
 def _decrypt_aes_ecb(data: bytes, aes_key_b64: str) -> bytes:
     """Decrypt AES-128-ECB media data.
 
-    ``aes_key_b64`` is always base64-encoded (caller converts hex keys first).
+    `aes_key_b64` is always base64-encoded (caller converts hex keys first).
     """
     try:
         key = _parse_aes_key(aes_key_b64)

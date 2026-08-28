@@ -1,8 +1,4 @@
-"""One-shot admin RPCs over the daemon WebSocket (sdk wire only).
-
-Used by `soothed` admin commands that must talk to a running daemon without
-depending on soothe-client-python (client sits above the daemon in the DAG).
-"""
+"""One-shot admin RPCs over the daemon WebSocket (sdk wire only)."""
 
 from __future__ import annotations
 
@@ -38,7 +34,7 @@ def _client_version() -> str:
 
 
 async def _perform_handshake(ws: Any, *, timeout: float) -> None:
-    """Complete protocol-1 ``connection_init`` / ``connection_ack``."""
+    """Complete protocol-1 `connection_init` / `connection_ack`."""
     init = ConnectionInitEnvelope(
         params=ConnectionInitParams(
             client_version=_client_version(),
@@ -105,19 +101,19 @@ async def send_admin_request(
     *,
     timeout: float = 30.0,
 ) -> dict[str, Any]:
-    """Send a protocol-1 request and return the ``result`` dict.
+    """Send a protocol-1 request and return the `result` dict.
 
     Args:
-        ws_url: Daemon WebSocket URL (e.g. ``ws://127.0.0.1:8765``).
-        method: RPC method name (e.g. ``memory_stats``).
-        params: Structured parameters for the method.
-        timeout: Per-command timeout in seconds.
+    ws_url: Daemon WebSocket URL (e.g. `ws://127.0.0.1:8765`).
+    method: RPC method name (e.g. `memory_stats`).
+    params: Structured parameters for the method.
+    timeout: Per-command timeout in seconds.
 
     Returns:
-        The ``result`` payload from the matching ``response`` envelope.
+    The `result` payload from the matching `response` envelope.
 
     Raises:
-        RuntimeError: On handshake failure, error envelope, timeout, or disconnect.
+    RuntimeError: On handshake failure, error envelope, timeout, or disconnect.
     """
     import websockets
 
@@ -170,5 +166,5 @@ async def send_admin_request(
 
 
 def memory_stats(ws_url: str, mode: str = "daemon", *, timeout: float = 30.0) -> dict[str, Any]:
-    """Fetch daemon memory profiling stats (sync wrapper for ``soothed memory``)."""
+    """Fetch daemon memory profiling stats (sync wrapper for `soothed memory`)."""
     return asyncio.run(send_admin_request(ws_url, "memory_stats", {"mode": mode}, timeout=timeout))

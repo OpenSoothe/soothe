@@ -28,11 +28,11 @@ async def _trigger_config_reload(ws_url: str, timeout: float = 5.0) -> dict[str,
     """Trigger config reload via WebSocket RPC.
 
     Args:
-        ws_url: WebSocket URL to connect to.
-        timeout: Request timeout in seconds.
+    ws_url: WebSocket URL to connect to.
+    timeout: Request timeout in seconds.
 
     Returns:
-        Response dict from daemon, or error dict on failure.
+    Response dict from daemon, or error dict on failure.
     """
     try:
         async with connected_websocket(ws_url, timeout=timeout) as client:
@@ -55,8 +55,8 @@ def config_reload(
     daemon to have hot-reload enabled via daemon.enable_config_reload().
 
     Examples:
-        soothe config reload
-        soothe config reload --json
+    soothe config reload
+    soothe config reload --json
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)

@@ -78,23 +78,23 @@ class _DeferredStepComplete(NamedTuple):
 
 
 class CognitionStepMessage(Vertical):
-    """Agent-loop act step card (RFC-628).
+    """Agent-loop act step card.
 
     Header is the full step description plus compact live meta while running
-    (`` · 45s · 12/1 · ↑8.1K ↓2.0K``). Activity nests under To-do then Tool-use.
+    (` · 45s · 12/1 · ↑8.1K ↓2.0K`). Activity nests under To-do then Tool-use.
     The Running footer line is omitted; Completed/Failed/Pending footers remain.
-    Optional full tool lists use ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. Cards
+    Optional full tool lists use `STEP_CARD_SHOW_TOOL_ROW_DETAILS`. Cards
     auto-collapse to title + status on terminal status (success / error);
     click toggles manual expand / collapse.
 
-    Intake-only orphan SubAgent cards reuse this widget with ``_subagent_type``
+    Intake-only orphan SubAgent cards reuse this widget with `_subagent_type`
     set: same header meta / activity tree / footers, with a subagent glyph and
-    ``DisplayName(preview)`` title.
+    `DisplayName(preview)` title.
 
-    Pure rendering and classification live in ``cognition_step_activity.py``.
-    Card headers use a stateful card-prefix glyph (see ``_assemble_card_header``); body
-    lines use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
-    Prose / notes keep ``⎿ ○`` continuation lines.
+    Pure rendering and classification live in `cognition_step_activity.py`.
+    Card headers use a stateful card-prefix glyph (see `_assemble_card_header`); body
+    lines use the goal-tree gutter (`⎿`) plus hollow/filled circles when shown.
+    Prose / notes keep `⎿ ○` continuation lines.
     """
 
     ALLOW_SELECT = True
@@ -238,7 +238,7 @@ class CognitionStepMessage(Vertical):
 
     @property
     def last_completed_execute_prose(self) -> str:
-        """Prose accumulated from ``execute_step`` for this step when it completed."""
+        """Prose accumulated from `execute_step` for this step when it completed."""
         return self._last_completed_execute_prose
 
     @property
@@ -268,7 +268,7 @@ class CognitionStepMessage(Vertical):
             self._sync_step_card_surface()
 
     def _token_budget_suffix(self) -> str:
-        """Token budget suffix for status lines, e.g. ``in:1.2K out:345``."""
+        """Token budget suffix for status lines, e.g. `in:1.2K out:345`."""
         if not (self._input_tokens or self._output_tokens):
             return ""
         from soothe_cli.runtime.state.session_stats import format_token_count
@@ -445,9 +445,9 @@ class CognitionStepMessage(Vertical):
 
         When collapsed, only the header (title) and status footer remain
         visible — all body sections (tools, activity tree, detail) are hidden
-        via inline ``display = False``.  CSS ``display: none`` alone is
+        via inline `display = False`. CSS `display: none` alone is
         insufficient because Textual's inline styles take priority over
-        cascade rules, so a prior ``display = True`` set during running would
+        cascade rules, so a prior `display = True` set during running would
         keep body widgets visible.
 
         When expanded, the surface is re-synced to re-show body widgets that
@@ -523,7 +523,7 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.display = True
 
     def append_execute_assistant_delta(self, delta: str) -> None:
-        """Accumulate per-step LoopAIMessage (``phase=execute_step``) prose into this card."""
+        """Accumulate per-step LoopAIMessage (`phase=execute_step`) prose into this card."""
         if not delta:
             return
         self._execute_assistant_buffer += delta
@@ -549,7 +549,7 @@ class CognitionStepMessage(Vertical):
         rows: list[_StepToolRow],
         limit: int | None = None,
     ) -> list[_StepToolRow]:
-        """Return the most recently appended rows, capped at ``limit``."""
+        """Return the most recently appended rows, capped at `limit`."""
         if limit is None:
             return latest_preview_rows(rows)
         return latest_preview_rows(rows, limit)
@@ -563,7 +563,7 @@ class CognitionStepMessage(Vertical):
         return task_delegation_dedupe_key(row, self._step_id)
 
     def _iter_task_delegation_rows(self) -> list[_StepToolRow]:
-        """Task delegation rows on this step (unified ``{step}:s:task:…`` ids)."""
+        """Task delegation rows on this step (unified `{step}:s:task:…` ids)."""
         return self._build_row_index().task_delegations
 
     def _phase_icon(self, phase: str, g: Any, *, animate_running: bool = False) -> str:
@@ -586,7 +586,7 @@ class CognitionStepMessage(Vertical):
     def _apply_todos_payload(self, todos: object) -> bool:
         """Normalize and store todos. Returns True when the list changed.
 
-        Empty payloads are ignored so short-circuited empty ``write_todos`` does
+        Empty payloads are ignored so short-circuited empty `write_todos` does
         not clear a previously shown list.
         """
         if not isinstance(todos, list):
@@ -598,7 +598,7 @@ class CognitionStepMessage(Vertical):
         return True
 
     def _maybe_apply_write_todos_args(self, tool_name: str, args: dict[str, Any] | None) -> bool:
-        """Derive Todo section from ``write_todos`` tool args (daemon has no todo emit)."""
+        """Derive Todo section from `write_todos` tool args (daemon has no todo emit)."""
         if not is_write_todos_tool_name(tool_name):
             return False
         payload = args if isinstance(args, dict) else {}
@@ -617,13 +617,13 @@ class CognitionStepMessage(Vertical):
         return self._apply_todos_payload(todos)
 
     def _available_line_width(self) -> int | None:
-        """Terminal columns available for one step-card line, or ``None`` if unknown.
+        """Terminal columns available for one step-card line, or `None` if unknown.
 
-        ``Widget.size`` is the content area, so only a 2 column safety slack is
+        `Widget.size` is the content area, so only a 2 column safety slack is
         reserved to keep tool activity lines truncating instead of wrapping. The
         terminal fallback also subtracts the card's horizontal padding
-        (``padding: 0 1`` → 2 columns). Falls back through the app size, then the
-        terminal, then ``None`` (preserves prior fixed-cap behavior for unmounted
+        (`padding: 0 1` → 2 columns). Falls back through the app size, then the
+        terminal, then `None` (preserves prior fixed-cap behavior for unmounted
         widgets and tests).
         """
         width = 0
@@ -732,9 +732,9 @@ class CognitionStepMessage(Vertical):
     def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
         """Tracked scope-local totals for status lines.
 
-        Step cards use ``total_tool_count`` (main + subgraph). Intake-only orphan
+        Step cards use `total_tool_count` (main + subgraph). Intake-only orphan
         SubAgent cards use the same index over their filtered subgraph rows.
-        Server ``tool_call_count`` is only a fallback when no local rows exist.
+        Server `tool_call_count` is only a fallback when no local rows exist.
         """
         index = self._build_row_index()
         tool_count = index.total_tool_count
@@ -774,12 +774,12 @@ class CognitionStepMessage(Vertical):
         """Paint the step card footer status (always the last visible body line).
 
         Args:
-            head: The leading status text (e.g. ``"Completed (1.2s)"`` or
-                ``"Failed · 1.2s"``) that gets the prominent success/error tone.
-            success: Whether this is a successful completion (dim, like tool
-                activity rows) or a failure (red).
-            suffix: Optional stats tail (tool counts, token budget) that keeps
-                the subdued cognition tone so it doesn't drown out the head.
+        head: The leading status text (e.g. `"Completed (1.2s)"` or
+        `"Failed · 1.2s"`) that gets the prominent success/error tone.
+        success: Whether this is a successful completion (dim, like tool
+        activity rows) or a failure (red).
+        suffix: Optional stats tail (tool counts, token budget) that keeps
+        the subdued cognition tone so it doesn't drown out the head.
         """
         if self._status_widget is None:
             return
@@ -869,7 +869,7 @@ class CognitionStepMessage(Vertical):
         )
 
     def _step_branched_error_detail(self, err_text: str) -> Content:
-        """Multiline error body: first line ``⎿ ✗ …``; continuations ``⎿ ○ …``."""
+        """Multiline error body: first line `⎿ ✗ …`; continuations `⎿ ○ …`."""
         g = get_glyphs()
         gutter = self._step_goal_tree_gutter()
         try:
@@ -892,7 +892,7 @@ class CognitionStepMessage(Vertical):
         return Content.assemble(*parts)
 
     def _build_tools_panel_row_order(self) -> list[_StepToolRow]:
-        """Flat row order for the optional full tools panel (RFC-628)."""
+        """Flat row order for the optional full tools panel."""
         index = self._build_row_index()
         return list(index.task_delegations) + list(index.main_tools)
 
@@ -983,12 +983,12 @@ class CognitionStepMessage(Vertical):
         """Register a new tool row (pending).
 
         Args:
-            tool_call_id: Unique tool call identifier.
-            tool_name: Tool name for display.
-            args: Parsed tool arguments.
-            raw_args: Raw JSON args string from streaming (stored on the row for
-                later merge when args arrive incrementally).
-            is_task_row: Mark as task delegation row (flat marker on step card).
+        tool_call_id: Unique tool call identifier.
+        tool_name: Tool name for display.
+        args: Parsed tool arguments.
+        raw_args: Raw JSON args string from streaming (stored on the row for
+        later merge when args arrive incrementally).
+        is_task_row: Mark as task delegation row (flat marker on step card).
         """
         tcid = str(tool_call_id).strip()
         if not tcid:
@@ -1084,7 +1084,7 @@ class CognitionStepMessage(Vertical):
         self._sync_step_card_surface()
 
     def promote_to_running_if_pending(self) -> None:
-        """Transition ``pending`` → ``running`` (RFC-628 authorized promotion only)."""
+        """Transition `pending` → `running` ( promotion only)."""
         if self._status != "pending":
             return
         if getattr(self, "is_mounted", False):
@@ -1095,7 +1095,7 @@ class CognitionStepMessage(Vertical):
         self._deferred_running = True
 
     def _canonical_task_lookup_key(self, tool_call_id: str) -> str | None:
-        """Normalized task row key when ``tool_call_id`` denotes a step-level delegation."""
+        """Normalized task row key when `tool_call_id` denotes a step-level delegation."""
         tcid = str(tool_call_id).strip()
         if not tcid:
             return None
@@ -1107,7 +1107,7 @@ class CognitionStepMessage(Vertical):
         return None
 
     def has_tool_call_row(self, tool_call_id: str) -> bool:
-        """Return True if this step card already tracks ``tool_call_id`` (or its task alias)."""
+        """Return True if this step card already tracks `tool_call_id` (or its task alias)."""
         tcid = str(tool_call_id).strip()
         if not tcid:
             return False
@@ -1231,7 +1231,7 @@ class CognitionStepMessage(Vertical):
     def mark_unfinished_tools_on_step_complete(self, *, success: bool) -> None:
         """Finalize open tool rows when the step card completes.
 
-        On successful steps, pending/running/skipped tools are marked ``success``
+        On successful steps, pending/running/skipped tools are marked `success`
         so branches show Done instead of Skipped/Pending when the task finished
         without per-tool ToolMessage events.
         """
@@ -1257,7 +1257,7 @@ class CognitionStepMessage(Vertical):
         return out
 
     def snapshot_tool_rows(self) -> list[dict[str, Any]]:
-        """Serialize tool rows for ``MessageData``."""
+        """Serialize tool rows for `MessageData`."""
         return [
             {
                 "id": r.tool_call_id,
@@ -1378,9 +1378,9 @@ class CognitionStepMessage(Vertical):
         """Update retry status for running animation display.
 
         Args:
-            attempt: Current attempt number (1-indexed).
-            max_attempts: Maximum attempts allowed.
-            error_type: "timeout" or "rate_limit".
+        attempt: Current attempt number (1-indexed).
+        max_attempts: Maximum attempts allowed.
+        error_type: "timeout" or "rate_limit".
         """
         self._retry_attempt = attempt
         self._max_retry_attempts = max_attempts
@@ -1403,7 +1403,7 @@ class CognitionStepMessage(Vertical):
     def _auto_collapse_on_terminal(self) -> None:
         """Collapse card body to title + status when reaching terminal status.
 
-        Called at the end of ``set_complete`` / ``set_interrupted`` so the card
+        Called at the end of `set_complete` / `set_interrupted` so the card
         shows only the header (title) and status footer. Clicking expands the
         card to reveal full detail (activity tree, execute prose, error text).
         Does not override a prior manual collapse.
@@ -1485,8 +1485,8 @@ class CognitionStepMessage(Vertical):
     ) -> None:
         """Show a compact answered-notice on the step card.
 
-        Called after :meth:`set_complete` for steps whose ``step_completed``
-        event payload includes a ``clarification`` block (RFC-622, RFC-623).
+        Called after :meth:`set_complete` for steps whose `step_completed`
+        event payload includes a `clarification` block (,).
         Only a status line is shown — the full Q&A pairs are rendered in the
         dedicated clarification/QA card.
         """
@@ -1547,9 +1547,9 @@ class CognitionStepMessage(Vertical):
     def set_awaiting_clarification(self, questions: list[str]) -> None:
         """Pause the running animation and show the awaiting-notice on the step card.
 
-        Called when a ``soothe.loop.clarification.requested`` event arrives
-        while the loop graph is suspended on ``await_clarification``
-        (RFC-622 / RFC-623). Stops the spinner and marks the card as awaiting
+        Called when a `soothe.loop.clarification.requested` event arrives
+        while the loop graph is suspended on `await_clarification`
+        ( /). Stops the spinner and marks the card as awaiting
         an answer. Only the status line is shown on the step card — the actual
         questions are rendered in the dedicated clarification/QA card.
         """
@@ -1570,8 +1570,8 @@ class CognitionStepMessage(Vertical):
     def set_clarification_deferred(self, reason: str, questions: list[str]) -> None:
         """Show the deferred clarification notice on the step card.
 
-        Called when a ``soothe.loop.clarification.deferred`` event arrives.
-        The loop has terminated (no live ``interrupt()``), so this is
+        Called when a `soothe.loop.clarification.deferred` event arrives.
+        The loop has terminated (no live `interrupt()`), so this is
         informational only — the user should provide more detail in their
         next message. Stops the spinner and shows the status line. The actual
         questions are rendered in the dedicated clarification/QA card.
@@ -1620,8 +1620,8 @@ class CognitionStepMessage(Vertical):
         """Update task row icon when a delegated task completes.
 
         Args:
-            task_key: Dedupe key or raw task tool_call_id for the delegation row.
-            success: True for success (✓ icon), False for error (✗ icon).
+        task_key: Dedupe key or raw task tool_call_id for the delegation row.
+        success: True for success (✓ icon), False for error (✗ icon).
         """
         if not task_key:
             return
@@ -1649,19 +1649,19 @@ def create_subagent_card(
 ) -> CognitionStepMessage:
     """Create an intake-only orphan SubAgent card (shared step-card style path).
 
-    In-step ``task`` delegations stay on the parent step card. This factory only
-    sets orphan fields (``_subagent_type``, etc.); header meta, To-do / Tool-use
-    activity, and footers use the same ``CognitionStepMessage`` methods.
+    In-step `task` delegations stay on the parent step card. This factory only
+    sets orphan fields (`_subagent_type`, etc.); header meta, To-do / Tool-use
+    activity, and footers use the same `CognitionStepMessage` methods.
 
     Args:
-        step_id: Display step id (synthetic for orphans).
-        description: Task description from tool args.
-        subagent_type: Subagent type name (e.g., "deep_research", "browser_use").
-        task_idx: Task index for filtering subgraph rows (type ``t``).
-        **kwargs: Additional arguments for CognitionStepMessage.
+    step_id: Display step id (synthetic for orphans).
+    description: Task description from tool args.
+    subagent_type: Subagent type name (e.g., "deep_research", "browser_use").
+    task_idx: Task index for filtering subgraph rows (type `t`).
+    **kwargs: Additional arguments for CognitionStepMessage.
 
     Returns:
-        CognitionStepMessage configured as an orphan SubAgent card.
+    CognitionStepMessage configured as an orphan SubAgent card.
     """
     card = CognitionStepMessage(
         step_id=step_id,

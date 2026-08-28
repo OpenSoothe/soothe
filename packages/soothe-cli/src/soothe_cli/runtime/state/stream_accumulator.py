@@ -1,4 +1,4 @@
-"""Unified streaming text accumulator with boundary preservation (RFC-614)."""
+"""Unified streaming text accumulator with boundary preservation."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ class StreamingAccumState:
     """State for a single streaming output stream.
 
     Attributes:
-        accumulated_text: Accumulated content from all chunks.
-        is_active: Stream is still active (expecting more chunks).
-        namespace: Namespace for this stream (avoid interleaving).
+    accumulated_text: Accumulated content from all chunks.
+    is_active: Stream is still active (expecting more chunks).
+    namespace: Namespace for this stream (avoid interleaving).
     """
 
     accumulated_text: str = ""
@@ -29,15 +29,15 @@ class StreamingAccumState:
 class StreamingTextAccumulator:
     """Accumulates streaming text chunks with boundary preservation.
 
-    Architecture Pattern (RFC-614, mirrors tool call accumulation from RFC-211):
+    Architecture Pattern (, mirrors tool call accumulation):
     - Track by (event_type + namespace) to prevent interleaving concurrent streams
     - Preserve whitespace boundaries for markdown formatting
     - Finalize on non-chunk event or turn completion
     - Clear state after finalization
 
     Attributes:
-        streams: Dict mapping (event_type, namespace) -> StreamingAccumState
-        boundary_preserve_enabled: Whether to preserve leading/trailing whitespace
+    streams: Dict mapping (event_type, namespace) -> StreamingAccumState
+    boundary_preserve_enabled: Whether to preserve leading/trailing whitespace
     """
 
     streams: dict[tuple[str, tuple[str, ...]], StreamingAccumState] = field(default_factory=dict)
@@ -60,13 +60,13 @@ class StreamingTextAccumulator:
         - is_chunk=False: Return accumulated text (final message)
 
         Args:
-            event_type: Event type string (RFC-403 naming).
-            content: Raw content chunk (may have boundary whitespace).
-            namespace: Namespace tuple for concurrent stream isolation.
-            is_chunk: True if partial chunk, False if final message.
+        event_type: Event type string ().
+        content: Raw content chunk (may have boundary whitespace).
+        namespace: Namespace tuple for concurrent stream isolation.
+        is_chunk: True if partial chunk, False if final message.
 
         Returns:
-            Displayable text with preserved boundaries, or None if empty.
+        Displayable text with preserved boundaries, or None if empty.
         """
         key = (event_type, namespace)
 
@@ -110,11 +110,11 @@ class StreamingTextAccumulator:
         """Finalize stream and return final accumulated text.
 
         Args:
-            event_type: Event type string.
-            namespace: Namespace tuple.
+        event_type: Event type string.
+        namespace: Namespace tuple.
 
         Returns:
-            Final accumulated text or None if stream empty.
+        Final accumulated text or None if stream empty.
         """
         key = (event_type, namespace)
         if key not in self.streams:

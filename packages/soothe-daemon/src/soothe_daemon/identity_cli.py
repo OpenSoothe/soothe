@@ -1,12 +1,4 @@
-"""Identity service CLI commands. Commands.
-
-Provides soothed identity subcommands for:
-- User management (create-user, list-users, delete-user)
-- AKSK management (create-aksk, list-aksk, revoke-aksk)
-- Token management (list-tokens, revoke-token, revoke-all-tokens)
-- External identity mapping (map-external, list-mappings, unmap-external)
-- Service status (status)
-"""
+"""Identity service CLI commands. Commands."""
 
 from __future__ import annotations
 

@@ -20,7 +20,7 @@ def _get_console() -> Console:
     needed. The result is cached in `globals()["console"]`.
 
     Returns:
-        The global Rich `Console` singleton.
+    The global Rich `Console` singleton.
     """
     cached = globals().get("console")
     if cached is not None:

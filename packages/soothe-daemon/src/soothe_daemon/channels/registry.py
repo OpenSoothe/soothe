@@ -1,11 +1,4 @@
-"""Channel discovery registry.
-
-Provides plugin discovery for channels via:
-1. pkgutil scan of built-in channels in soothe_daemon.channels package
-2. Python entry_points for external plugins ("soothe.channels" group)
-
-Only enabled channels are imported, reducing startup overhead.
-"""
+"""Channel discovery registry."""
 
 from __future__ import annotations
 
@@ -27,7 +20,7 @@ def discover_channel_names() -> list[str]:
     modules. Used to identify config sections that might be channel configs.
 
     Returns:
-        List of channel module names (excluding base, message, events, registry).
+    List of channel module names (excluding base, message, events, registry).
     """
     try:
         from soothe_daemon.channels import __path__
@@ -48,10 +41,10 @@ def load_channel_class(name: str) -> type[Channel] | None:
     """Import and return Channel class by module name.
 
     Args:
-        name: Channel module name (e.g., "websocket", "telegram").
+    name: Channel module name (e.g., "websocket", "telegram").
 
     Returns:
-        Channel subclass, or None if not found or not a valid Channel.
+    Channel subclass, or None if not found or not a valid Channel.
     """
     try:
         module = importlib.import_module(f"soothe_daemon.channels.{name}")
@@ -85,10 +78,10 @@ def discover_plugins(enabled_names: set[str]) -> dict[str, type[Channel]]:
     ```
 
     Args:
-        enabled_names: Set of channel names to load.
+    enabled_names: Set of channel names to load.
 
     Returns:
-        Dict mapping channel name to Channel class.
+    Dict mapping channel name to Channel class.
     """
     channels: dict[str, type[Channel]] = {}
 
@@ -132,10 +125,10 @@ def discover_enabled(enabled_names: set[str]) -> dict[str, type[Channel]]:
     (entry_points). Only imports enabled channels.
 
     Args:
-        enabled_names: Set of channel names that are enabled in config.
+    enabled_names: Set of channel names that are enabled in config.
 
     Returns:
-        Dict mapping channel name to Channel class.
+    Dict mapping channel name to Channel class.
     """
     channels: dict[str, type[Channel]] = {}
 
@@ -159,7 +152,7 @@ def discover_all() -> dict[str, type[Channel]]:
     discover_enabled() when you have a specific set to load.
 
     Returns:
-        Dict mapping channel name to Channel class.
+    Dict mapping channel name to Channel class.
     """
     # Get all candidate names
     built_in_names = set(discover_channel_names())

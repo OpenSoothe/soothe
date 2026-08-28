@@ -110,8 +110,8 @@ def _check_websocket_connectivity(config: SootheDaemonConfig | None) -> CheckRes
 async def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
     """Check daemon readiness state via WebSocket handshake.
 
-    Drains the initial ``status`` push (and other non-ack frames) before
-    requiring ``connection_ack``, matching admin RPC handshake behavior.
+    Drains the initial `status` push (and other non-ack frames) before
+    requiring `connection_ack`, matching admin RPC handshake behavior.
     """
     import asyncio
     import json
@@ -238,7 +238,7 @@ def _check_daemon_uptime(pid: int) -> CheckResult:
 def _check_stale_locks(config: SootheDaemonConfig | None) -> CheckResult | None:
     """Check for stale PID files and zombie daemon.
 
-    Returns ``None`` when there is nothing notable to report (keeps doctor quiet).
+    Returns `None` when there is nothing notable to report (keeps doctor quiet).
     """
     from soothe_daemon.bootstrap.paths import pid_path
     from soothe_daemon.server import SootheDaemon
@@ -309,10 +309,10 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
     over PID file checks.
 
     Args:
-        config: ``SootheDaemonConfig`` instance for transport configuration
+    config: `SootheDaemonConfig` instance for transport configuration
 
     Returns:
-        CategoryResult with daemon check results
+    CategoryResult with daemon check results
     """
     checks: list[CheckResult] = []
 

@@ -1,9 +1,4 @@
-"""``soothecli`` entry point — alias for ``soothe --no-tui``.
-
-Injects ``--no-tui`` into ``sys.argv`` before delegating to the main
-Typer ``app`` so the TUI is never launched and all subcommands /
-options behave identically to ``soothe --no-tui <args>``.
-"""
+"""`soothecli` entry point — alias for `soothe --no-tui`."""
 
 from __future__ import annotations
 

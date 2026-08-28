@@ -32,7 +32,7 @@ def open_style_link(event: Click) -> None:
     debug level and the event bubbles normally.
 
     Args:
-        event: The Textual click event to inspect.
+    event: The Textual click event to inspect.
     """
     url = event.style.link
     if not url:

@@ -108,7 +108,7 @@ def is_daemon_worker_thread_lost(exc: BaseException | str) -> bool:
 def is_attach_idle_timeout(exc: BaseException | str) -> bool:
     """Return whether an error is the attach-only idle timeout.
 
-    Raised by ``iter_turn_chunks`` when a stale ``live`` probe attached to a
+    Raised by `iter_turn_chunks` when a stale `live` probe attached to a
     loop whose runner had already exited (no follow-on turn materialized).
     """
     return ATTACH_IDLE_TIMEOUT_MARKER in str(exc)

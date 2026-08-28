@@ -1,8 +1,4 @@
-"""Textual UI adapter: stream daemon events into Textual widgets.
-
-Merged module (formerly ``tui/textual_adapter/`` package). Public symbols are listed
-in ``__all__``; a few test-only helpers resolve via ``__getattr__``.
-"""
+"""Textual UI adapter: stream daemon events into Textual widgets."""
 
 from __future__ import annotations
 
@@ -197,9 +193,9 @@ def _retain_assistant_ns_on_stream_terminal(
     assistant_message_by_namespace: dict[tuple[Any, ...], Any],
     is_main_agent: bool,
 ) -> bool:
-    """Return True when ``stream_terminal`` must not release the namespace card.
+    """Return True when `stream_terminal` must not release the namespace card.
 
-    Loop-tagged assistant streams append deltas onto one ``AssistantMessage``.
+    Loop-tagged assistant streams append deltas onto one `AssistantMessage`.
     """
     if is_main_agent and ns_key in assistant_message_by_namespace:
         return True
@@ -404,10 +400,10 @@ class TextualUIAdapter:
         streaming before matching `ToolMessage` results are received.
 
         Args:
-            error: Error text to display in each pending tool widget.
-            interrupt_goal_tree: When False, clear tool tracking without
-                overwriting a terminal plan-panel footer (stream-end after a
-                successful goal completion).
+        error: Error text to display in each pending tool widget.
+        interrupt_goal_tree: When False, clear tool tracking without
+        overwriting a terminal plan-panel footer (stream-end after a
+        successful goal completion).
         """
         for tcid, step_w in list(self._tool_to_step.items()):
             step_w.set_tool_error(tcid, error, duration_ms=0)
@@ -436,11 +432,11 @@ class TextualUIAdapter:
         """Mark in-flight step cards as interrupted and clear tracking.
 
         Args:
-            message: Error text shown on interrupted step cards / plan footer.
-            only_in_flight: When True, only interrupt cards still ``running``;
-                completed cards are dropped from the registry without UX change.
-            interrupt_goal_tree: When False, skip plan-panel ``set_interrupted``
-                (preserves a success footer after goal completion).
+        message: Error text shown on interrupted step cards / plan footer.
+        only_in_flight: When True, only interrupt cards still `running`;
+        completed cards are dropped from the registry without UX change.
+        interrupt_goal_tree: When False, skip plan-panel `set_interrupted`
+        (preserves a success footer after goal completion).
         """
         targets = {
             sid: step_msg
@@ -467,8 +463,8 @@ class TextualUIAdapter:
     def clear_live_session_ui(self) -> None:
         """Drop in-memory plan/step/clarification state for /clear or loop switch.
 
-        The Ctrl+t plan panel reads ``_goal_tree_message`` (not mounted in
-        ``#messages``), so transcript clears must also null this handle or the
+        The Ctrl+t plan panel reads `_goal_tree_message` (not mounted in
+        `#messages`), so transcript clears must also null this handle or the
         panel keeps showing the previous loop's plan. Clarification flags are
         cleared so the next turn on a new loop is not treated as an answer.
         """
@@ -584,7 +580,7 @@ class TurnToolUiCoalescer:
         """Record a wire kwargs payload.
 
         Returns:
-            True when the same ``(tool_call_id, args)`` was already applied.
+        True when the same `(tool_call_id, args)` was already applied.
         """
         key = str(tool_call_id).strip()
         if not key:
@@ -718,7 +714,7 @@ def canonical_subgraph_tool_ids(
     *,
     task_scope: TaskScope | None,
 ) -> tuple[str, str]:
-    """Return ``(merge_lookup_id, row_key)`` for a subgraph tool invocation."""
+    """Return `(merge_lookup_id, row_key)` for a subgraph tool invocation."""
     raw = str(raw_tool_call_id).strip()
     if not raw:
         return "", ""
@@ -781,7 +777,7 @@ def _log_step_completion_stats(
 
 
 def _is_orphan_subagent_card(card: Any) -> bool:
-    """True when ``card`` is an intake-only orphan SubAgent widget."""
+    """True when `card` is an intake-only orphan SubAgent widget."""
     check = getattr(card, "_is_orphan_subagent_card", None)
     if callable(check):
         return bool(check())
@@ -867,7 +863,7 @@ def _route_orphan_wire_event(
     event_type: str,
     data: dict[str, Any],
 ) -> bool:
-    """Route ``soothe.subagent.*`` events onto an orphan card via ``invocation_id``."""
+    """Route `soothe.subagent.*` events onto an orphan card via `invocation_id`."""
     inv = str(data.get("invocation_id") or "").strip()
     if not inv:
         return False
@@ -969,11 +965,11 @@ def _register_execute_namespace_binding(
     """Bind an execute namespace to its step card for later lookups.
 
     Custom loop events (step_started, step_completed) carry the root namespace
-    ``()`` and register the step card under ``_step_by_namespace[()]``. But LLM
-    message chunks — including ``usage_metadata`` for token accounting — arrive
-    under the actual execute namespace (e.g. ``("execute:{thread_id}",)`` or a
-    parallel branch ``("execute:{thread_id}", "N")``). Without binding, the
-    namespace lookup in ``_resolve_token_target_card`` misses for parallel
+    `()` and register the step card under `_step_by_namespace[()]`. But LLM
+    message chunks — including `usage_metadata` for token accounting — arrive
+    under the actual execute namespace (e.g. `("execute:{thread_id}",)` or a
+    parallel branch `("execute:{thread_id}", "N")`). Without binding, the
+    namespace lookup in `_resolve_token_target_card` misses for parallel
     waves where the single-active-step fallback cannot disambiguate.
 
     Called when a step-scope tool call or message is first seen for an execute
@@ -1004,7 +1000,7 @@ def _apply_backend_loop_tokens_event(
     source: str,
     step_id: str = "",
 ) -> None:
-    """Trace and merge backend ``total_tokens_used`` from a lifecycle event."""
+    """Trace and merge backend `total_tokens_used` from a lifecycle event."""
     has_total_field = "total_tokens_used" in data
     total_used = int(data.get("total_tokens_used") or 0) if has_total_field else None
     if source == "plan_phase":
@@ -1160,7 +1156,7 @@ def _display_target_for_task_scope(
 ) -> Any | None:
     """Resolve orphan SubAgent card or parent step card for a task scope.
 
-    In-step ``task`` delegations no longer create SubAgent cards — activity and
+    In-step `task` delegations no longer create SubAgent cards — activity and
     tool counts live on the parent step card. Intake-only orphans remain.
     """
     step_id = task_scope_step_id(task_scope)
@@ -1245,7 +1241,7 @@ def _apply_subagent_wire_activity_event(
 ) -> bool:
     """Render note-style subagent wire events on orphan or parent step card.
 
-    Planner ``*.progress`` on orphan cards is swallowed (no activity notes; stage
+    Planner `*.progress` on orphan cards is swallowed (no activity notes; stage
     is not shown on the title). Other subagent progress still appends activity lines.
     """
     et = str(event_type or "").strip()
@@ -1284,7 +1280,7 @@ def _apply_subagent_wire_lifecycle_event(
     data: dict[str, Any],
     task_scope: TaskScope,
 ) -> bool:
-    """Handle subagent ``*.completed`` / ``*.failed`` wire events."""
+    """Handle subagent `*.completed` / `*.failed` wire events."""
     et = str(event_type or "").strip()
     if not (et.endswith(".completed") or et.endswith(".failed")):
         return False
@@ -1443,7 +1439,7 @@ def _ingest_main_task_tool_on_step_card(
     *,
     bound_step_id: str,
 ) -> None:
-    """Register a main-graph ``task`` delegation on the step card (no SubAgent card)."""
+    """Register a main-graph `task` delegation on the step card (no SubAgent card)."""
     tcid = str(tool_call_id).strip()
     sid = str(bound_step_id).strip()
     if not tcid or is_inner_subgraph_task_tool_id(tcid):
@@ -1643,7 +1639,7 @@ async def cleanup_stale_plan_step_cards(
     """Drop stale pending step cards after replan; do not mount future steps.
 
     Planned and queued steps appear only in the Ctrl+T plan quick view (goal tree).
-    Step cards mount in the message list when ``step_started`` fires.
+    Step cards mount in the message list when `step_started` fires.
     """
     planned_ids = {
         str(row.get("id", "")).strip()
@@ -1679,7 +1675,7 @@ def _lookup_step_card(
     adapter: TextualUIAdapter,
     step_id: str,
 ) -> tuple[str, CognitionStepMessage | None]:
-    """Resolve a tracked step card by registry key or widget ``_step_id``."""
+    """Resolve a tracked step card by registry key or widget `_step_id`."""
     for key in _step_card_lookup_keys(step_id):
         widget = adapter._current_step_messages.get(key)
         if widget is not None:
@@ -1695,7 +1691,7 @@ def _pop_step_card_from_adapter(
     adapter: TextualUIAdapter,
     step_id: str,
 ) -> CognitionStepMessage | None:
-    """Remove and return the step card for ``step_id``, trying alias keys."""
+    """Remove and return the step card for `step_id`, trying alias keys."""
     dict_key, widget = _lookup_step_card(adapter, step_id)
     if widget is None:
         return None
@@ -1706,7 +1702,7 @@ def _pop_step_card_from_adapter(
 
 
 def _record_plan_step_dag(adapter: TextualUIAdapter, raw_steps: list[Any]) -> None:
-    """Capture in-wave step order and dependency edges from ``plan_decision``."""
+    """Capture in-wave step order and dependency edges from `plan_decision`."""
     order: list[str] = []
     dep_map: dict[str, tuple[str, ...]] = {}
     in_plan: set[str] = set()
@@ -1731,7 +1727,7 @@ def _dependency_stuck_predecessor_ids(
     adapter: TextualUIAdapter,
     next_step_id: str,
 ) -> set[str]:
-    """Return in-plan predecessors that may be finalized when ``next_step_id`` starts."""
+    """Return in-plan predecessors that may be finalized when `next_step_id` starts."""
     next_id = str(next_step_id or "").strip()
     if not next_id:
         return set()
@@ -1765,7 +1761,7 @@ def _finalize_stuck_dependency_predecessors(
     next_step_id: str,
     ns_key: tuple[Any, ...],
 ) -> None:
-    """Finalize predecessor cards still ``running`` when a dependent step starts."""
+    """Finalize predecessor cards still `running` when a dependent step starts."""
     if adapter._last_plan_execution_mode != "dependency":
         return
     next_id = str(next_step_id or "").strip()
@@ -1808,11 +1804,11 @@ def _finalize_stuck_dependency_predecessors(
 
 
 def _coerce_ai_message_for_blocks(message: Any) -> Any:
-    """Best-effort dict → ``AIMessage`` / ``AIMessageChunk`` for block extraction.
+    """Best-effort dict → `AIMessage` / `AIMessageChunk` for block extraction.
 
-    If the wire payload uses ``type: \"AIMessage\"`` (class name) instead of ``ai``,
+    If the wire payload uses `type: \"AIMessage\"` (class name) instead of `ai`,
     :func:`messages_from_dict` would fail; :func:`envelope_langchain_message_dict`
-    canonicalizes first (see ``daemon_session``).
+    canonicalizes first (see `daemon_session`).
     """
     from langchain_core.messages import AIMessageChunk
 
@@ -1830,11 +1826,11 @@ def _coerce_ai_message_for_blocks(message: Any) -> Any:
 
 
 def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Map LangChain ``non_standard`` tool wrappers to plain ``tool_call`` blocks.
+    """Map LangChain `non_standard` tool wrappers to plain `tool_call` blocks.
 
-    Anthropic-style ``tool_use`` content is often stored as
-    ``{\"type\": \"non_standard\", \"value\": {\"type\": \"tool_use\", ...}}``.
-    The TUI loop only understands ``tool_call`` / ``tool_call_chunk`` — without this,
+    Anthropic-style `tool_use` content is often stored as
+    `{\"type\": \"non_standard\", \"value\": {\"type\": \"tool_use\", ...}}`.
+    The TUI loop only understands `tool_call` / `tool_call_chunk` — without this,
     tool cards never mount for Claude/Anthropic providers.
     """
     out: list[dict[str, Any]] = []
@@ -1888,12 +1884,12 @@ def _tui_goal_completion_matches_prior_main_visible_answer(
     output_text: str,
     pending_execute_text: str = "",
 ) -> bool:
-    """Return True when ``goal_completion`` duplicates an already-shown main answer.
+    """Return True when `goal_completion` duplicates an already-shown main answer.
 
-    Covers (1) ``execute_step`` prose on ``CognitionStepMessage``, (2) prose last flushed to a
-    standalone ``AssistantMessage``, and (3) prose still in ``pending_text_by_namespace`` that
-    was already streamed into an ``AssistantMessage`` via ``append_content`` but not yet
-    flushed (``goal_completion`` can arrive before the stream terminal frame or end-of-turn
+    Covers (1) `execute_step` prose on `CognitionStepMessage`, (2) prose last flushed to a
+    standalone `AssistantMessage`, and (3) prose still in `pending_text_by_namespace` that
+    was already streamed into an `AssistantMessage` via `append_content` but not yet
+    flushed (`goal_completion` can arrive before the stream terminal frame or end-of-turn
     flush — common for direct daemon runs; subagent routing often interleaves flushes differently).
     """
     if ns_key != ():
@@ -2225,9 +2221,9 @@ async def _sync_goal_completion_thinking_row_time(
 
 
 def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> str:
-    """Resolve checkpoint thread id for daemon ``loop_state_*`` RPCs.
+    """Resolve checkpoint thread id for daemon `loop_state_*` RPCs.
 
-    Prefer ``configurable.thread_id`` from the stream config; fall back to the
+    Prefer `configurable.thread_id` from the stream config; fall back to the
     session's active loop when the config is empty (e.g. edge timing during
     bootstrap).
     """
@@ -2297,7 +2293,7 @@ def complete_tracked_step_card(
     tool_call_count: int,
     summary: str,
 ) -> None:
-    """Finalize a step card that is still tracked in ``_current_step_messages``."""
+    """Finalize a step card that is still tracked in `_current_step_messages`."""
     _ensure_step_card_running_ui(widget)
     _detach_step_card_from_adapter(adapter, step_id, widget, ns_key=ns_key, router=router)
     widget.set_complete(success, duration_ms, tool_call_count, summary)
@@ -2308,7 +2304,7 @@ def complete_tracked_step_card(
 
 
 def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
-    """True while any tool is awaiting a ``ToolMessage`` on a step card."""
+    """True while any tool is awaiting a `ToolMessage` on a step card."""
     return bool(adapter._tool_to_step)
 
 
@@ -2330,7 +2326,7 @@ async def _maybe_set_running_tools_spinner(
 
 
 def _execute_progress_hint(adapter: TextualUIAdapter) -> str | None:
-    """Return ``completed/total`` when a multi-step execute wave is active."""
+    """Return `completed/total` when a multi-step execute wave is active."""
     total = int(getattr(adapter, "_execute_wave_total", 0) or 0)
     if total <= 1:
         return None
@@ -2369,11 +2365,11 @@ def _build_interrupted_ai_message(
     """Build an AIMessage capturing interrupted state (text + tool calls).
 
     Args:
-        pending_text_by_namespace: Dict of accumulated text by namespace
-        adapter: UI adapter with pending step-aggregated tools.
+    pending_text_by_namespace: Dict of accumulated text by namespace
+    adapter: UI adapter with pending step-aggregated tools.
 
     Returns:
-        AIMessage with accumulated content and tool calls, or None if empty.
+    AIMessage with accumulated content and tool calls, or None if empty.
     """
 
     main_ns_key = ()
@@ -2402,11 +2398,11 @@ def _read_mentioned_file(file_path: Any, max_embed_bytes: int) -> str:
     """Read a mentioned file for inline embedding (sync, for use with to_thread).
 
     Args:
-        file_path: Resolved path to the file.
-        max_embed_bytes: Size threshold; larger files get a reference only.
+    file_path: Resolved path to the file.
+    max_embed_bytes: Size threshold; larger files get a reference only.
 
     Returns:
-        Markdown snippet with the file content or a size-exceeded reference.
+    Markdown snippet with the file content or a size-exceeded reference.
     """
     file_size = file_path.stat().st_size
     if file_size > max_embed_bytes:
@@ -2498,7 +2494,7 @@ async def _finalize_goal_completion_stream(
     goal_loop_start_monotonic: float | None = None,
     turn_start_monotonic: float | None = None,
 ) -> None:
-    """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
+    """Stop the goal_completion `AssistantMessage` stream and record it under `ns_key`."""
     if not getattr(stream_msg, "_streaming_active", False):
         return
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
@@ -2559,15 +2555,15 @@ async def _handle_interrupt_cleanup(
     """Shared cleanup for CancelledError and KeyboardInterrupt.
 
     Args:
-        adapter: UI adapter with display callbacks.
-        config: Runnable config with loop_id mapped to thread_id in configurable.
-        daemon_session: Active daemon websocket session; also receives ``/cancel``
-            so the in-flight query stops (Ctrl+C / Esc; ``detach`` is quit-only).
-        pending_text_by_namespace: Accumulated text per namespace.
-        turn_stats: Stats for the current turn.
-        start_time: Monotonic timestamp when the turn began.
-        app_exiting: When ``True`` (TUI quit), skip daemon RPC — disconnect
-            cleanup runs immediately afterward.
+    adapter: UI adapter with display callbacks.
+    config: Runnable config with loop_id mapped to thread_id in configurable.
+    daemon_session: Active daemon websocket session; also receives `/cancel`
+    so the in-flight query stops (Ctrl+C / Esc; `detach` is quit-only).
+    pending_text_by_namespace: Accumulated text per namespace.
+    turn_stats: Stats for the current turn.
+    start_time: Monotonic timestamp when the turn began.
+    app_exiting: When `True` (TUI quit), skip daemon RPC — disconnect
+    cleanup runs immediately afterward.
     """
     import time
 
@@ -2837,7 +2833,7 @@ def _snapshot_turn_event_stats(
     ev_stats: TurnEventStats,
     daemon_session: Any,  # noqa: ANN401
 ) -> TurnEventStats:
-    """Return turn + daemon transport counters without mutating ``ev_stats``."""
+    """Return turn + daemon transport counters without mutating `ev_stats`."""
     snapshot = TurnEventStats()
     snapshot.merge(ev_stats)
     if daemon_session is not None:
@@ -2864,7 +2860,7 @@ def _log_goal_completed_event_stats(
     total_steps: int,
     elapsed_seconds: float,
 ) -> None:
-    """Emit a structured goal-completion summary to ``cli.log``."""
+    """Emit a structured goal-completion summary to `cli.log`."""
     snapshot = _snapshot_turn_event_stats(ev_stats, daemon_session)
     _warn_inbound_dropped(snapshot)
     logger.info(
@@ -2886,7 +2882,7 @@ def _log_turn_event_stats(
     turn_stats: SessionStats,
     daemon_session: Any,  # noqa: ANN401
 ) -> None:
-    """Merge daemon-side counters and emit final turn summary to ``cli.log``."""
+    """Merge daemon-side counters and emit final turn summary to `cli.log`."""
     snapshot = _snapshot_turn_event_stats(ev_stats, daemon_session)
     turn_stats.event_stats = snapshot
     _warn_inbound_dropped(snapshot)
@@ -2932,16 +2928,16 @@ async def _mount_manual_clarification_input(
     """Mount (or reuse) the inline clarification answer widget.
 
     Prefers a running execute step card, then an active orphan SubAgent card,
-    then a synthetic key from ``origin_node`` so intake-only plan review still
+    then a synthetic key from `origin_node` so intake-only plan review still
     shows an answer UI after the orphan card has completed.
 
-    Routes by payload shape (RFC-622 §9c): structured ``QuestionSpec`` dicts
-    with an ``options`` key → ``StructuredAskUserWidget``; HITL origins
-    (``plan_mode_review``, ``tool_approval``) → ``ClarificationInputMessage``;
-    plain strings → ``StructuredAskUserWidget`` in degraded mode.
+    Routes by payload shape: structured `QuestionSpec` dicts
+    with an `options` key → `StructuredAskUserWidget`; HITL origins
+    (`plan_mode_review`, `tool_approval`) → `ClarificationInputMessage`;
+    plain strings → `StructuredAskUserWidget` in degraded mode.
 
     Returns:
-        The step/key used for ``adapter._clarification_input_by_step``.
+    The step/key used for `adapter._clarification_input_by_step`.
     """
     # Determine whether questions are structured (dict with "options") or plain.
     is_structured = bool(questions) and isinstance(questions[0], dict) and "options" in questions[0]
@@ -3038,37 +3034,37 @@ async def execute_task_textual(
     the TextualUIAdapter for all UI operations.
 
     Args:
-        user_input: The user's input message
-        daemon_session: Connected daemon websocket session (exclusive execution path).
-            When ``skip_daemon_send_turn=True``, only consumes chunks (prompt already
-            queued server-side).
-        assistant_id: The agent identifier
-        session_state: Session state (loop id, etc.)
-        adapter: The TextualUIAdapter for UI operations
-        image_tracker: Optional tracker for images
-        context: Optional `CLIContext` with model override and params, passed
-            to the graph via `context=`.
-        sandbox_type: Sandbox provider name for trace metadata, or `None`
-            if no sandbox is active.
-        workspace: Resolved project directory (status-bar cwd / daemon bootstrap)
-            mirrored into stream ``configurable.workspace``; when omitted,
-            ``build_stream_config`` uses ``Path.cwd``.
-        turn_stats: Pre-created `SessionStats` to accumulate into.
+    user_input: The user's input message
+    daemon_session: Connected daemon websocket session (exclusive execution path).
+    When `skip_daemon_send_turn=True`, only consumes chunks (prompt already
+    queued server-side).
+    assistant_id: The agent identifier
+    session_state: Session state (loop id, etc.)
+    adapter: The TextualUIAdapter for UI operations
+    image_tracker: Optional tracker for images
+    context: Optional `CLIContext` with model override and params, passed
+    to the graph via `context=`.
+    sandbox_type: Sandbox provider name for trace metadata, or `None`
+    if no sandbox is active.
+    workspace: Resolved project directory (status-bar cwd / daemon bootstrap)
+    mirrored into stream `configurable.workspace`; when omitted,
+    `build_stream_config` uses `Path.cwd`.
+    turn_stats: Pre-created `SessionStats` to accumulate into.
 
-            When the caller holds a reference to the same object, stats are
-            available even if this coroutine is cancelled before it can return.
+    When the caller holds a reference to the same object, stats are
+    available even if this coroutine is cancelled before it can return.
 
-            If `None`, a new instance is created internally.
-        skip_daemon_send_turn: When ``True``, skip ``send_turn`` and only consume
-            chunks (prompt already queued, e.g. after ``invoke_skill`` or a
-            running loop).
-        clarification_mode: Wire clarification relay mode (``auto`` / ``manual``).
-        sticky_preferred_subagent: Optional preferred_subagent when the message
-            has no slash route (composer Plan mode).
+    If `None`, a new instance is created internally.
+    skip_daemon_send_turn: When `True`, skip `send_turn` and only consume
+    chunks (prompt already queued, e.g. after `invoke_skill` or a
+    running loop).
+    clarification_mode: Wire clarification relay mode (`auto` / `manual`).
+    sticky_preferred_subagent: Optional preferred_subagent when the message
+    has no slash route (composer Plan mode).
 
     Returns:
-        Stats accumulated over this turn (request count, token counts,
-            wall-clock time).
+    Stats accumulated over this turn (request count, token counts,
+    wall-clock time).
 
     Raises:
     """

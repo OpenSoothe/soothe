@@ -36,7 +36,7 @@ _DELIVERY_ACK_POLL_S = 0.01
 
 
 def _extract_loop_id_from_wire(event: dict[str, Any]) -> str | None:
-    """Return ``loop_id`` from a legacy or protocol-1 wire frame."""
+    """Return `loop_id` from a legacy or protocol-1 wire frame."""
     lid = event.get("loop_id")
     if isinstance(lid, str) and lid.strip():
         return lid.strip()
@@ -52,7 +52,7 @@ def _extract_loop_id_from_wire(event: dict[str, Any]) -> str | None:
 
 
 def _wire_event_needs_delivery_ack(event: dict[str, Any]) -> bool:
-    """True when a wire frame must be acked before turn ``complete`` / ``idle``."""
+    """True when a wire frame must be acked before turn `complete` / `idle`."""
     if not isinstance(event, dict):
         return False
     etype = event.get("type", "")
@@ -80,7 +80,7 @@ def _wire_event_needs_delivery_ack(event: dict[str, Any]) -> bool:
 
 
 def _delivery_tracked_units(event: dict[str, Any]) -> int:
-    """Count delivery-ack units in one outbound wire frame (incl. ``event_batch``)."""
+    """Count delivery-ack units in one outbound wire frame (incl. `event_batch`)."""
     if not isinstance(event, dict):
         return 0
     if event.get("type") == "event_batch":
@@ -112,26 +112,26 @@ _PROTO1_WIRE_TYPES: frozenset[str] = frozenset(
 
 
 def _to_next_envelope(event: dict[str, Any], subscription_id: str | None) -> dict[str, Any]:
-    """Wrap a legacy streaming frame as a protocol-1 ``next`` envelope.
+    """Wrap a legacy streaming frame as a protocol-1 `next` envelope.
 
-    Free-form streaming frames (``event``, ``command_response``, card replay
-    frames, ``status``) are translated into the unified
-    ``{proto, type:"next", payload:{namespace, mode, data}, id?}`` shape. The
-    original frame type becomes ``payload.mode``; ``payload.data`` carries the
-    frame body (with ``loop_id`` preserved). ``status`` frames and pure
-    protocol-1 frames (``response``, ``error``, ``next``, ``complete``, …) are
-    returned unchanged — ``status`` is a defined top-level protocol-1 message
+    Free-form streaming frames (`event`, `command_response`, card replay
+    frames, `status`) are translated into the unified
+    `{proto, type:"next", payload:{namespace, mode, data}, id?}` shape. The
+    original frame type becomes `payload.mode`; `payload.data` carries the
+    frame body (with `loop_id` preserved). `status` frames and pure
+    protocol-1 frames (`response`, `error`, `next`, `complete`, …) are
+    returned unchanged — `status` is a defined top-level protocol-1 message
     type, not a subscription stream event.
 
     Args:
-        event: Raw wire frame dict as produced by the daemon broadcast path.
-        subscription_id: The subscriber's correlation id for the loop this
-            frame is scoped to, or ``None`` for daemon-global frames (in which
-            case the envelope ``id`` is omitted).
+    event: Raw wire frame dict as produced by the daemon broadcast path.
+    subscription_id: The subscriber's correlation id for the loop this
+    frame is scoped to, or `None` for daemon-global frames (in which
+    case the envelope `id` is omitted).
 
     Returns:
-        A protocol-1 ``next`` envelope dict, or the original dict if it is
-        already a protocol-1 frame or a ``status`` frame.
+    A protocol-1 `next` envelope dict, or the original dict if it is
+    already a protocol-1 frame or a `status` frame.
     """
     msg_type = event.get("type")
     if not isinstance(msg_type, str) or msg_type in _PROTO1_WIRE_TYPES:
@@ -166,10 +166,10 @@ def _queue_has_high_priority(queue: asyncio.Queue) -> bool:
     has item.
 
     Args:
-        queue: Event queue to check.
+    queue: Event queue to check.
 
     Returns:
-        True if any event has HIGH or CRITICAL priority.
+    True if any event has HIGH or CRITICAL priority.
     """
     if queue.empty():
         return False
@@ -205,16 +205,16 @@ class ClientSession:
     """Represents a connected client with loop-scoped subscriptions.
 
     Attributes:
-        client_id: Unique identifier for this client
-        transport: Channel instance handling wire I/O
-        transport_client: Channel-specific client handle (e.g. WebSocket)
-        subscriptions: Set of loop_ids this client receives events for
-        event_queue: Queue for delivering events to the client
-        sender_task: Background task that sends events to the client
-        wire_tier: Client wire filter tier (``full`` or ``progress``)
-        detach_requested: Whether client explicitly requested detach
-        config: Optional SootheConfig for effective streaming config
-        loop_subscription_ids: Maps loop_id → subscription correlation id for ``next`` envelopes
+    client_id: Unique identifier for this client
+    transport: Channel instance handling wire I/O
+    transport_client: Channel-specific client handle (e.g. WebSocket)
+    subscriptions: Set of loop_ids this client receives events for
+    event_queue: Queue for delivering events to the client
+    sender_task: Background task that sends events to the client
+    wire_tier: Client wire filter tier (`full` or `progress`)
+    detach_requested: Whether client explicitly requested detach
+    config: Optional SootheConfig for effective streaming config
+    loop_subscription_ids: Maps loop_id → subscription correlation id for `next` envelopes
     """
 
     client_id: str
@@ -240,10 +240,10 @@ class ClientSessionManager:
     """Manages client sessions and loop-scoped subscriptions.
 
     Args:
-        event_bus: EventBus instance for routing events
-        cancel_callback: Optional async callback to cancel work for a loop_id on disconnect.
-        dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks.
-        config: Optional SootheConfig for streaming interval configuration.
+    event_bus: EventBus instance for routing events
+    cancel_callback: Optional async callback to cancel work for a loop_id on disconnect.
+    dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks.
+    config: Optional SootheConfig for streaming interval configuration.
     """
 
     def __init__(
@@ -300,16 +300,16 @@ class ClientSessionManager:
     ) -> StreamDeliveryMode:
         """Return stream shaping mode for a client or loop.
 
-        §3.2: Preference is stored on ``ClientSession``, not a shared
-        per-loop map. When ``client_id`` is provided, that session's mode wins.
-        Otherwise resolve via the client that owns in-flight work on ``loop_id``.
+        §3.2: Preference is stored on `ClientSession`, not a shared
+        per-loop map. When `client_id` is provided, that session's mode wins.
+        Otherwise resolve via the client that owns in-flight work on `loop_id`.
 
         Args:
-            client_id: Connected client whose preference to read.
-            loop_id: Loop used to find the owning client when ``client_id`` is omitted.
+        client_id: Connected client whose preference to read.
+        loop_id: Loop used to find the owning client when `client_id` is omitted.
 
         Returns:
-            ``batch`` | ``adaptive`` | ``streaming`` (defaults to ``adaptive``).
+        `batch` | `adaptive` | `streaming` (defaults to `adaptive`).
         """
         if client_id:
             session = self._sessions.get(client_id)
@@ -334,17 +334,17 @@ class ClientSessionManager:
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
-        For strict isolation, also unsubscribes from the ``global`` topic when
+        For strict isolation, also unsubscribes from the `global` topic when
         subscribing to a specific loop. Loop-scoped clients should only receive
         events from their subscribed loop, not daemon-wide broadcasts.
 
-        refuses subscriptions to ``autopilot__*`` worker
+        refuses subscriptions to `autopilot__*` worker
         loop_ids. Those are internal autopilot subprocess workers and must
         never be exposed as user-facing sessions.
 
-         : If client has ``autopilot_subscribed=True``, bypass the
+        : If client has `autopilot_subscribed=True`, bypass the
         worker filter so subscribed clients can observe autopilot assignment
-        loops (``subscribe_thread`` on ``autopilot__*`` ids).
+        loops (`subscribe_thread` on `autopilot__*` ids).
         """
         try:
             from soothe_autopilot.workers.pool import is_autopilot_worker_loop_id
@@ -616,7 +616,7 @@ class ClientSessionManager:
             self._delivery_ack_seq[key] = seq
 
     def _delivery_boundary_for_loop(self, loop_id: str) -> int:
-        """Return max outbound delivery seq across subscribers for ``loop_id``."""
+        """Return max outbound delivery seq across subscribers for `loop_id`."""
         boundary = 0
         for session in self._sessions.values():
             if loop_id not in session.subscriptions:
@@ -628,7 +628,7 @@ class ClientSessionManager:
         return boundary
 
     def _delivery_acks_met(self, loop_id: str, boundary: int) -> bool:
-        """True when every subscribed client has acked through ``boundary``."""
+        """True when every subscribed client has acked through `boundary`."""
         if boundary <= 0:
             return True
         for session in self._sessions.values():
@@ -662,7 +662,7 @@ class ClientSessionManager:
     async def send_to_client(self, session: ClientSession, message: dict[str, Any]) -> None:
         """Send a wire message to one client (serialized per WebSocket connection).
 
-        Legacy streaming frames are translated to protocol-1 ``next`` envelopes
+        Legacy streaming frames are translated to protocol-1 `next` envelopes
         at this boundary so every client receives the unified
         wire shape regardless of which daemon code path produced the frame.
         """
@@ -676,10 +676,10 @@ class ClientSessionManager:
     ) -> dict[str, Any]:
         """Translate a legacy frame to a protocol-1 envelope for this session.
 
-        ``event_batch`` wrappers are preserved as a transport-level optimization;
-        each sub-event is individually wrapped as a ``next`` envelope. The SDK
-        client expands ``event_batch`` on receive, so downstream ``next()``
-        readers see one ``next`` payload per sub-event.
+        `event_batch` wrappers are preserved as a transport-level optimization;
+        each sub-event is individually wrapped as a `next` envelope. The SDK
+        client expands `event_batch` on receive, so downstream `next()`
+        readers see one `next` payload per sub-event.
         """
         if not isinstance(message, dict):
             return message
@@ -904,7 +904,7 @@ class ClientSessionManager:
         """Get batch timeout from config.
 
         Returns:
-            Timeout in seconds (default 0.2 = 200ms).
+        Timeout in seconds (default 0.2 = 200ms).
         """
         if self._config is None:
             return 0.2  # 200ms default
@@ -921,7 +921,7 @@ class ClientSessionManager:
     ) -> bool:
         """Wait until subscribed session queues are empty and sender batch window elapses.
 
-        Ensures ``goal_completion`` and other tail frames are flushed before ``status: idle``.
+        Ensures `goal_completion` and other tail frames are flushed before `status: idle`.
 
         Adds extra settle margin for HIGH/CRITICAL priority events to prevent
         race condition where sender hasn't flushed batched goal_completion before
@@ -931,13 +931,13 @@ class ClientSessionManager:
         sequence through terminal frames (or times out with a degraded warning).
 
         Args:
-            loop_id: Loop scope to drain.
-            batch_timeout_s: Sender/coalesce flush window; defaults to config interval.
-            max_wait_s: Hard cap on wait time.
-            require_delivery_acks: When False, skip client ack gating (tests).
+        loop_id: Loop scope to drain.
+        batch_timeout_s: Sender/coalesce flush window; defaults to config interval.
+        max_wait_s: Hard cap on wait time.
+        require_delivery_acks: When False, skip client ack gating (tests).
 
         Returns:
-            True if queues stayed empty after the flush window, False on timeout.
+        True if queues stayed empty after the flush window, False on timeout.
         """
         import time
 

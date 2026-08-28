@@ -1,10 +1,4 @@
-"""Command routing logic for CLI/TUI (RFC-454).
-
-Routes slash commands based on registry metadata:
-- CLI-only commands: handled locally
-- Daemon RPC commands: send command_request, handle command_response
-- Daemon routing commands: send plain text input
-"""
+"""Command routing logic for CLI/TUI."""
 
 from __future__ import annotations
 
@@ -25,10 +19,10 @@ def parse_slash_command(input_text: str) -> tuple[str, str | None]:
     """Parse slash command and extract command + query.
 
     Args:
-        input_text: Full user input (e.g., "/deep_research topic summary")
+    input_text: Full user input (e.g., "/deep_research topic summary")
 
     Returns:
-        Tuple of (command, query) where query may be None
+    Tuple of (command, query) where query may be None
     """
     stripped = input_text.strip()
     if not stripped.startswith("/"):
@@ -47,13 +41,13 @@ def validate_command(
     """Validate command before routing.
 
     Args:
-        entry: Command registry entry
-        command: Command name
-        query: Query parameter (if present)
-        loop_id: Active StrangeLoop id for this session
+    entry: Command registry entry
+    command: Command name
+    query: Query parameter (if present)
+    loop_id: Active StrangeLoop id for this session
 
     Returns:
-        Tuple of (is_valid, error_message)
+    Tuple of (is_valid, error_message)
     """
     if entry.get("requires_loop") and not loop_id:
         return (False, "No active loop")
@@ -69,10 +63,10 @@ def find_command_by_daemon_command(daemon_command: str) -> dict[str, Any] | None
     """Find command entry by daemon command name.
 
     Args:
-        daemon_command: Daemon command name (e.g., "memory")
+    daemon_command: Daemon command name (e.g., "memory")
 
     Returns:
-        Command entry dict or None if not found
+    Command entry dict or None if not found
     """
     from soothe_cli.commands.slash_commands import COMMANDS
 
@@ -86,11 +80,11 @@ def parse_command_params(entry: dict[str, Any], query: str) -> dict[str, Any]:
     """Parse query into params based on schema.
 
     Args:
-        entry: Command registry entry with params_schema
-        query: Query string to parse
+    entry: Command registry entry with params_schema
+    query: Query string to parse
 
     Returns:
-        Dict of params
+    Dict of params
     """
     schema = entry.get("params_schema", {})
     if not schema:
@@ -120,15 +114,15 @@ async def route_slash_command(
     """Route slash command based on registry metadata.
 
     Args:
-        cmd_input: Full command input (e.g., "/memory", "/deep_research topic")
-        console: Rich console for rendering
-        client: WebSocket client for daemon communication
-        loop_id: Active StrangeLoop id
-        session: Optional ``DaemonSession``; when set, uses ``session.client`` and
-            ``session.loop_id`` unless overridden.
+    cmd_input: Full command input (e.g., "/memory", "/deep_research topic")
+    console: Rich console for rendering
+    client: WebSocket client for daemon communication
+    loop_id: Active StrangeLoop id
+    session: Optional `DaemonSession`; when set, uses `session.client` and
+    `session.loop_id` unless overridden.
 
     Returns:
-        True if command was handled, False if unknown command
+    True if command was handled, False if unknown command
     """
     from soothe_cli.commands.slash_commands import COMMANDS
 
@@ -190,15 +184,15 @@ async def handle_rpc_command(
     *,
     loop_id: str | None = None,
 ) -> None:
-    """Handle daemon RPC command with structured request/response (RFC-454).
+    """Handle daemon RPC command with structured request/response.
 
     Args:
-        entry: Command registry entry
-        command: Command name
-        query: Query/params (if present)
-        console: Rich console
-        client: WebSocket client
-        loop_id: Active subscribed loop (required for daemon-side binding)
+    entry: Command registry entry
+    command: Command name
+    query: Query/params (if present)
+    console: Rich console
+    client: WebSocket client
+    loop_id: Active subscribed loop (required for daemon-side binding)
     """
     daemon_command = entry["daemon_command"]
 
@@ -250,16 +244,16 @@ async def handle_routing_command(
 ) -> None:
     """Handle daemon routing command by sending input with optional subagent or interaction mode.
 
-    For routing commands that map to a configured subagent id (e.g. ``/deep_research``,
-    ``/browser_use``), strips the slash token from the query and sets the WebSocket
-    ``preferred_subagent`` field so the daemon merges a subagent hint into StrangeLoop.
-    The ``/plan`` command sets ``interaction_mode=plan`` instead (read-only plan graph).
+    For routing commands that map to a configured subagent id (e.g. `/deep_research`,
+    `/browser_use`), strips the slash token from the query and sets the WebSocket
+    `preferred_subagent` field so the daemon merges a subagent hint into StrangeLoop.
+    The `/plan` command sets `interaction_mode=plan` instead (read-only plan graph).
 
     Args:
-        cmd_input: Full command input (e.g., "/deep_research topic summary")
-        console: Rich console
-        client: WebSocket client
-        loop_id: Subscribed loop to target (required for ``loop_input``)
+    cmd_input: Full command input (e.g., "/deep_research topic summary")
+    console: Rich console
+    client: WebSocket client
+    loop_id: Subscribed loop to target (required for `loop_input`)
     """
     if not loop_id:
         console.print("[red]Error: No active loop for routing command[/red]")

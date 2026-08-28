@@ -102,7 +102,7 @@ def _make_synthetic_event(
     *,
     author_info: Any = None,
 ) -> dict[str, Any]:
-    """Build a synthetic ``message.add`` event dict."""
+    """Build a synthetic `message.add` event dict."""
     payload: dict[str, Any] = {
         "messageId": message_id,
         "author": author,

@@ -1,12 +1,4 @@
-"""Minimal stdout-only renderer for headless CLI.
-
-Emits RFC-614 loop-tagged assistant text for the main graph (empty LangGraph namespace)
-and loop-tagged finals (including replayed ``goal_completion`` from). Subgraph
-namespaced prose is suppressed unless loop-tagged. Stderr is used for errors.
-
-UI transcript SoT is ``soothe.card.*`` (TUI / appkit); headless keeps raw ``messages``
-phases for stdout and does not project card frames.
-"""
+"""Minimal stdout-only renderer for headless CLI."""
 
 from __future__ import annotations
 

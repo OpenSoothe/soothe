@@ -42,9 +42,9 @@ class CronService:
     Runs periodic monitoring tick to dispatch due jobs.
 
     Args:
-        config: SootheConfig for settings and LLM factory.
-        autopilot: AutopilotService for goal dispatch.
-        store: Optional store (created from ``persistence.default_backend`` if None).
+    config: SootheConfig for settings and LLM factory.
+    autopilot: AutopilotService for goal dispatch.
+    store: Optional store (created from `persistence.default_backend` if None).
     """
 
     def __init__(
@@ -56,9 +56,9 @@ class CronService:
         """Initialize CronService.
 
         Args:
-            config: SootheConfig for settings and LLM factory.
-            autopilot: AutopilotService for goal dispatch.
-            store: Optional cron store (created from config when None).
+        config: SootheConfig for settings and LLM factory.
+        autopilot: AutopilotService for goal dispatch.
+        store: Optional cron store (created from config when None).
         """
         self._config = config
         self._autopilot = autopilot
@@ -112,12 +112,12 @@ class CronService:
     async def seed_builtin_jobs(self) -> int:
         """Seed built-in recurring maintenance jobs into the store.
 
-        Iterates the built-in job registry (see ``cron.builtin``) and creates
+        Iterates the built-in job registry (see `cron.builtin`) and creates
         each job if it does not already exist. Seeding is idempotent: a job with
-        the same stable ``job_id`` is never duplicated.
+        the same stable `job_id` is never duplicated.
 
         Returns:
-            Number of newly created built-in jobs (0 if all already existed).
+        Number of newly created built-in jobs (0 if all already existed).
         """
         if not self._cron_config.enable_builtin_jobs:
             logger.debug("Built-in cron jobs disabled; skipping seed pass")
@@ -209,18 +209,18 @@ class CronService:
         """Submit job via natural language.
 
         Args:
-            natural_language: User's natural language request.
-            user_id: Owner user identifier.
-            priority: Optional priority override.
+        natural_language: User's natural language request.
+        user_id: Owner user identifier.
+        priority: Optional priority override.
 
         Returns:
-            Created CronJob with id and next_run set.
+        Created CronJob with id and next_run set.
 
         Raises:
-            AutopilotDisabledError: If autopilot scheduling is disabled in config.
-            ExtractionError: If NL extraction fails.
-            DuplicateCronJobError: If an equivalent active job already exists.
-            ValueError: If max_jobs limit exceeded.
+        AutopilotDisabledError: If autopilot scheduling is disabled in config.
+        ExtractionError: If NL extraction fails.
+        DuplicateCronJobError: If an equivalent active job already exists.
+        ValueError: If max_jobs limit exceeded.
         """
         if not self._config.agent.autopilot.enabled:
             logger.warning(
@@ -299,11 +299,11 @@ class CronService:
         """List jobs for user, optionally filtered by status.
 
         Args:
-            user_id: User identifier.
-            status: Optional status filter.
+        user_id: User identifier.
+        status: Optional status filter.
 
         Returns:
-            List of CronJob objects owned by this user.
+        List of CronJob objects owned by this user.
         """
         return await self._store.list_by_user(user_id, status)
 
@@ -311,11 +311,11 @@ class CronService:
         """Cancel a pending job.
 
         Args:
-            job_id: Job identifier.
-            user_id: User identifier (for ownership validation).
+        job_id: Job identifier.
+        user_id: User identifier (for ownership validation).
 
         Returns:
-            True if cancelled, False if not found or not owned.
+        True if cancelled, False if not found or not owned.
         """
         job = await self._store.get(job_id)
         if job is None or job.user_id != user_id:
@@ -332,11 +332,11 @@ class CronService:
         """Get job details.
 
         Args:
-            job_id: Job identifier.
-            user_id: User identifier (for ownership validation).
+        job_id: Job identifier.
+        user_id: User identifier (for ownership validation).
 
         Returns:
-            CronJob if found and owned by user, None otherwise.
+        CronJob if found and owned by user, None otherwise.
         """
         job = await self._store.get(job_id)
         if job is None or job.user_id != user_id:
@@ -407,11 +407,11 @@ class CronService:
         """Check if recurring job has reached end condition.
 
         Args:
-            job: CronJob to check.
-            now: Current time.
+        job: CronJob to check.
+        now: Current time.
 
         Returns:
-            True if job should be marked completed due to end condition.
+        True if job should be marked completed due to end condition.
         """
         if not job.end_condition:
             return False
@@ -458,8 +458,8 @@ class CronService:
         Called when a goal dispatched from a cron job completes.
 
         Args:
-            job_id: Cron job identifier.
-            success: Whether goal execution succeeded.
+        job_id: Cron job identifier.
+        success: Whether goal execution succeeded.
         """
         job = await self._store.get(job_id)
         if job is None:
@@ -507,7 +507,7 @@ class CronService:
         Bridge from internal event to handle_goal_completion when goal has cron_job_id.
 
         Args:
-            event: InternalGoalCompletedEvent from AutopilotService.
+        event: InternalGoalCompletedEvent from AutopilotService.
         """
         # Extract goal_id from event
         goal_id = getattr(event, "goal_id", None)

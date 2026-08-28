@@ -1,8 +1,4 @@
-"""Autocomplete system for @ mentions and / commands.
-
-This is a custom implementation that handles trigger-based completion
-for slash commands (/) and file mentions (@).
-"""
+"""Autocomplete system for @ mentions and / commands."""
 
 from __future__ import annotations
 
@@ -26,7 +22,7 @@ def _get_git_executable() -> str | None:
     """Get full path to git executable using shutil.which().
 
     Returns:
-        Full path to git executable, or None if not found.
+    Full path to git executable, or None if not found.
     """
     return shutil.which("git")
 
@@ -52,8 +48,8 @@ class CompletionView(Protocol):
         """Render the completion suggestions popup.
 
         Args:
-            suggestions: List of (label, description) tuples
-            selected_index: Index of currently selected item
+        suggestions: List of (label, description) tuples
+        selected_index: Index of currently selected item
         """
         ...
 
@@ -65,9 +61,9 @@ class CompletionView(Protocol):
         """Replace text in the input from start to end with replacement.
 
         Args:
-            start: Start index in the input text
-            end: End index in the input text
-            replacement: Text to insert
+        start: Start index in the input text
+        end: End index in the input text
+        replacement: Text to insert
         """
         ...
 
@@ -118,8 +114,8 @@ class SlashCommandController:
         """Initialize the slash command controller.
 
         Args:
-            commands: List of `(command, description, hidden_keywords)` tuples.
-            view: View to render suggestions to.
+        commands: List of `(command, description, hidden_keywords)` tuples.
+        view: View to render suggestions to.
         """
         self._commands = commands
         self._view = view
@@ -133,7 +129,7 @@ class SlashCommandController:
         the static command registry at runtime.
 
         Args:
-            commands: New list of `(command, description, hidden_keywords)` tuples.
+        commands: New list of `(command, description, hidden_keywords)` tuples.
         """
         self._commands = commands
         self.reset()
@@ -143,7 +139,7 @@ class SlashCommandController:
         """Handle input that starts with /.
 
         Returns:
-            True if text starts with slash, indicating a command.
+        True if text starts with slash, indicating a command.
         """
         return text.startswith("/")
 
@@ -159,13 +155,13 @@ class SlashCommandController:
         """Score a command against a search string. Higher = better match.
 
         Args:
-            search: Lowercase search string (without leading `/`).
-            cmd: Command name (e.g. `'/help'`).
-            desc: Command description text.
-            keywords: Space-separated hidden keywords for matching.
+        search: Lowercase search string (without leading `/`).
+        cmd: Command name (e.g. `'/help'`).
+        desc: Command description text.
+        keywords: Space-separated hidden keywords for matching.
 
         Returns:
-            Score value where higher indicates better match quality.
+        Score value where higher indicates better match quality.
         """
         if not search:
             return 0.0
@@ -241,7 +237,7 @@ class SlashCommandController:
         into the input. Tab always completes without submitting.
 
         Returns:
-            CompletionResult indicating how the key was handled.
+        CompletionResult indicating how the key was handled.
         """
         if not self._suggestions:
             return CompletionResult.IGNORED
@@ -282,7 +278,7 @@ class SlashCommandController:
         """Apply the currently selected completion.
 
         Returns:
-            True if completion was applied, False if no suggestions.
+        True if completion was applied, False if no suggestions.
         """
         if not self._suggestions:
             return False
@@ -313,7 +309,7 @@ def _get_project_files(root: Path) -> list[str]:
     """Get project files using git ls-files or fallback to glob.
 
     Returns:
-        List of relative file paths from project root.
+    List of relative file paths from project root.
     """
     git_path = _get_git_executable()
     if git_path:
@@ -353,7 +349,7 @@ def _fuzzy_score(query: str, candidate: str) -> float:
     """Score a candidate against query. Higher = better match.
 
     Returns:
-        Score value where higher indicates better match quality.
+    Score value where higher indicates better match quality.
     """
     query_lower = query.lower()
     # Normalize path separators for cross-platform support
@@ -400,7 +396,7 @@ def _is_dotpath(path: str) -> bool:
     """Check if path contains dotfiles/dotdirs (e.g., .github/...).
 
     Returns:
-        True if path contains hidden directories or files.
+    True if path contains hidden directories or files.
     """
     return any(part.startswith(".") for part in path.split("/"))
 
@@ -409,7 +405,7 @@ def _path_depth(path: str) -> int:
     """Get depth of path (number of / separators).
 
     Returns:
-        Number of path separators in the path.
+    Number of path separators in the path.
     """
     return path.count("/")
 
@@ -424,13 +420,13 @@ def _fuzzy_search(
     """Return top matches sorted by score.
 
     Args:
-        query: Search query
-        candidates: List of file paths to search
-        limit: Max results to return
-        include_dotfiles: Whether to include dotfiles (default False)
+    query: Search query
+    candidates: List of file paths to search
+    limit: Max results to return
+    include_dotfiles: Whether to include dotfiles (default False)
 
     Returns:
-        List of matching file paths sorted by relevance score.
+    List of matching file paths sorted by relevance score.
     """
     # Filter dotfiles unless explicitly searching for them
     filtered = candidates if include_dotfiles else [c for c in candidates if not _is_dotpath(c)]
@@ -456,8 +452,8 @@ class FuzzyFileController:
         """Initialize the fuzzy file controller.
 
         Args:
-            view: View to render suggestions to
-            cwd: Starting directory to find project root from
+        view: View to render suggestions to
+        cwd: Starting directory to find project root from
         """
         self._view = view
         self._cwd = cwd or Path.cwd()
@@ -470,7 +466,7 @@ class FuzzyFileController:
         """Get cached file list or refresh.
 
         Returns:
-            List of project file paths.
+        List of project file paths.
         """
         if self._file_cache is None:
             self._file_cache = _get_project_files(self._project_root)
@@ -493,7 +489,7 @@ class FuzzyFileController:
         """Handle input that contains @ not followed by space.
 
         Returns:
-            True if cursor is after @ and within a file mention context.
+        True if cursor is after @ and within a file mention context.
         """
         if cursor_index <= 0 or cursor_index > len(text):
             return False
@@ -540,7 +536,7 @@ class FuzzyFileController:
         """Get fuzzy file suggestions.
 
         Returns:
-            List of (label, type_hint) tuples for matching files.
+        List of (label, type_hint) tuples for matching files.
         """
         files = self._get_files()
         # Include dotfiles only if query starts with "."
@@ -560,7 +556,7 @@ class FuzzyFileController:
         """Handle key events for navigation and selection.
 
         Returns:
-            CompletionResult indicating how the key was handled.
+        CompletionResult indicating how the key was handled.
         """
         if not self._suggestions:
             return CompletionResult.IGNORED
@@ -594,7 +590,7 @@ class FuzzyFileController:
         """Apply the currently selected completion.
 
         Returns:
-            True if completion was applied, False if no suggestions or invalid state.
+        True if completion was applied, False if no suggestions or invalid state.
         """
         if not self._suggestions:
             return False
@@ -624,7 +620,7 @@ class MultiCompletionManager:
         """Initialize with a list of controllers.
 
         Args:
-            controllers: List of completion controllers (checked in order)
+        controllers: List of completion controllers (checked in order)
         """
         self._controllers = controllers
         self._active: CompletionController | None = None
@@ -658,7 +654,7 @@ class MultiCompletionManager:
         """Handle key event, delegating to active controller.
 
         Returns:
-            CompletionResult from active controller, or IGNORED if none active.
+        CompletionResult from active controller, or IGNORED if none active.
         """
         if self._active is None:
             return CompletionResult.IGNORED

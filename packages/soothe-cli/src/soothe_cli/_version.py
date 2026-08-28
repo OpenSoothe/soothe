@@ -15,7 +15,7 @@ _VERSION_PATTERN = re.compile(r"^(\d+\.\d+\.\d+)")
 
 
 def _parse_version_file_text(text: str) -> str | None:
-    """Extract the semver from a repo ``VERSION`` file."""
+    """Extract the semver from a repo `VERSION` file."""
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -59,7 +59,7 @@ def _editable_source_roots() -> list[Path]:
 
 
 def _read_repo_version_from_source(root: Path) -> str | None:
-    """Read the monorepo ``VERSION`` file for an editable install root."""
+    """Read the monorepo `VERSION` file for an editable install root."""
     candidates = [root.parent.parent / "VERSION", *(parent / "VERSION" for parent in root.parents)]
     for path in candidates:
         if not path.is_file():
@@ -75,7 +75,7 @@ def _read_repo_version_from_source(root: Path) -> str | None:
 
 
 def _resolve_version() -> str:
-    """Resolve the CLI version, preferring repo ``VERSION`` for editable installs."""
+    """Resolve the CLI version, preferring repo `VERSION` for editable installs."""
     for root in _editable_source_roots():
         repo_version = _read_repo_version_from_source(root)
         if repo_version:

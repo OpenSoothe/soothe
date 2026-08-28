@@ -1,10 +1,4 @@
-"""Render fenced Mermaid diagrams for TUI markdown.
-
-Goal-completion synthesis emits mermaid code fences; Rich's default
-``CodeBlock`` shows them as source. This helper expands supported diagrams to
-Unicode/ASCII art via ``termaid``, with progressive compaction to fit the
-card width.
-"""
+"""Render fenced Mermaid diagrams for TUI markdown."""
 
 from __future__ import annotations
 
@@ -49,15 +43,15 @@ def render_mermaid_art(
     *,
     max_width: int | None = None,
 ) -> str | None:
-    """Render Mermaid source to terminal art, or ``None`` on failure.
+    """Render Mermaid source to terminal art, or `None` on failure.
 
     Args:
-        source: Mermaid diagram body (without fence markers).
-        max_width: Optional column budget; re-renders with smaller gap/padding
-            when the diagram exceeds this width.
+    source: Mermaid diagram body (without fence markers).
+    max_width: Optional column budget; re-renders with smaller gap/padding
+    when the diagram exceeds this width.
 
     Returns:
-        Non-empty diagram string, or ``None`` when rendering fails / is empty.
+    Non-empty diagram string, or `None` when rendering fails / is empty.
     """
     text = (source or "").strip()
     if not text:

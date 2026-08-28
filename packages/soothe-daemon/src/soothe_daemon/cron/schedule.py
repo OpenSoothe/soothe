@@ -1,12 +1,4 @@
-"""Schedule math for the cron service.
-
-Supports delayed execution (``--delay``), specific time (``--at``), simple
-recurrence (``--every``), and cron expressions (``--cron``). Also hosts the
-timezone helpers used to resolve and label wall-clock schedules.
-
-This module folds the former ``soothe.autopilot.schedule`` package (tasks +
-timezone) into the daemon's cron service, since scheduling is a cron concern.
-"""
+"""Schedule math for the cron service."""
 
 from __future__ import annotations
 
@@ -30,14 +22,14 @@ def resolve_schedule_timezone(name: str | None) -> tzinfo:
     """Resolve a configured schedule timezone name to a tzinfo.
 
     Args:
-        name: ``local`` for the system timezone, ``UTC`` for UTC, or an IANA
-            timezone such as ``Asia/Shanghai``.
+    name: `local` for the system timezone, `UTC` for UTC, or an IANA
+    timezone such as `Asia/Shanghai`.
 
     Returns:
-        tzinfo used when interpreting cron and wall-clock schedules.
+    tzinfo used when interpreting cron and wall-clock schedules.
 
     Raises:
-        ValueError: If the timezone name is invalid.
+    ValueError: If the timezone name is invalid.
     """
     if name is None or name.upper() == "UTC":
         return UTC
@@ -82,10 +74,10 @@ class ScheduleSpec:
         """Calculate next run time after the given time.
 
         Args:
-            after: Reference time.
+        after: Reference time.
 
         Returns:
-            Next scheduled time in UTC, or None if one-shot already past.
+        Next scheduled time in UTC, or None if one-shot already past.
         """
         after_utc = _as_utc(after)
         schedule_tz = resolve_schedule_timezone(self.timezone)
@@ -130,13 +122,13 @@ def _parse_duration(value: str) -> timedelta:
     """Parse a duration string like '2h', '30m', '1h30m', '1d'.
 
     Args:
-        value: Duration string.
+    value: Duration string.
 
     Returns:
-        Parsed timedelta.
+    Parsed timedelta.
 
     Raises:
-        ValueError: If value cannot be parsed.
+    ValueError: If value cannot be parsed.
     """
     m = _DURATION_RE.fullmatch(value)
     if not m or not any(m.groups()):
@@ -164,18 +156,18 @@ _CRON_FIELDS = {
 
 
 def _next_cron(expr: str, after: datetime, schedule_tz: tzinfo) -> datetime | None:
-    """Calculate the next UTC time matching a cron expression in ``schedule_tz``.
+    """Calculate the next UTC time matching a cron expression in `schedule_tz`.
 
-    Supports: specific values, wildcards (``*``), ranges (``1-5``),
-    steps (``*/5``), and lists (``1,3,5``).
+    Supports: specific values, wildcards (`*`), ranges (`1-5`),
+    steps (`*/5`), and lists (`1,3,5`).
 
     Args:
-        expr: Cron expression (5 fields).
-        after: Reference instant (UTC-aware).
-        schedule_tz: Timezone used to interpret cron wall-clock fields.
+    expr: Cron expression (5 fields).
+    after: Reference instant (UTC-aware).
+    schedule_tz: Timezone used to interpret cron wall-clock fields.
 
     Returns:
-        Next matching datetime in UTC.
+    Next matching datetime in UTC.
     """
     parts = expr.strip().split()
     cron_field_count = 5  # standard 5-field cron: min hour dom month dow
@@ -212,11 +204,11 @@ def _matches_constraints(dt: datetime, constraints: dict[str, set[int]]) -> bool
     """Check if a datetime matches all cron constraints.
 
     Args:
-        dt: Datetime to check.
-        constraints: Dict of field name → set of valid values.
+    dt: Datetime to check.
+    constraints: Dict of field name → set of valid values.
 
     Returns:
-        True if datetime matches all constraints.
+    True if datetime matches all constraints.
     """
     checks = {
         "minute": dt.minute,
@@ -239,12 +231,12 @@ def _parse_cron_field(pattern: str, lo: int, hi: int) -> set[int] | None:
     """Parse a single cron field into a set of valid values.
 
     Args:
-        pattern: Cron field pattern (``*``, ``1-5``, ``*/2``, ``1,3,5``).
-        lo: Minimum valid value.
-        hi: Maximum valid value.
+    pattern: Cron field pattern (`*`, `1-5`, `*/2`, `1,3,5`).
+    lo: Minimum valid value.
+    hi: Maximum valid value.
 
     Returns:
-        Set of valid values, or None if pattern is invalid.
+    Set of valid values, or None if pattern is invalid.
     """
     values: set[int] = set()
     for part in pattern.split(","):

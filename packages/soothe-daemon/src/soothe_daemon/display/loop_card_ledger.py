@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class LoopCardLedger:
-    """Durable ledger for one loop (backend from ``get_display_card_store``)."""
+    """Durable ledger for one loop (backend from `get_display_card_store`)."""
 
     def __init__(
         self,

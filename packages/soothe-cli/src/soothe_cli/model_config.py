@@ -1,9 +1,4 @@
-"""Model configuration utilities for TUI (adapted from Soothe).
-
-This module provides TUI-specific configuration utilities that bridge between
-SootheConfig and TUI preferences. Note: This is a minimal stub to enable TUI
-functionality - full migration needed in future.
-"""
+"""Model configuration utilities for TUI (adapted from Soothe)."""
 
 from __future__ import annotations
 
@@ -24,10 +19,10 @@ _LEGACY_CLI_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
 
 
 def resolve_cli_config_path() -> Path:
-    """Return the CLI prefs path, migrating legacy ``config.yml`` once if needed.
+    """Return the CLI prefs path, migrating legacy `config.yml` once if needed.
 
     Returns:
-        Path to ``~/.soothe/config/cli.yml`` (created/migrated lazily).
+    Path to `~/.soothe/config/cli.yml` (created/migrated lazily).
     """
     if _DEFAULT_CLI_CONFIG_PATH.exists():
         return _DEFAULT_CLI_CONFIG_PATH
@@ -71,14 +66,14 @@ def _in_running_loop() -> bool:
 
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
-    """Parsed ``provider:model`` specification for TUI helpers."""
+    """Parsed `provider:model` specification for TUI helpers."""
 
     provider: str
     model: str
 
     @classmethod
     def try_parse(cls, model_spec: str) -> ModelSpec | None:
-        """Parse explicit ``provider:model`` when both parts are non-empty."""
+        """Parse explicit `provider:model` when both parts are non-empty."""
         if not model_spec or ":" not in model_spec:
             return None
         prov, _, rest = model_spec.partition(":")
@@ -93,10 +88,10 @@ async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
     """Fetch provider config from daemon via WebSocket RPC.
 
     Args:
-        provider_name: Provider name to fetch.
+    provider_name: Provider name to fetch.
 
     Returns:
-        Provider config dict or None if not found.
+    Provider config dict or None if not found.
     """
     try:
         from soothe_client import (
@@ -144,7 +139,7 @@ class ModelConfig:
         """Initialize from an optional pre-loaded config.
 
         Args:
-            _cfg: Config instance (None during transition).
+        _cfg: Config instance (None during transition).
         """
         self._cfg = _cfg
         self.default_model: str | None = None
@@ -156,17 +151,17 @@ def resolve_env_var(var_name: str) -> str:
 
     This function handles two scenarios:
     1. Direct env var lookup: resolve_env_var("OPENAI_API_KEY")
-       - First checks SOOTHE_OPENAI_API_KEY
-       - Falls back to OPENAI_API_KEY
+    - First checks SOOTHE_OPENAI_API_KEY
+    - Falls back to OPENAI_API_KEY
     2. Pattern resolution: resolve_env_var("${OPENAI_API_KEY}")
-       - Resolves ${VAR} patterns within strings
+    - Resolves ${VAR} patterns within strings
 
     Args:
-        var_name: Environment variable name (e.g., "OPENAI_API_KEY")
-                  or pattern string (e.g., "${OPENAI_API_KEY}")
+    var_name: Environment variable name (e.g., "OPENAI_API_KEY")
+    or pattern string (e.g., "${OPENAI_API_KEY}")
 
     Returns:
-        Resolved value from environment, or empty string if not found.
+    Resolved value from environment, or empty string if not found.
     """
     import os
 
@@ -230,9 +225,9 @@ class LoopConfig:
     """Loop list display preferences for TUI.
 
     Attributes:
-        columns: Column visibility settings keyed by column name.
-        relative_time: Whether to show relative timestamps.
-        sort_order: Sort order for loop list ("updated_at" or "created_at").
+    columns: Column visibility settings keyed by column name.
+    relative_time: Whether to show relative timestamps.
+    sort_order: Sort order for loop list ("updated_at" or "created_at").
     """
 
     columns: dict[str, bool]
@@ -259,7 +254,7 @@ def load_loop_config() -> LoopConfig:
     """Load loop display configuration.
 
     Returns:
-        LoopConfig instance with columns, relative_time, sort_order.
+    LoopConfig instance with columns, relative_time, sort_order.
     """
     return LoopConfig(
         columns=dict(_DEFAULT_LOOP_COLUMNS),
@@ -282,10 +277,10 @@ def save_loop_sort_order(sort_order: str) -> bool:
     """Save loop list sort order preference (stub: no-op success).
 
     Args:
-        sort_order: Sort order ("updated_at" or "created_at").
+    sort_order: Sort order ("updated_at" or "created_at").
 
     Returns:
-        True (success stub).
+    True (success stub).
     """
     # Stub - implement with SootheConfig persistence later
     return True
@@ -295,10 +290,10 @@ def save_loop_relative_time(relative_time: bool) -> bool:
     """Save loop list relative time preference (stub: no-op success).
 
     Args:
-        relative_time: Whether to use relative timestamps.
+    relative_time: Whether to use relative timestamps.
 
     Returns:
-        True (success stub).
+    True (success stub).
     """
     # Stub - implement with SootheConfig persistence later
     return True
@@ -318,7 +313,7 @@ def save_default_model(model_spec: ModelSpec) -> None:
     """Save default model preference.
 
     Args:
-        model_spec: Model specification to save as default.
+    model_spec: Model specification to save as default.
     """
     # Stub - should integrate with SootheConfig providers mapping
     pass
@@ -331,7 +326,7 @@ def clear_default_model() -> None:
 
 
 def clear_caches() -> None:
-    """Clear cached ``SootheConfig`` so the next ``ModelConfig.load()`` re-reads disk."""
+    """Clear cached `SootheConfig` so the next `ModelConfig.load()` re-reads disk."""
     try:
         import soothe_cli.config.loader as _cl
 
@@ -344,10 +339,10 @@ def is_warning_suppressed(_warning_type: str) -> bool:
     """Check if a warning type is suppressed in user preferences.
 
     Args:
-        _warning_type: Warning type identifier.
+    _warning_type: Warning type identifier.
 
     Returns:
-        True if warning should be suppressed.
+    True if warning should be suppressed.
     """
     # Stub - should check SootheConfig user preferences
     return False
@@ -387,14 +382,14 @@ def parse_models_list_response(
     dict[str, dict[str, Any]],
     dict[str, bool | None],
 ]:
-    """Parse daemon ``models_list`` wire payload for the ``/model`` UI.
+    """Parse daemon `models_list` wire payload for the `/model` UI.
 
     Args:
-        resp: Raw ``models_list`` RPC response from the daemon.
+    resp: Raw `models_list` RPC response from the daemon.
 
     Returns:
-        Tuple of ``(all_models, default_spec, profiles, wire_credential_map)`` where
-        ``all_models`` is ``(provider:model spec, provider)`` pairs.
+    Tuple of `(all_models, default_spec, profiles, wire_credential_map)` where
+    `all_models` is `(provider:model spec, provider)` pairs.
     """
     rows = resp.get("models") or []
     all_models: list[tuple[str, str]] = []
@@ -416,7 +411,7 @@ def parse_models_list_response(
 
 
 def get_available_models() -> list[ModelProfileEntry]:
-    """List models declared on daemon config (for ``/model`` UI).
+    """List models declared on daemon config (for `/model` UI).
 
     Per architectural separation, CLI fetches providers from daemon via RPC.
     Returns empty list if daemon not reachable.
@@ -487,13 +482,13 @@ def get_available_models() -> list[ModelProfileEntry]:
 
 
 def get_model_profiles(cli_override: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
-    """Map ``provider:model`` keys to footer-shaped profile rows (minimal until YAML profiles exist).
+    """Map `provider:model` keys to footer-shaped profile rows (minimal until YAML profiles exist).
 
     Args:
-        cli_override: Reserved for CLI profile merge (unused in minimal catalog).
+    cli_override: Reserved for CLI profile merge (unused in minimal catalog).
 
     Returns:
-        Mapping of spec string to ``{"profile": {...}, "overridden_keys": set()}``.
+    Mapping of spec string to `{"profile": {...}, "overridden_keys": set()}`.
     """
     del cli_override  # reserved for future profile merge from CLI flags
     profiles: dict[str, dict[str, Any]] = {}

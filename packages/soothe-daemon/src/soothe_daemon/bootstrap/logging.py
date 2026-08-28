@@ -1,10 +1,4 @@
-"""Logging configuration for Soothe daemon server.
-
-``soothe_daemon.*`` logs go to ``SOOTHE_HOME/logs/daemon.log``. In-process
-``soothe.*`` / ``soothe_nano.*`` / ``soothe_plugins.*`` agent logs use ``soothe.log`` via
-``soothe.logging.setup_logging`` (separate file by default). Standalone CLI
-runs use the same ``soothe.log`` path when not attached to a daemon.
-"""
+"""Logging configuration for Soothe daemon server."""
 
 from __future__ import annotations
 
@@ -68,7 +62,7 @@ def set_loop_id(loop_id: str | None) -> None:
     """Set the current loop ID for logging context.
 
     Args:
-        loop_id: The loop ID to set, or None to clear.
+    loop_id: The loop ID to set, or None to clear.
     """
     loop_id_ctx.set(loop_id)
 
@@ -77,13 +71,13 @@ def set_client_id(client_id: str | None) -> None:
     """Set the current client ID for logging context.
 
     Args:
-        client_id: The client ID to set, or None to clear.
+    client_id: The client ID to set, or None to clear.
     """
     client_id_ctx.set(client_id)
 
 
 def _daemon_log_level_from_soothe_config(cfg: object) -> str:
-    """Resolve daemon file log level from ``SootheConfig`` (``debug`` / ``observability``)."""
+    """Resolve daemon file log level from `SootheConfig` (`debug` / `observability`)."""
     if bool(getattr(cfg, "debug", False)):
         return "DEBUG"
     obs = getattr(cfg, "observability", None)
@@ -100,16 +94,16 @@ def setup_daemon_logging(
     log_file: str | None = None,
     foreground: bool = False,
 ) -> None:
-    """Configure the ``soothe_daemon`` logger hierarchy.
+    """Configure the `soothe_daemon` logger hierarchy.
 
-    Writes to ``SOOTHE_HOME/logs/daemon.log`` (rotating, 5 MB max, 3 backups).
-    Call ``soothe.logging.setup_logging`` separately for ``soothe.*`` handlers
-    (defaults to ``soothe.log`` unless ``log_file`` is overridden).
+    Writes to `SOOTHE_HOME/logs/daemon.log` (rotating, 5 MB max, 3 backups).
+    Call `soothe.logging.setup_logging` separately for `soothe.*` handlers
+    (defaults to `soothe.log` unless `log_file` is overridden).
 
     Args:
-        level: Log level for file output (DEBUG, INFO, WARNING, ERROR).
-        log_file: Optional custom log file path.
-        foreground: When True, also logs to stdout at INFO level.
+    level: Log level for file output (DEBUG, INFO, WARNING, ERROR).
+    log_file: Optional custom log file path.
+    foreground: When True, also logs to stdout at INFO level.
     """
     log_dir = Path(SOOTHE_HOME) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)

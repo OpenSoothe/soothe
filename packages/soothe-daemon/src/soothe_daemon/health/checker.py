@@ -72,8 +72,8 @@ class HealthChecker:
     """Orchestrates health checks across vital (and optional deep) categories.
 
     Attributes:
-        config: Agent ``SootheConfig`` for config-driven checks (optional).
-        daemon_config: Daemon ``SootheDaemonConfig`` for transport checks (optional).
+    config: Agent `SootheConfig` for config-driven checks (optional).
+    daemon_config: Daemon `SootheDaemonConfig` for transport checks (optional).
     """
 
     def __init__(
@@ -84,11 +84,11 @@ class HealthChecker:
         """Initialize health checker.
 
         Args:
-            config: Agent ``SootheConfig``. If ``None``, runs basic checks
-                that don't require configuration.
-            daemon_config: Daemon ``SootheDaemonConfig`` for transport /
-                worker-pool / queue checks. If ``None``, daemon-side checks
-                fall back to defaults.
+        config: Agent `SootheConfig`. If `None`, runs basic checks
+        that don't require configuration.
+        daemon_config: Daemon `SootheDaemonConfig` for transport /
+        worker-pool / queue checks. If `None`, daemon-side checks
+        fall back to defaults.
         """
         self.config = config
         self.daemon_config = daemon_config
@@ -204,15 +204,15 @@ class HealthChecker:
         APIs are batched per owner once per report.
 
         Args:
-            categories: Specific categories to run (None = vitals, or vitals+deep).
-            exclude: Categories to skip.
-            deep: Include deep optional categories when ``categories`` is None.
-            live_llm: Perform a live invoke against ``router.default``.
-            require_running: Treat offline daemon as error (via daemon check message).
-            on_progress: Optional progressive diagnosis callbacks.
+        categories: Specific categories to run (None = vitals, or vitals+deep).
+        exclude: Categories to skip.
+        deep: Include deep optional categories when `categories` is None.
+        live_llm: Perform a live invoke against `router.default`.
+        require_running: Treat offline daemon as error (via daemon check message).
+        on_progress: Optional progressive diagnosis callbacks.
 
         Returns:
-            Complete health report with all check results.
+        Complete health report with all check results.
         """
         selected = self._resolve_categories(categories, exclude, deep=deep)
         self._nano_cache = None
@@ -309,7 +309,7 @@ class HealthChecker:
 
 
 def _upgrade_offline_daemon_to_error(result: CategoryResult) -> CategoryResult:
-    """When ``--require-running``, treat offline daemon INFO checks as ERROR."""
+    """When `--require-running`, treat offline daemon INFO checks as ERROR."""
     from soothe_daemon.health.models import CheckResult
 
     upgraded: list[CheckResult] = []

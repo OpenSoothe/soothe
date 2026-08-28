@@ -1,9 +1,4 @@
-"""Unified slash-command registry.
-
-Every slash command is declared once as a `SlashCommand` entry in `COMMANDS`.
-Bypass-tier frozensets and autocomplete tuples are derived automatically — no
-other file should hard-code command metadata.
-"""
+"""Unified slash-command registry."""
 
 from __future__ import annotations
 
@@ -238,11 +233,11 @@ def resolve_command_head(command: str) -> str:
     """Map a slash command (or alias) to its canonical registry name.
 
     Args:
-        command: Full user input or bare command (e.g. ``/tokens`` or ``/plan x``).
+    command: Full user input or bare command (e.g. `/tokens` or `/plan x`).
 
     Returns:
-        Canonical command head (e.g. ``/context`` for ``/tokens``), or the lowercased
-        first token when unknown.
+    Canonical command head (e.g. `/context` for `/tokens`), or the lowercased
+    first token when unknown.
     """
     stripped = command.strip()
     if not stripped.startswith("/"):
@@ -261,11 +256,11 @@ def enter_action_for(command: str) -> EnterAction:
     operator can append arguments before submitting.
 
     Args:
-        command: Completed suggestion label (e.g. ``/clear`` or ``/skill:foo``).
+    command: Completed suggestion label (e.g. `/clear` or `/skill:foo`).
 
     Returns:
-        `EnterAction.EXECUTE` for one-stage submit, or `EnterAction.COMPLETE`
-        for insert-only. Unknown static commands default to execute.
+    `EnterAction.EXECUTE` for one-stage submit, or `EnterAction.COMPLETE`
+    for insert-only. Unknown static commands default to execute.
     """
     stripped = command.strip()
     if stripped.startswith(("/skill:", "/skills:")):
@@ -283,10 +278,10 @@ def _build_bypass_set(tier: BypassTier) -> frozenset[str]:
     """Build a frozenset of command names (including aliases) for a tier.
 
     Args:
-        tier: The bypass tier to collect.
+    tier: The bypass tier to collect.
 
     Returns:
-        Frozenset of all names and aliases that belong to `tier`.
+    Frozenset of all names and aliases that belong to `tier`.
     """
     names: set[str] = set()
     for cmd in COMMANDS:
@@ -356,13 +351,13 @@ def parse_skill_command(command: str) -> tuple[str, str]:
     """Extract skill name and args from a `/skill:<name>` or `/skills:<name>` command.
 
     Args:
-        command: The full command string (e.g., `/skill:web-research find X`).
+    command: The full command string (e.g., `/skill:web-research find X`).
 
     Returns:
-        Tuple of `(skill_name, args)`.
+    Tuple of `(skill_name, args)`.
 
-            The skill name is normalized to lowercase. Both are empty strings
-            when the command has no skill name after the prefix.
+    The skill name is normalized to lowercase. Both are empty strings
+    when the command has no skill name after the prefix.
     """
     prefix = "/skills:" if command.lstrip().startswith("/skills:") else "/skill:"
     after_prefix = command[len(prefix) :].strip()
@@ -377,13 +372,13 @@ def parse_skill_command(command: str) -> tuple[str, str]:
 def build_skill_commands_from_wire(
     rows: list[dict[str, Any]],
 ) -> list[tuple[str, str, str]]:
-    """Build autocomplete tuples from daemon ``skills_list_response`` rows.
+    """Build autocomplete tuples from daemon `skills_list_response` rows.
 
     Args:
-        rows: Wire-safe dicts with at least ``name`` and optional ``description``.
+    rows: Wire-safe dicts with at least `name` and optional `description`.
 
     Returns:
-        Sorted list of ``(name, description, hidden_keywords)`` tuples.
+    Sorted list of `(name, description, hidden_keywords)` tuples.
     """
     tuples: list[tuple[str, str, str]] = []
     for row in rows:
@@ -405,9 +400,9 @@ def build_skill_commands(
     and the skill name as a hidden keyword for fuzzy matching.
 
     Args:
-        skills: List of discovered skill metadata.
+    skills: List of discovered skill metadata.
 
     Returns:
-        List of `(name, description, hidden_keywords)` tuples.
+    List of `(name, description, hidden_keywords)` tuples.
     """
     return [(f"/skill:{skill['name']}", skill["description"], skill["name"]) for skill in skills]

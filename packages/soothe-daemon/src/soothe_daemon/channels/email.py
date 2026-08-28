@@ -589,7 +589,7 @@ class EmailChannel(Channel):
         """Parse Authentication-Results headers for SPF and DKIM verdicts.
 
         Returns:
-            A tuple of (spf_pass, dkim_pass) booleans.
+        A tuple of (spf_pass, dkim_pass) booleans.
         """
         spf_pass = False
         dkim_pass = False

@@ -25,8 +25,8 @@ class HistoryManager:
         """Initialize the history manager.
 
         Args:
-            history_file: Path to the JSON-lines history file
-            max_entries: Maximum number of entries to keep
+        history_file: Path to the JSON-lines history file
+        max_entries: Maximum number of entries to keep
         """
         self.history_file = history_file
         self.max_entries = max_entries
@@ -127,7 +127,7 @@ class HistoryManager:
         """Add a command to history.
 
         Args:
-            text: The command text to add
+        text: The command text to add
         """
         text = text.strip()
         # Skip empty or slash commands
@@ -159,13 +159,13 @@ class HistoryManager:
         no effect.
 
         Args:
-            current_input: Current input text. Saved only on the first call of a
-                navigation session; ignored on subsequent calls.
-            query: Substring to match against history entries.
-                Captured once on the first call of a navigation session.
+        current_input: Current input text. Saved only on the first call of a
+        navigation session; ignored on subsequent calls.
+        query: Substring to match against history entries.
+        Captured once on the first call of a navigation session.
 
         Returns:
-            Previous matching entry or `None`.
+        Previous matching entry or `None`.
         """
         if not self._entries:
             return None
@@ -190,10 +190,10 @@ class HistoryManager:
         Uses the query captured by the most recent `get_previous` call.
 
         Returns:
-            The next matching entry, or the original input when past the newest
-                match.
+        The next matching entry, or the original input when past the newest
+        match.
 
-                `None` if not currently navigating history.
+        `None` if not currently navigating history.
         """
         if self._current_index == -1:
             return None

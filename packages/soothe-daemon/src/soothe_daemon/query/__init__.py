@@ -1,8 +1,4 @@
-"""Query execution infrastructure for the daemon.
-
-This submodule provides:
-- QueryEngine: Query execution lifecycle, streaming, cancellation
-"""
+"""Query execution infrastructure for the daemon."""
 
 from soothe_daemon.query.engine import QueryEngine
 

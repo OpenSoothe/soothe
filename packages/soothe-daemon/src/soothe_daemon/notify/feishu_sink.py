@@ -1,9 +1,4 @@
-"""Feishu/Lark NotifySink stub.
-
-Config schema + registry participation; live IM send is a follow-up.
-When enabled without credentials / live path, deliver returns a clear
-skipped result so operators see the extension point.
-"""
+"""Feishu/Lark NotifySink stub."""
 
 from __future__ import annotations
 

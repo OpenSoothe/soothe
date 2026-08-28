@@ -1,8 +1,4 @@
-"""Base class providing shared utilities for CLI and TUI renderers.
-
-This module provides common functionality that both sync (CLI) and async (TUI)
-renderers can inherit from, reducing duplication and ensuring consistent behavior.
-"""
+"""Base class providing shared utilities for CLI and TUI renderers."""
 
 from __future__ import annotations
 
@@ -17,7 +13,7 @@ class RendererBase:
     - Shared formatting helpers
     - Common display utilities
 
-    ``HeadlessCliRenderer`` and TUI message layers inherit from this base class.
+    `HeadlessCliRenderer` and TUI message layers inherit from this base class.
     """
 
     @staticmethod
@@ -35,18 +31,18 @@ class RendererBase:
         - Incorrect spacing in numbered lists
 
         Args:
-            text: Text to repair (typically streaming output).
+        text: Text to repair (typically streaming output).
 
         Returns:
-            Repaired text with proper markdown formatting.
+        Repaired text with proper markdown formatting.
 
         Example:
-            >>> text = "##1First Step##2Second Step"
-            >>> repaired = RendererBase.repair_concatenated_output(text)
-            >>> print(repaired)
-            ## 1 First Step
+        >>> text = "##1First Step##2Second Step"
+        >>> repaired = RendererBase.repair_concatenated_output(text)
+        >>> print(repaired)
+        ## 1 First Step
 
-            ## 2 Second Step
+        ## 2 Second Step
         """
         repaired = text
         # Add newline before numbered headings (## 1, ## 2, etc.)

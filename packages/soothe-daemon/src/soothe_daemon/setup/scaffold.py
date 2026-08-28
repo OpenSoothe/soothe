@@ -26,15 +26,15 @@ def scaffold_configs(
     force: bool = False,
     stdout: object | None = None,
 ) -> ScaffoldResult:
-    """Create missing ``nano.yml`` / ``soothe.yml`` / ``daemon.yml`` from templates.
+    """Create missing `nano.yml` / `soothe.yml` / `daemon.yml` from templates.
 
     Args:
-        config_dir: Target directory (created if missing).
-        force: When True, overwrite existing files with templates.
-        stdout: Optional stream for progress messages (defaults to ``sys.stdout``).
+    config_dir: Target directory (created if missing).
+    force: When True, overwrite existing files with templates.
+    stdout: Optional stream for progress messages (defaults to `sys.stdout`).
 
     Returns:
-        ScaffoldResult describing created / skipped / overwritten files.
+    ScaffoldResult describing created / skipped / overwritten files.
     """
     out = stdout if stdout is not None else sys.stdout
     config_dir = config_dir.expanduser()

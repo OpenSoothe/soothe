@@ -1,13 +1,4 @@
-"""Daemon-owned wire event type string constants.
-
-Channel, output, and skillify events were previously declared inline in their
-respective modules. They are centralized here so daemon-owned wire types have
-a single declaration site, matching the host's ``foundation/events/constants``.
-
-Wire-visible constants shared across packages (strange-loop, stream-end,
-memory, policy) remain in ``soothe_sdk.core.events`` (the protocol-contracts
-layer); this module owns only daemon-defined types.
-"""
+"""Daemon-owned wire event type string constants."""
 
 from __future__ import annotations
 

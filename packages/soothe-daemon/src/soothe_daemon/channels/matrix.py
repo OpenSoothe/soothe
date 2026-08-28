@@ -143,10 +143,10 @@ class _StreamBuf:
     """Buffer for managing LLM response stream data.
 
     Attributes:
-        text: Stores the text content of the buffer.
-        event_id: Identifier for the associated event. None indicates no
-            specific event association.
-        last_edit: Timestamp of the most recent edit to the buffer.
+    text: Stores the text content of the buffer.
+    event_id: Identifier for the associated event. None indicates no
+    specific event association.
+    last_edit: Timestamp of the most recent edit to the buffer.
     """
 
     text: str = ""
@@ -217,12 +217,12 @@ def _build_matrix_text_content(
     """Construct Matrix text content payload.
 
     Args:
-        text: Plain text content.
-        event_id: Optional event ID to replace (for edits).
-        thread_relates_to: Optional thread relation metadata.
+    text: Plain text content.
+    event_id: Optional event ID to replace (for edits).
+    thread_relates_to: Optional thread relation metadata.
 
     Returns:
-        Matrix content dictionary.
+    Matrix content dictionary.
     """
     content: dict[str, object] = {"msgtype": "m.text", "body": text, "m.mentions": {}}
     if html := _render_markdown_html(text):

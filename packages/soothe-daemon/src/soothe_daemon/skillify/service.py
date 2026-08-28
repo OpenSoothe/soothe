@@ -153,7 +153,7 @@ class SkillifyService:
 def get_skillify_service(config: SootheConfig) -> SkillifyService | None:
     """Return the shared SkillifyService instance, creating it if needed (not started).
 
-    Returns ``None`` when Skillify is disabled or vector store/embeddings are unavailable.
+    Returns `None` when Skillify is disabled or vector store/embeddings are unavailable.
     """
     global _shared_instance  # noqa: PLW0603
 

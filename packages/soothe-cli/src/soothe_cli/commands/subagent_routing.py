@@ -27,10 +27,10 @@ def get_subagent_display_name(technical_name: str) -> str:
     """Get display name for a subagent.
 
     Args:
-        technical_name: Internal subagent name.
+    technical_name: Internal subagent name.
 
     Returns:
-        Title-cased label for first-party ids; otherwise the raw id string.
+    Title-cased label for first-party ids; otherwise the raw id string.
     """
     key = (technical_name or "").strip()
     if key.lower() in SUBAGENT_DISPLAY_NAMES:
@@ -41,23 +41,23 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/deep_research``, ``/browser_use``)
+    Detects subagent routing commands (e.g. `/deep_research`, `/browser_use`)
     and extracts the wire subagent name along with the cleaned input text
-    (slash token removed so display cards do not show the prefix). ``/plan`` is
-    handled separately by ``command_router`` (sets ``interaction_mode=plan``).
+    (slash token removed so display cards do not show the prefix). `/plan` is
+    handled separately by `command_router` (sets `interaction_mode=plan`).
 
     Args:
-        user_input: Raw user input string.
+    user_input: Raw user input string.
 
     Returns:
-        Tuple of ``(subagent_name, cleaned_text)``.
-        ``subagent_name`` is ``None`` if no valid subcommand found.
-        The subcommand is removed from ``cleaned_text``.
+    Tuple of `(subagent_name, cleaned_text)`.
+    `subagent_name` is `None` if no valid subcommand found.
+    The subcommand is removed from `cleaned_text`.
 
     Examples:
-        ``"/deep_research check this"`` -> ``("deep_research", "check this")``
-        ``"/browser_use open example.com"`` -> ``("browser_use", "open example.com")``
-        ``"hello world"`` -> ``(None, "hello world")``
+    `"/deep_research check this"` -> `("deep_research", "check this")`
+    `"/browser_use open example.com"` -> `("browser_use", "open example.com")`
+    `"hello world"` -> `(None, "hello world")`
     """
     first_match: tuple[int, str] | None = None
     lowered = user_input.lower()

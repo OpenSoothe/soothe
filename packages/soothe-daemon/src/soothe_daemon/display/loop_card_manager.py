@@ -1,8 +1,4 @@
-"""Per-loop card ledger lifecycle, real-time binding, and reattach replay.
-
-Optimization 4: Uses dedicated card-bind executor to isolate from
-asyncio.to_thread pool, preventing contention under concurrent loops.
-"""
+"""Per-loop card ledger lifecycle, real-time binding, and reattach replay."""
 
 from __future__ import annotations
 
@@ -58,7 +54,7 @@ _card_ingest_overflow_total: dict[str, int] = defaultdict(int)
 
 
 def get_card_ingest_overflow_metrics() -> dict[str, int]:
-    """Return cumulative card-ingest overflow counts keyed by ``loop_id``."""
+    """Return cumulative card-ingest overflow counts keyed by `loop_id`."""
     return dict(_card_ingest_overflow_total)
 
 
@@ -117,7 +113,7 @@ class _LoopFlushScheduler:
 
 
 class LoopCardManager:
-    """Owns per-loop ``LoopCardLedger`` instances and real-time card binding."""
+    """Owns per-loop `LoopCardLedger` instances and real-time card binding."""
 
     def __init__(
         self,
@@ -137,14 +133,14 @@ class LoopCardManager:
         self._stream_degraded_sent: set[str] = set()
 
     def overflow_depth(self, loop_id: str) -> int:
-        """Current overflow deque depth for ``loop_id`` (0 when no worker)."""
+        """Current overflow deque depth for `loop_id` (0 when no worker)."""
         worker = self._ingest_workers.get(loop_id)
         if worker is None:
             return 0
         return len(worker.overflow)
 
     async def _notify_card_ingest_pressure(self, loop_id: str, overflow_depth: int) -> None:
-        """Emit ``stream_degraded`` once per backpressure episode."""
+        """Emit `stream_degraded` once per backpressure episode."""
         if overflow_depth <= 0 or loop_id in self._stream_degraded_sent:
             return
         self._stream_degraded_sent.add(loop_id)
@@ -179,7 +175,7 @@ class LoopCardManager:
         self._stream_degraded_sent.discard(loop_id)
 
     async def stop_for_loop(self, loop_id: str) -> None:
-        """Drop in-memory ledger and binding buffers for ``loop_id``."""
+        """Drop in-memory ledger and binding buffers for `loop_id`."""
         await self._shutdown_ingest_worker(loop_id)
         await self._cancel_debounced_flush(loop_id)
         state = self._buffers.get(loop_id)
@@ -210,7 +206,7 @@ class LoopCardManager:
         return ledger
 
     async def ensure_for_loop(self, loop_id: str) -> LoopCardLedger:
-        """Return the ledger for ``loop_id``, loading persisted mutations from DB."""
+        """Return the ledger for `loop_id`, loading persisted mutations from DB."""
         return await self._open_ledger(loop_id)
 
     async def is_display_empty(self, loop_id: str) -> bool:
@@ -463,8 +459,8 @@ class LoopCardManager:
         asyncio.to_thread to prevent contention with general thread pool.
 
         / : append create/update mutations when possible;
-        fall back to ``replace_with`` only when cards disappear from the
-        projection. Broadcasts live ``soothe.card.*`` frames after a successful apply.
+        fall back to `replace_with` only when cards disappear from the
+        projection. Broadcasts live `soothe.card.*` frames after a successful apply.
         """
         executor = _get_card_bind_executor()
         loop = asyncio.get_running_loop()
@@ -511,8 +507,8 @@ class LoopCardManager:
     ) -> None:
         """Publish bound card frames to loop subscribers.
 
-        Frames are wrapped as ``event`` / ``mode=custom`` so existing
-        ``iter_turn_chunks`` clients deliver them (top-level ``soothe.card.*`` is
+        Frames are wrapped as `event` / `mode=custom` so existing
+        `iter_turn_chunks` clients deliver them (top-level `soothe.card.*` is
         skipped by that iterator). Zero subscribers is a no-op.
         """
         broadcast = getattr(self._daemon, "_broadcast", None)
@@ -665,7 +661,7 @@ class LoopCardManager:
         loop_id: str,
         send_fn: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> int:
-        """Stream ``soothe.card.replay.begin`` → ``soothe.card.created`` × N → ``soothe.card.replay.end``."""
+        """Stream `soothe.card.replay.begin` → `soothe.card.created` × N → `soothe.card.replay.end`."""
         ledger = await self.ensure_for_loop(loop_id)
         if ledger.card_count() == 0:
             return await self._emit_empty_replay(loop_id, send_fn)

@@ -36,12 +36,12 @@ def build_file_change_preview(
     """Return widget class and data for a filesystem tool preview, or None.
 
     Args:
-        tool_name: Tool name (must be in ``FILE_CHANGE_TOOLS``).
-        args: Parsed tool arguments.
-        assistant_id: Agent id for ``/memories/`` path resolution.
+    tool_name: Tool name (must be in `FILE_CHANGE_TOOLS`).
+    args: Parsed tool arguments.
+    assistant_id: Agent id for `/memories/` path resolution.
 
     Returns:
-        ``(widget_class, data)`` or None when the tool is not a file-change tool.
+    `(widget_class, data)` or None when the tool is not a file-change tool.
     """
     if tool_name not in FILE_CHANGE_TOOLS:
         return None

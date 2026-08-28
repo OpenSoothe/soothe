@@ -26,7 +26,7 @@ def get_last_app_result() -> Any:
     """Return the result from the most recent TUI run.
 
     Returns:
-        The AppResult from the last TUI session, or None if TUI hasn't run.
+    The AppResult from the last TUI session, or None if TUI hasn't run.
     """
     return _last_app_result
 
@@ -34,8 +34,8 @@ def get_last_app_result() -> Any:
 def _resume_gate(cfg: CLIConfig, resume_loop_id: str) -> dict[str, Any] | None:
     """Fetch execution state for a resumed loop before launching the TUI.
 
-    Returns the ``{plan, step_index, iteration, status}`` snapshot on success,
-    or ``None`` when the daemon is unreachable or the RPC fails (non-fatal —
+    Returns the `{plan, step_index, iteration, status}` snapshot on success,
+    or `None` when the daemon is unreachable or the RPC fails (non-fatal —
     resume proceeds regardless).
     """
     try:
@@ -58,7 +58,7 @@ def _resume_gate(cfg: CLIConfig, resume_loop_id: str) -> dict[str, Any] | None:
 def _prompt_resume(resume_loop_id: str, state: dict[str, Any]) -> bool:
     """Prompt the user to confirm resume of an active loop.
 
-    Returns ``True`` if the user confirms (Enter / y), ``False`` to discard
+    Returns `True` if the user confirms (Enter / y), `False` to discard
     (n / any other input). Non-interactive stdin (no TTY) defaults to resuming.
     """
     step_index = state.get("step_index", 0)

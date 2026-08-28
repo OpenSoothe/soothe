@@ -1,8 +1,4 @@
-"""Autopilot CLI subcommands for RFC-204.
-
-Daemon-backed control surface: submit tasks and manage goals via WebSocket.
-Requires ``soothed start``. Live forest dashboard: ``soothe autopilot top``.
-"""
+"""Autopilot CLI subcommands."""
 
 from __future__ import annotations
 
@@ -148,21 +144,21 @@ def _wait_for_goal(client: Any, goal_id: str, *, timeout_s: float = _WAIT_TIMEOU
 
 
 def _resolve_submit_task(task: str | None, file: str | None) -> str:
-    """Resolve task text from an inline argument or ``--file``.
+    """Resolve task text from an inline argument or `--file`.
 
-    Exactly one of ``task`` or ``file`` is required. Does not read a workspace
-    ``GOAL.md`` by default (IG-742).
+    Exactly one of `task` or `file` is required. Does not read a workspace
+    `GOAL.md` by default.
 
     Args:
-        task: Optional inline task description.
-        file: Optional path to a UTF-8 file (or ``-`` for stdin).
+    task: Optional inline task description.
+    file: Optional path to a UTF-8 file (or `-` for stdin).
 
     Returns:
-        Non-empty task description.
+    Non-empty task description.
 
     Raises:
-        typer.Exit: When both sources are set, neither is set, or the file is
-            missing, unreadable, or empty.
+    typer.Exit: When both sources are set, neither is set, or the file is
+    missing, unreadable, or empty.
     """
     has_task = bool(task and task.strip())
     has_file = bool(file and file.strip())
@@ -357,7 +353,7 @@ def list_goals(
 
 
 def _children_from_edges(edges: list[Any]) -> dict[str, list[str]]:
-    """Build adjacency from ``source`` → ``target`` edge list."""
+    """Build adjacency from `source` → `target` edge list."""
     children: dict[str, list[str]] = {}
     for edge in edges:
         if not isinstance(edge, dict):
@@ -593,7 +589,7 @@ def guide_job(
 
 
 def _short_loop_id(loop_id: str, *, head: int = 4, tail: int = 4) -> str:
-    """Shorten loop ids as ``prefix…suffix`` (4 chars each by default)."""
+    """Shorten loop ids as `prefix…suffix` (4 chars each by default)."""
     text = str(loop_id or "")
     if head < 0 or tail < 0:
         head, tail = 4, 4
@@ -603,7 +599,7 @@ def _short_loop_id(loop_id: str, *, head: int = 4, tail: int = 4) -> str:
 
 
 def format_tokens(tokens: Any) -> str:
-    """Format a token count for autopilot job UI (e.g. ``12K``)."""
+    """Format a token count for autopilot job UI (e.g. `12K`)."""
     try:
         n = int(tokens or 0)
     except (TypeError, ValueError):
@@ -618,7 +614,7 @@ def format_tokens(tokens: Any) -> str:
 
 
 def _parse_iso_datetime(raw: Any) -> Any | None:
-    """Parse an ISO timestamp / datetime, or return ``None`` if invalid."""
+    """Parse an ISO timestamp / datetime, or return `None` if invalid."""
     from datetime import UTC, datetime
 
     if raw is None or raw == "":
@@ -641,16 +637,16 @@ def format_elapsed(
     now: Any | None = None,
     ended_at: Any | None = None,
 ) -> str:
-    """Format execution elapsed time as ``HH:MM:SS``.
+    """Format execution elapsed time as `HH:MM:SS`.
 
     Args:
-        started_at: ISO timestamp string or datetime.
-        now: Optional clock override (datetime) when still running.
-        ended_at: Optional end timestamp; when set, freeze elapsed at end
-            (terminal goals/jobs/loops must not keep ticking).
+    started_at: ISO timestamp string or datetime.
+    now: Optional clock override (datetime) when still running.
+    ended_at: Optional end timestamp; when set, freeze elapsed at end
+    (terminal goals/jobs/loops must not keep ticking).
 
     Returns:
-        Elapsed string, or empty when ``started_at`` is missing/invalid.
+    Elapsed string, or empty when `started_at` is missing/invalid.
     """
     from datetime import UTC, datetime
 
@@ -673,7 +669,7 @@ def format_elapsed(
 
 
 def _elapsed_end_for_status(status: str, ended_at: Any) -> Any | None:
-    """Return ``ended_at`` when status is terminal/suspended; else ``None``."""
+    """Return `ended_at` when status is terminal/suspended; else `None`."""
     if str(status or "").lower() in _TERMINAL_STATUSES:
         return ended_at
     return None
@@ -683,12 +679,12 @@ def format_row_elapsed(status: str, started_at: Any, updated_at: Any) -> str:
     """Elapsed for a top row, empty until the job/goal actually starts running.
 
     Args:
-        status: Row status (``pending`` rows never show a clock).
-        started_at: Execution start timestamp; missing means not started yet.
-        updated_at: End timestamp used to freeze terminal/suspended rows.
+    status: Row status (`pending` rows never show a clock).
+    started_at: Execution start timestamp; missing means not started yet.
+    updated_at: End timestamp used to freeze terminal/suspended rows.
 
     Returns:
-        ``HH:MM:SS`` string, or empty when the row has not started.
+    `HH:MM:SS` string, or empty when the row has not started.
     """
     if not started_at or str(status or "").lower() == "pending":
         return ""
@@ -696,7 +692,7 @@ def format_row_elapsed(status: str, started_at: Any, updated_at: Any) -> str:
 
 
 def _created_at_timestamp(raw: Any) -> float | None:
-    """Parse a job ``created_at`` to epoch seconds, or ``None`` if invalid."""
+    """Parse a job `created_at` to epoch seconds, or `None` if invalid."""
     from datetime import UTC, datetime
 
     if raw in (None, ""):
@@ -714,7 +710,7 @@ def _created_at_timestamp(raw: Any) -> float | None:
 
 
 def _job_created_sort_key(job: dict) -> tuple[float, str]:
-    """Newest ``created_at`` first; missing timestamps sort last."""
+    """Newest `created_at` first; missing timestamps sort last."""
     ts = _created_at_timestamp(job.get("created_at"))
     if ts is None:
         ts = float("-inf")
@@ -752,9 +748,9 @@ def apply_top_key(state: TopViewState, key: str) -> None:
     """Apply a single-char (or special) key to view state.
 
     Args:
-        state: Mutable view state.
-        key: Key string — single char, named specials (``up``, ``page_down``,
-            ``ctrl_d``, …), or ``space``.
+    state: Mutable view state.
+    key: Key string — single char, named specials (`up`, `page_down`,
+    `ctrl_d`, …), or `space`.
     """
     if state.help_open:
         state.help_open = False
@@ -850,10 +846,10 @@ def decode_top_csi(seq: str) -> str | None:
     """Map a CSI/SS3 tail (bytes after ESC) to a named key, if recognized.
 
     Args:
-        seq: Escape tail such as ``[A``, ``[5~``, or ``OH``.
+    seq: Escape tail such as `[A`, `[5~`, or `OH`.
 
     Returns:
-        Named key (``up``, ``page_down``, ``home``, …) or None.
+    Named key (`up`, `page_down`, `home`, …) or None.
     """
     mapping = {
         "[A": "up",
@@ -938,7 +934,7 @@ def _text_line(*parts: tuple[str, str | None]) -> Text:
 
 
 def _append_metric(line: Text, metric: Text) -> None:
-    """Append a spaced metric segment built by ``_metric_*`` helpers."""
+    """Append a spaced metric segment built by `_metric_*` helpers."""
     if not metric.plain:
         return
     line.append("  ")
@@ -946,7 +942,7 @@ def _append_metric(line: Text, metric: Text) -> None:
 
 
 def _metric_progress(kind: str, done: int, total: int) -> Text:
-    """Colored progress metric, e.g. ``goals:2/5`` / ``steps:1/2``."""
+    """Colored progress metric, e.g. `goals:2/5` / `steps:1/2`."""
     ratio = (float(done) / float(total)) if total > 0 else 0.0
     value_style = _meter_fill_style(ratio, kind="progress")
     out = Text()
@@ -958,7 +954,7 @@ def _metric_progress(kind: str, done: int, total: int) -> Text:
 
 
 def _metric_kv(key: str, value: str, value_style: str) -> Text:
-    """Colored name:value metric (``tok:12K``, ``pri:50``)."""
+    """Colored name:value metric (`tok:12K`, `pri:50`)."""
     out = Text()
     out.append(f"{key}:", style=_STYLE_DIM)
     out.append(value, style=value_style)
@@ -966,12 +962,12 @@ def _metric_kv(key: str, value: str, value_style: str) -> Text:
 
 
 def _metric_elapsed(elapsed: str) -> Text:
-    """Wall-clock elapsed as bare ``HH:MM:SS`` (shown right after status)."""
+    """Wall-clock elapsed as bare `HH:MM:SS` (shown right after status)."""
     return Text(elapsed, style=_STYLE_METRIC_TIME)
 
 
 def _metric_seq(seq: object) -> Text:
-    """Loop attempt sequence as ``seq:N``."""
+    """Loop attempt sequence as `seq:N`."""
     out = Text()
     out.append("seq:", style=_STYLE_DIM)
     out.append(str(seq), style=_STYLE_METRIC_SEQ)
@@ -979,9 +975,9 @@ def _metric_seq(seq: object) -> Text:
 
 
 def _metric_deps(deps: list[str]) -> Text:
-    """Step dependency hint as ``→a,b,c`` (shown after the step description).
+    """Step dependency hint as `→a,b,c` (shown after the step description).
 
-    Arrow points at prerequisites (same convention as plan quick-view ``→ N``).
+    Arrow points at prerequisites (same convention as plan quick-view `→ N`).
     """
     return Text(f"→{','.join(deps[:3])}", style=_STYLE_METRIC_DEPS)
 
@@ -998,11 +994,11 @@ def _format_entity_row(
     prefix: list[tuple[str, str | None]] | None = None,
     bracket_id: bool = True,
 ) -> Text:
-    """Unified forest row: ``KIND [id] status  <metrics…>  "desc"  <trailing…>``.
+    """Unified forest row: `KIND [id] status <metrics…> "desc" <trailing…>`.
 
     JOB / GOAL lead with status and metrics, description preview at the tail.
-    STEP puts dependency arrows in ``trailing`` after the description. LOOP
-    omits status/description/elapsed and shows only ``seq`` in trailing.
+    STEP puts dependency arrows in `trailing` after the description. LOOP
+    omits status/description/elapsed and shows only `seq` in trailing.
     """
     parts: list[tuple[str, str | None]] = list(prefix or [])
     # Pad kind label to 4 chars so columns align (JOB / GOAL / STEP / LOOP).
@@ -1024,7 +1020,7 @@ def _format_entity_row(
 
 
 def _job_goal_progress(job: dict) -> tuple[int, int]:
-    """Return ``(completed, total)`` goals for a top job row.
+    """Return `(completed, total)` goals for a top job row.
 
     Prefers wire fields from the full DAG; falls back to counting visible nodes.
     """
@@ -1058,7 +1054,7 @@ _TOP_STATUS_SHORT: dict[str, str] = {
 
 
 def _meter_fill_style(ratio: float, *, kind: str = "util") -> str:
-    """Meter fill color: ``util`` (load pressure) or ``progress`` (completion)."""
+    """Meter fill color: `util` (load pressure) or `progress` (completion)."""
     if kind == "progress":
         # High completion is success — opposite of util pressure coloring.
         if ratio >= 1.0:
@@ -1082,7 +1078,7 @@ def _meter_bar(
     width: int = 10,
     kind: str = "util",
 ) -> Text:
-    """Render a compact ``[████░░░░░░]`` meter (util or progress semantics)."""
+    """Render a compact `[████░░░░░░]` meter (util or progress semantics)."""
     bar_w = max(4, width)
     tot = float(total) if total else 0.0
     use = max(0.0, float(used))
@@ -1108,7 +1104,7 @@ def _short_status_label(status: str) -> str:
 
 
 def _append_status_counts(line: Text, counts: Counter[str]) -> None:
-    """Append ``status=N`` segments in preferred order, then leftovers."""
+    """Append `status=N` segments in preferred order, then leftovers."""
     seen: set[str] = set()
     for key in _TOP_STATUS_ORDER:
         n = int(counts.get(key, 0))
@@ -1127,10 +1123,10 @@ def _append_status_counts(line: Text, counts: Counter[str]) -> None:
 
 
 def aggregate_top_stats(snapshot: dict) -> dict[str, Any]:
-    """Aggregate Jobs/Goals/Loops/Steps counts from an ``autopilot_top`` snapshot.
+    """Aggregate Jobs/Goals/Loops/Steps counts from an `autopilot_top` snapshot.
 
     Counts reflect the forest currently in the payload (filtered when
-    ``mode=active``). Pool fields come from ``loop_pool``.
+    `mode=active`). Pool fields come from `loop_pool`.
     """
     jobs_raw = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     job_counts: Counter[str] = Counter()
@@ -1319,7 +1315,7 @@ def _format_step_list(
 
     Renders the full StepDAG for goals already present in the forest. Goal
     filtering (mode=active) happens upstream; do not drop completed steps here
-    or live goals with finished plan waves look empty when ``steps=all``.
+    or live goals with finished plan waves look empty when `steps=all`.
     """
     ordered_nodes: list[dict] = []
     seen: set[str] = set()
@@ -1370,18 +1366,18 @@ def _format_top_forest(
 ) -> list[Text]:
     """Render jobs → goal DAG → step DAG → loops as colored Rich Text rows.
 
-    Jobs are shown newest-first (by ``created_at``) so the latest job sits at
-    the top of the forest. ``steps_mode=all`` lists each goal's full StepDAG;
-    ``active`` lists only active and pending steps.
+    Jobs are shown newest-first (by `created_at`) so the latest job sits at
+    the top of the forest. `steps_mode=all` lists each goal's full StepDAG;
+    `active` lists only active and pending steps.
 
     Entity rows share a unified layout::
 
-        KIND [id] status  HH:MM:SS  <name:value…>  "desc"
+    KIND [id] status HH:MM:SS <name:value…> "desc"
 
-    Elapsed is bare time right after status, anchored on ``started_at`` so
+    Elapsed is bare time right after status, anchored on `started_at` so
     pending jobs/goals show no clock. Other metrics use name:value
     (progress, tokens, priority, rail). STEP rows put deps after the
-    description as ``→id`` arrows (prerequisites).
+    description as `→id` arrows (prerequisites).
     """
     raw_jobs = [j for j in (snapshot.get("jobs") or []) if isinstance(j, dict)]
     jobs = _sort_jobs_newest_first(raw_jobs)
@@ -1550,10 +1546,10 @@ def render_top_snapshot(
     height: int | None = None,
     state: TopViewState | None = None,
 ) -> Text:
-    """Render a full autopilot top screen as Rich ``Text``.
+    """Render a full autopilot top screen as Rich `Text`.
 
-    When ``height`` is set, pad so the footer sits on the last terminal row
-    (linux-``top`` style viewport). Use ``.plain`` for unstyled assertions.
+    When `height` is set, pad so the footer sits on the last terminal row
+    (linux-`top` style viewport). Use `.plain` for unstyled assertions.
     """
     view = state or TopViewState(interval=interval if interval is not None else 2.0)
     if interval is not None:

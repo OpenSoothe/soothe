@@ -44,11 +44,11 @@ class ModelLabel(Widget):
         """Return the intrinsic width so `width: auto` works.
 
         Args:
-            container: Size of the container.
-            _viewport: Size of the viewport (unused).
+        container: Size of the container.
+        _viewport: Size of the viewport (unused).
 
         Returns:
-            Character length of the full provider:model string.
+        Character length of the full provider:model string.
         """
         if not self.model:
             return 0
@@ -59,7 +59,7 @@ class ModelLabel(Widget):
         """Render the model label with width-aware truncation.
 
         Returns:
-            Text content, truncated from the right when necessary.
+        Text content, truncated from the right when necessary.
         """
         width = self.content_size.width
         if not self.model or width <= 0:
@@ -77,11 +77,11 @@ class ModelLabel(Widget):
 class ClarificationModeBadge(Static):
     """Visual block showing the active composer mode (Auto / Manual / Plan / Ask).
 
-    Rendered Claude Code-style as ``⏵⏵ <label> (shift+Tab to cycle)``. Each mode
+    Rendered Claude Code-style as `⏵⏵ <label> (shift+Tab to cycle)`. Each mode
     uses a distinct foreground color with no background, so the badge blends into
-    the status bar rather than appearing as a colored chip. ``Manual`` (the
-    default) renders as dim muted text so it stays low-emphasis; ``Auto`` is green,
-    ``Plan`` teal accent, and ``Ask`` blue primary. All colors use theme-aware CSS
+    the status bar rather than appearing as a colored chip. `Manual` (the
+    default) renders as dim muted text so it stays low-emphasis; `Auto` is green,
+    `Plan` teal accent, and `Ask` blue primary. All colors use theme-aware CSS
     variables so they adapt to dark and light themes.
     """
 
@@ -248,8 +248,8 @@ class StatusBar(Horizontal):
         """Initialize the status bar.
 
         Args:
-            cwd: Current working directory to display
-            **kwargs: Additional arguments passed to parent
+        cwd: Current working directory to display
+        **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
         # Store initial cwd - will be used in compose()
@@ -259,8 +259,8 @@ class StatusBar(Horizontal):
         """Compose the status bar layout.
 
         Yields:
-            Clarification-mode badge, model label, input-mode indicator, tip,
-            message/cwd/branch group, and token count.
+        Clarification-mode badge, model label, input-mode indicator, tip,
+        message/cwd/branch group, and token count.
         """
         yield ClarificationModeBadge(id="clarification-mode-badge")
         yield ModelLabel(id="model-display")
@@ -374,7 +374,7 @@ class StatusBar(Horizontal):
         """Format the current working directory for display.
 
         Returns:
-            Formatted path string, using ~ for home directory when possible.
+        Formatted path string, using ~ for home directory when possible.
         """
         path = Path(cwd_path or self.cwd or self._initial_cwd)
         try:
@@ -390,7 +390,7 @@ class StatusBar(Horizontal):
         """Set the current input mode.
 
         Args:
-            mode: One of "normal", "shell", or "command"
+        mode: One of "normal", "shell", or "command"
         """
         self.mode = mode
 
@@ -410,7 +410,7 @@ class StatusBar(Horizontal):
         """Set the status message.
 
         Args:
-            message: Status message to display (empty string to clear)
+        message: Status message to display (empty string to clear)
         """
         self.status_message = message
 
@@ -429,9 +429,9 @@ class StatusBar(Horizontal):
         """Render the token count into the display widget.
 
         Args:
-            count: Accumulated loop token usage total.
-            approximate: Append "+" suffix to indicate the count is stale
-                (e.g. after an interrupted generation).
+        count: Accumulated loop token usage total.
+        approximate: Append "+" suffix to indicate the count is stale
+        (e.g. after an interrupted generation).
         """
         try:
             display = self.query_one("#tokens-display", Static)
@@ -456,8 +456,8 @@ class StatusBar(Horizontal):
         attribute.
 
         Args:
-            count: Accumulated loop token usage total.
-            approximate: Append "+" to indicate the count is stale.
+        count: Accumulated loop token usage total.
+        approximate: Append "+" to indicate the count is stale.
         """
         self._approximate = approximate
         if self.tokens == count:
@@ -479,8 +479,8 @@ class StatusBar(Horizontal):
         """Update the model display text.
 
         Args:
-            provider: Model provider name (e.g., `'anthropic'`).
-            model: Model name (e.g., `'claude-sonnet-4-5'`).
+        provider: Model provider name (e.g., `'anthropic'`).
+        model: Model name (e.g., `'claude-sonnet-4-5'`).
         """
         label = self.query_one("#model-display", ModelLabel)
         label.provider = provider
@@ -508,5 +508,5 @@ class StatusBar(Horizontal):
         badge.mode = normalize_composer_mode(mode)
 
     def set_clarification_mode(self, mode: str) -> None:
-        """Set the active composer mode (``auto``, ``manual``, ``plan``, or ``ask``)."""
+        """Set the active composer mode (`auto`, `manual`, `plan`, or `ask`)."""
         self.clarification_mode = normalize_composer_mode(mode)

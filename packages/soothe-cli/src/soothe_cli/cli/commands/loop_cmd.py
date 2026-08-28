@@ -1,7 +1,4 @@
-"""Loop management CLI commands for StrangeLoop instances.
-
-RFC-503: Loop-First User Experience
-RFC-504: Loop Management CLI Commands
+"""Loop management CLI commands for StrangeLoop instances.: Loop-First User Experience: Loop Management CLI Commands
 
 All loop operations use daemon WebSocket RPC; the daemon must be running.
 """
@@ -110,9 +107,9 @@ def list_loops(
     """List all StrangeLoop instances.
 
     Examples:
-        soothe loop list
-        soothe loop list --status running
-        soothe loop list --limit 10
+    soothe loop list
+    soothe loop list --status running
+    soothe loop list --limit 10
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -166,8 +163,8 @@ def describe_loop(
     """Show detailed loop information.
 
     Example:
-        soothe loop show loop_abc123
-        soothe loop show loop_abc123 --verbose
+    soothe loop show loop_abc123
+    soothe loop show loop_abc123 --verbose
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -237,8 +234,8 @@ def delete_loop(
     Removes this loop's run directory and related artifacts.
 
     Example:
-        soothe loop delete loop_abc123
-        soothe loop delete loop_abc123 --force
+    soothe loop delete loop_abc123
+    soothe loop delete loop_abc123 --force
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -336,13 +333,13 @@ def continue_loop(
     Behavior:
     - Resolve target loop (explicit `LOOP_ID` or most-recent loop)
     - Launch TUI on that loop, which resumes from the daemon's last execution
-      step index unless the loop is unknown or already finished
+    step index unless the loop is unknown or already finished
     - Optionally submit initial prompt in the resumed session
 
     Example:
-        soothe loop continue
-        soothe loop continue loop_abc123
-        soothe loop continue loop_abc123 --prompt "translate to chinese"
+    soothe loop continue
+    soothe loop continue loop_abc123
+    soothe loop continue loop_abc123 --prompt "translate to chinese"
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -387,7 +384,7 @@ def detach_loop(
     - Client can reattach later with 'soothe loop attach'
 
     Example:
-        soothe loop detach loop_abc123
+    soothe loop detach loop_abc123
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -424,7 +421,7 @@ def attach_loop(
     - Show current loop status
 
     Example:
-        soothe loop attach loop_abc123
+    soothe loop attach loop_abc123
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -479,8 +476,8 @@ def new_loop(
     """Create fresh loop for new query.
 
     Example:
-        soothe loop new
-        soothe loop new --prompt "analyze performance"
+    soothe loop new
+    soothe loop new --prompt "analyze performance"
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)

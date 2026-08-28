@@ -1,9 +1,4 @@
-"""Unified daemon event processor with pluggable rendering.
-
-This module implements RFC-0019's unified event processing architecture.
-EventProcessor handles all event routing, state management, and filtering,
-delegating display to RendererProtocol implementations.
-"""
+"""Unified daemon event processor with pluggable rendering."""
 
 from __future__ import annotations
 
@@ -42,7 +37,7 @@ _MSG_PAIR_LEN = 2
 
 
 def _loop_msg_accum_event_key(phase: str) -> str:
-    """Accumulator event-type key for loop-tagged assistant streams (RFC-614)."""
+    """Accumulator event-type key for loop-tagged assistant streams."""
     return f"_soothe.internal.loop_messages.{phase}"
 
 
@@ -53,14 +48,14 @@ class EventProcessor:
     Delegates display to RendererProtocol implementation.
 
     Display policy is fixed to the former **normal** client mode.
-    When ``headless_output`` is True, RFC-614 loop-tagged main-graph assistant
+    When `headless_output` is True, loop-tagged main-graph assistant
     text is emitted; tools and progress are not rendered.
 
     Usage:
-        processor = EventProcessor(renderer)
+    processor = EventProcessor(renderer)
 
-        # In event loop:
-        processor.process_event(event)
+    # In event loop:
+    processor.process_event(event)
     """
 
     def __init__(
@@ -75,12 +70,12 @@ class EventProcessor:
         """Initialize processor with renderer.
 
         Args:
-            renderer: Callback interface for display.
-            presentation_engine: Shared engine; if omitted, uses renderer's
-                ``presentation_engine`` when present, else a new instance.
-            tui_debug: When True, emit INFO logs on logger ``soothe.ux.tui.trace``.
-            headless_output: Headless CLI: loop-tagged main answers only, no tool/progress UI.
-            streaming_mode: Client display mode — ``batch`` (default) or ``streaming``.
+        renderer: Callback interface for display.
+        presentation_engine: Shared engine; if omitted, uses renderer's
+        `presentation_engine` when present, else a new instance.
+        tui_debug: When True, emit INFO logs on logger `soothe.ux.tui.trace`.
+        headless_output: Headless CLI: loop-tagged main answers only, no tool/progress UI.
+        streaming_mode: Client display mode — `batch` (default) or `streaming`.
         """
         self._renderer = renderer
         self._headless_output = headless_output
@@ -117,14 +112,14 @@ class EventProcessor:
         return self._state
 
     def _maybe_bind_task_namespace(self, namespace: tuple[str, ...]) -> None:
-        """Bind LangGraph subgraph ``namespace`` to the next queued Task spawn."""
+        """Bind LangGraph subgraph `namespace` to the next queued Task spawn."""
         if not namespace or namespace in self._state.namespace_task_bindings:
             return
         if self._state.task_spawn_queue:
             self._state.namespace_task_bindings[namespace] = self._state.task_spawn_queue.popleft()
 
     def _resolve_task_scope(self, namespace: tuple[str, ...]) -> tuple[str, str, str] | None:
-        """Return task scope ``(task_tool_call_id, subagent_type, step_id)`` for namespace."""
+        """Return task scope `(task_tool_call_id, subagent_type, step_id)` for namespace."""
         return resolve_task_scope_for_namespace(self._state.namespace_task_bindings, namespace)
 
     def _enqueue_task_spawn_if_needed(
@@ -135,7 +130,7 @@ class EventProcessor:
         *,
         is_main: bool,
     ) -> None:
-        """Record main-graph ``task`` tool calls so subgraph streams can resolve labels."""
+        """Record main-graph `task` tool calls so subgraph streams can resolve labels."""
         if not is_main or name != "task" or not tool_call_id:
             return
         raw = args.get("subagent_type", "")
@@ -151,14 +146,14 @@ class EventProcessor:
         is_main: bool,
         namespace: tuple[str, ...],
     ) -> bool:
-        """Record task spawns and notify the renderer at most once per ``tool_call_id``.
+        """Record task spawns and notify the renderer at most once per `tool_call_id`.
 
         Task spawn bookkeeping runs even in headless mode (namespace binding). Renderer
         notification is skipped when headless, below NORMAL tier, or the id was already
         emitted.
 
         Returns:
-            True when ``on_tool_call`` was invoked on the renderer.
+        True when `on_tool_call` was invoked on the renderer.
         """
         tc_id = str(tool_call_id or "").strip()
         if tc_id and tc_id in self._state.emitted_tool_call_ids:
@@ -237,13 +232,13 @@ class EventProcessor:
     def _suppress_main_assistant_body_for_headless_obj(
         self, msg: AIMessage, *, is_main: bool
     ) -> bool:
-        """Headless stdout: only RFC-614 loop-tagged finals.
+        """Headless stdout: only loop-tagged finals.
 
-        Suppresses unphased execute-wave narration on the main graph; ``goal_completion``,
-        ``goal_completion``, ``chitchat``, etc. are routed via ``assistant_output_phase`` before this path.
+        Suppresses unphased execute-wave narration on the main graph; `goal_completion`,
+        `goal_completion`, `chitchat`, etc. are routed via `assistant_output_phase` before this path.
 
-        Subgraph streams without RFC-614 phases are skipped in ``_handle_ai_message`` before
-        this runs; loop-tagged subgraph finals use ``_dispatch_loop_tagged_assistant_text``.
+        Subgraph streams without are skipped in `_handle_ai_message` before
+        this runs; loop-tagged subgraph finals use `_dispatch_loop_tagged_assistant_text`.
         """
         if not (self._headless_output and is_main):
             return False
@@ -271,7 +266,7 @@ class EventProcessor:
         is_chunk: bool,
         phase: str,
     ) -> None:
-        """Display logic for RFC-614 loop-tagged assistant messages."""
+        """Display logic loop-tagged assistant messages."""
         if phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
             return
         if self._headless_output and phase in self._HEADLESS_SUPPRESSED_PHASES:
@@ -364,7 +359,7 @@ class EventProcessor:
         """Main entry point - routes event to appropriate handler.
 
         Args:
-            event: Daemon event dictionary with 'type' key.
+        event: Daemon event dictionary with 'type' key.
         """
         event_type = event.get("type", "")
         log_tui_trace(
@@ -385,7 +380,7 @@ class EventProcessor:
             self._handle_clear_event(event)
 
     def _handle_command_response(self, event: dict[str, Any]) -> None:
-        """Handle command response from daemon (RFC-454)."""
+        """Handle command response from daemon."""
         command = event.get("command")
         data = event.get("data")
         error = event.get("error")
@@ -465,8 +460,8 @@ class EventProcessor:
     def _handle_error_event(self, event: dict[str, Any]) -> None:
         """Handle error events.
 
-        Supports both legacy flat errors (``{type:'error', message:...}``) and
-        protocol-1 error envelopes (``{type:'error', error:{code, message, data}}``).
+        Supports both legacy flat errors (`{type:'error', message:...}`) and
+        protocol-1 error envelopes (`{type:'error', error:{code, message, data}}`).
         """
         err_obj = event.get("error")
         if isinstance(err_obj, dict):
@@ -853,9 +848,9 @@ class EventProcessor:
         """Handle ToolMessage dict (serialized via model_dump).
 
         Args:
-            msg: ToolMessage serialized as dict.
-            is_main: True if from main agent.
-            namespace: LangGraph stream namespace for subgraph correlation.
+        msg: ToolMessage serialized as dict.
+        is_main: True if from main agent.
+        namespace: LangGraph stream namespace for subgraph correlation.
         """
         if not self._presentation.tier_visible(VerbosityTier.NORMAL):
             return
@@ -980,13 +975,13 @@ class EventProcessor:
         self._renderer.on_plan_created(plan)
 
     def _get_effective_streaming_config(self) -> Any:
-        """Get effective streaming config with defaults (RFC-614).
+        """Get effective streaming config with defaults.
 
         Since EventProcessor doesn't have direct access to CLI config,
         we use sensible defaults based on initialization parameters.
 
         Returns:
-            Dict with enabled, mode, and synthesis_streaming fields.
+        Dict with enabled, mode, and synthesis_streaming fields.
         """
         override = getattr(self, "_streaming_mode_override", None) or "batch"
         mode = override if override in ("batch", "streaming") else "batch"

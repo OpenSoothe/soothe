@@ -57,10 +57,10 @@ def command_token_span(line: str) -> tuple[int, int]:
     the returned span so the transient trigger character is highlighted too.
 
     Args:
-        line: Plain text of the first input line, with or without a leading `/`.
+    line: Plain text of the first input line, with or without a leading `/`.
 
     Returns:
-        Span of the token, or `(0, 0)` when there is no token.
+    Span of the token, or `(0, 0)` when there is no token.
     """
     start = 1 if line.startswith("/") else 0
     end = start
@@ -107,11 +107,11 @@ class ParsedPastedPathPayload:
     """Unified parse result for dropped-path payload detection.
 
     Attributes:
-        paths: Resolved file paths parsed from the input payload.
-        token_end: End index (exclusive) of the parsed leading token when the
-            payload starts with a path followed by trailing text.
+    paths: Resolved file paths parsed from the input payload.
+    token_end: End index (exclusive) of the parsed leading token when the
+    payload starts with a path followed by trailing text.
 
-            `None` means the entire payload was parsed as path-only content.
+    `None` means the entire payload was parsed as path-only content.
     """
 
     paths: list[Path]
@@ -136,11 +136,11 @@ class MediaTracker:
         """Add a media item and return its placeholder text.
 
         Args:
-            data: The image or video data to track.
-            kind: Media type key.
+        data: The image or video data to track.
+        kind: Media type key.
 
         Returns:
-            Placeholder string like "[image 1]" or "[video 1]".
+        Placeholder string like "[image 1]" or "[video 1]".
         """
         if kind == "image":
             placeholder = f"[image {self.next_image_id}]"
@@ -158,7 +158,7 @@ class MediaTracker:
         """Get all tracked images.
 
         Returns:
-            Copy of the list of tracked images.
+        Copy of the list of tracked images.
         """
         return list(self.images)
 
@@ -173,7 +173,7 @@ class MediaTracker:
         """Retain only media still referenced by placeholders in current text.
 
         Args:
-            text: Current input text shown to the user.
+        text: Current input text shown to the user.
         """
         img_found = self._sync_kind_images(text)
         vid_found = self._sync_kind_videos(text)
@@ -184,10 +184,10 @@ class MediaTracker:
         """Sync image list to surviving placeholders in text.
 
         Args:
-            text: Current input text.
+        text: Current input text.
 
         Returns:
-            Whether any image placeholders were found.
+        Whether any image placeholders were found.
         """
         placeholders = {m.group(0) for m in IMAGE_PLACEHOLDER_PATTERN.finditer(text)}
         self.images = [img for img in self.images if img.placeholder in placeholders]
@@ -203,10 +203,10 @@ class MediaTracker:
         """Sync video list to surviving placeholders in text.
 
         Args:
-            text: Current input text.
+        text: Current input text.
 
         Returns:
-            Whether any video placeholders were found.
+        Whether any video placeholders were found.
         """
         placeholders = {m.group(0) for m in VIDEO_PLACEHOLDER_PATTERN.finditer(text)}
         self.videos = [vid for vid in self.videos if vid.placeholder in placeholders]
@@ -227,12 +227,12 @@ class MediaTracker:
         """Compute next ID from the highest surviving placeholder.
 
         Args:
-            items: Surviving media items.
-            pattern: Placeholder regex with an `id` group.
-            fallback_count: Fallback when no IDs can be parsed.
+        items: Surviving media items.
+        pattern: Placeholder regex with an `id` group.
+        fallback_count: Fallback when no IDs can be parsed.
 
         Returns:
-            Next ID value (max_id + 1).
+        Next ID value (max_id + 1).
         """
         max_id = 0
         for item in items:
@@ -261,10 +261,10 @@ def parse_file_mentions(text: str) -> tuple[str, list[Path]]:
     internally with a console warning.
 
     Args:
-        text: Input text potentially containing `@file` mentions.
+    text: Input text potentially containing `@file` mentions.
 
     Returns:
-        Tuple of (original text unchanged, list of resolved file paths that exist).
+    Tuple of (original text unchanged, list of resolved file paths that exist).
     """
     matches = FILE_MENTION_PATTERN.finditer(text)
 
@@ -313,10 +313,10 @@ def parse_pasted_file_paths(text: str) -> list[Path]:
     - `file://` URLs
 
     Args:
-        text: Raw paste payload from the terminal.
+    text: Raw paste payload from the terminal.
 
     Returns:
-        List of resolved file paths, or an empty list when parsing fails.
+    List of resolved file paths, or an empty list when parsing fails.
     """
     payload = text.strip()
     if not payload:
@@ -359,12 +359,12 @@ def parse_pasted_path_payload(
     3. optional leading-path extraction (`extract_leading_pasted_file_path`)
 
     Args:
-        text: Input payload to parse.
-        allow_leading_path: Whether to parse a leading path token followed by
-            trailing prompt text.
+    text: Input payload to parse.
+    allow_leading_path: Whether to parse a leading path token followed by
+    trailing prompt text.
 
     Returns:
-        Parsed payload details, otherwise `None`.
+    Parsed payload details, otherwise `None`.
     """
     paths = parse_pasted_file_paths(text)
     if paths:
@@ -393,10 +393,10 @@ def parse_single_pasted_file_path(text: str) -> Path | None:
     single path representation.
 
     Args:
-        text: Raw pasted text payload.
+    text: Raw pasted text payload.
 
     Returns:
-        Resolved path when payload is a single existing file, otherwise `None`.
+    Resolved path when payload is a single existing file, otherwise `None`.
     """
     candidate = normalize_pasted_path(text)
     if candidate is None:
@@ -411,11 +411,11 @@ def extract_leading_pasted_file_path(text: str) -> tuple[Path, int] | None:
     path token followed by additional prompt text.
 
     Args:
-        text: Input text to inspect.
+    text: Input text to inspect.
 
     Returns:
-        Tuple of `(resolved_path, token_end_index)` or `None` when no valid
-        leading file path token exists.
+    Tuple of `(resolved_path, token_end_index)` or `None` when no valid
+    leading file path token exists.
     """
     if not text:
         return None
@@ -448,10 +448,10 @@ def normalize_pasted_path(text: str) -> Path | None:
     - Windows drive-letter and UNC paths
 
     Args:
-        text: Raw pasted text payload.
+    text: Raw pasted text payload.
 
     Returns:
-        Parsed `Path` if payload is a single path token, otherwise `None`.
+    Parsed `Path` if payload is a single path token, otherwise `None`.
     """
     payload = text.strip()
     if not payload:
@@ -496,10 +496,10 @@ def _split_paste_line(line: str) -> list[str]:
     """Split a single pasted line into path-like tokens.
 
     Args:
-        line: A single line from the paste payload.
+    line: A single line from the paste payload.
 
     Returns:
-        Parsed shell-like tokens, or an empty list when parsing fails.
+    Parsed shell-like tokens, or an empty list when parsing fails.
     """
     try:
         return shlex.split(line, posix=True)
@@ -512,10 +512,10 @@ def _token_to_path(token: str) -> Path | None:
     """Convert a pasted token into a path candidate.
 
     Args:
-        token: A single shell-split token from the paste payload.
+    token: A single shell-split token from the paste payload.
 
     Returns:
-        A parsed path candidate, or `None` when token parsing fails.
+    A parsed path candidate, or `None` when token parsing fails.
     """
     value = token.strip()
     if not value:
@@ -550,10 +550,10 @@ def _leading_token_end(text: str) -> int | None:
     """Return the end index of the first shell-like token.
 
     Args:
-        text: Input text beginning with a token.
+    text: Input text beginning with a token.
 
     Returns:
-        End index (exclusive), or `None` when token parsing fails.
+    End index (exclusive), or `None` when token parsing fails.
     """
     if not text:
         return None
@@ -590,11 +590,11 @@ def _extract_unquoted_leading_path_with_spaces(text: str) -> tuple[Path, int] | 
     `/`.
 
     Args:
-        text: Input text beginning with a potential path.
+    text: Input text beginning with a potential path.
 
     Returns:
-        Tuple of `(resolved_path, token_end_index)` or `None` when no matching
-        leading path prefix resolves to an existing file.
+    Tuple of `(resolved_path, token_end_index)` or `None` when no matching
+    leading path prefix resolves to an existing file.
     """
     if not text or ("\n" in text or "\r" in text):
         return None
@@ -619,11 +619,11 @@ def _normalize_windows_pasted_path(text: str) -> Path | None:
     """Return a `Path` for unquoted Windows drive/UNC path inputs.
 
     Args:
-        text: Potential Windows path input.
+    text: Potential Windows path input.
 
     Returns:
-        Parsed `Path` when `text` is Windows drive-letter or UNC style,
-        otherwise `None`.
+    Parsed `Path` when `text` is Windows drive-letter or UNC style,
+    otherwise `None`.
     """
     if _WINDOWS_DRIVE_PATH_PATTERN.match(text) or text.startswith("\\\\"):
         return Path(text)
@@ -638,11 +638,11 @@ def _normalize_posix_pasted_path(text: str) -> Path | None:
     though the full payload is intended to be a single path.
 
     Args:
-        text: Potential POSIX path input.
+    text: Potential POSIX path input.
 
     Returns:
-        Parsed `Path` when `text` looks like a raw POSIX absolute/home path,
-        otherwise `None`.
+    Parsed `Path` when `text` looks like a raw POSIX absolute/home path,
+    otherwise `None`.
     """
     if "\n" in text or "\r" in text:
         return None
@@ -659,10 +659,10 @@ def _resolve_existing_pasted_path(path: Path) -> Path | None:
     Performs an exact resolution first, then a Unicode-space-tolerant lookup.
 
     Args:
-        path: Parsed path candidate.
+    path: Parsed path candidate.
 
     Returns:
-        Resolved existing file path, otherwise `None`.
+    Resolved existing file path, otherwise `None`.
     """
     try:
         resolved = path.expanduser().resolve()
@@ -689,10 +689,10 @@ def _normalize_unicode_spaces(text: str) -> str:
     """Normalize Unicode lookalike spaces to ASCII spaces.
 
     Args:
-        text: Text to normalize.
+    text: Text to normalize.
 
     Returns:
-        Normalized text with Unicode-space variants converted to ASCII spaces.
+    Normalized text with Unicode-space variants converted to ASCII spaces.
     """
     return text.translate(_UNICODE_SPACE_EQUIVALENTS)
 
@@ -701,10 +701,10 @@ def _resolve_with_unicode_space_variants(path: Path) -> Path | None:
     """Resolve path by matching filename segments with Unicode space variants.
 
     Args:
-        path: Path candidate that may differ from disk by space code points.
+    path: Path candidate that may differ from disk by space code points.
 
     Returns:
-        Matching filesystem path, or `None` when no variant match exists.
+    Matching filesystem path, or `None` when no variant match exists.
     """
     expanded = path.expanduser()
     if expanded.is_absolute():
@@ -759,10 +759,10 @@ def should_abbreviate_pasted_input(text: str) -> bool:
     """Return whether pasted input should use an abbreviated display in the TUI.
 
     Args:
-        text: Raw pasted payload.
+    text: Raw pasted payload.
 
     Returns:
-        True when the paste is large enough to clutter the input widget.
+    True when the paste is large enough to clutter the input widget.
     """
     if not text:
         return False
@@ -781,14 +781,14 @@ def compose_paste_into_input(
     """Return input text after applying a paste at the given replacement range.
 
     Args:
-        existing_text: Current input text before paste.
-        pasted_text: Raw pasted payload.
-        replace_start: Inclusive replacement start offset. Defaults to the end.
-        replace_end: Exclusive replacement end offset. Defaults to start.
+    existing_text: Current input text before paste.
+    pasted_text: Raw pasted payload.
+    replace_start: Inclusive replacement start offset. Defaults to the end.
+    replace_end: Exclusive replacement end offset. Defaults to start.
 
     Returns:
-        Full input text after replacing ``[replace_start:replace_end]`` with
-        ``pasted_text``.
+    Full input text after replacing `[replace_start:replace_end]` with
+    `pasted_text`.
     """
     text_len = len(existing_text)
     if replace_start is None:
@@ -810,15 +810,15 @@ def compose_paste_into_input(
 def abbreviate_pasted_input_display(text: str, *, paste_index: int = 1) -> str:
     """Build a compact paste token for large pasted payloads.
 
-    The full ``text`` is retained separately for submission; this string is
+    The full `text` is retained separately for submission; this string is
     only for on-screen display in the input widget.
 
     Args:
-        text: Full pasted content.
-        paste_index: 1-based counter for multiple pastes in the same input.
+    text: Full pasted content.
+    paste_index: 1-based counter for multiple pastes in the same input.
 
     Returns:
-        Abbreviated display token (e.g. ``[Pasted text #1 +35 lines]``).
+    Abbreviated display token (e.g. `[Pasted text #1 +35 lines]`).
     """
     lines = text.splitlines()
     if not lines and text:

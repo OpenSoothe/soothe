@@ -107,10 +107,10 @@ async def check_external_apis(config: SootheConfig | None = None) -> CategoryRes
     """Check optional external API reachability when credentials/config imply use.
 
     Args:
-        config: SootheConfig instance.
+    config: SootheConfig instance.
 
     Returns:
-        CategoryResult with external API check results.
+    CategoryResult with external API check results.
     """
     targets = _configured_optional_apis(config)
     if not targets:

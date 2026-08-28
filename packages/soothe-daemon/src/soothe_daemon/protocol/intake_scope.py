@@ -1,4 +1,4 @@
-"""``intake_scope`` validation for daemon ``loop_input`` agent turns."""
+"""`intake_scope` validation for daemon `loop_input` agent turns."""
 
 from __future__ import annotations
 
@@ -12,15 +12,15 @@ def validate_and_normalize_intake_scope(
     *,
     intent_hint: str | None,
 ) -> tuple[str | None, str | None]:
-    """Validate optional ``loop_input.intake_scope``.
+    """Validate optional `loop_input.intake_scope`.
 
     Args:
-        raw: Client value from the wire message.
-        intent_hint: Normalized ``intent_hint`` for the same turn (may be unset).
+    raw: Client value from the wire message.
+    intent_hint: Normalized `intent_hint` for the same turn (may be unset).
 
     Returns:
-        ``(normalized_scope, error_message)``. On success ``error_message`` is
-        ``None``. Unset / empty returns ``(None, None)``.
+    `(normalized_scope, error_message)`. On success `error_message` is
+    `None`. Unset / empty returns `(None, None)`.
     """
     try:
         scope = parse_intake_scope(raw)

@@ -1,9 +1,4 @@
-"""Structured INFO logs for TUI debugging when ``SootheConfig.tui_debug`` is true.
-
-Enable via ``SOOTHE_TUI_DEBUG=true`` or ``tui_debug: true`` in config. Logs use logger
-``soothe.ux.tui.trace`` so you can filter with ``SOOTHE_LOG_LEVEL=INFO`` and grep for
-``tui_trace``.
-"""
+"""Structured INFO logs for TUI debugging when `SootheConfig.tui_debug` is true."""
 
 from __future__ import annotations
 
@@ -27,10 +22,10 @@ def log_tui_trace(*, tui_debug: bool, event: str, **fields: Any) -> None:
     """Emit a single INFO log line when TUI debug mode is enabled.
 
     Args:
-        tui_debug: Whether tracing is enabled (from config).
-        event: Short event name (e.g. ``renderer.assistant_text``).
-        fields: Key/value pairs appended as ``key='value'`` (strings truncated).
-            Common fields include ``loop_id`` for the active StrangeLoop id.
+    tui_debug: Whether tracing is enabled (from config).
+    event: Short event name (e.g. `renderer.assistant_text`).
+    fields: Key/value pairs appended as `key='value'` (strings truncated).
+    Common fields include `loop_id` for the active StrangeLoop id.
     """
     if not tui_debug:
         return

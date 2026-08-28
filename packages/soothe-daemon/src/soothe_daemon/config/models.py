@@ -1,8 +1,4 @@
-"""Nested config schemas for ``SootheDaemonConfig``.
-
-Holds ``WebSocketConfig`` / ``TransportConfig``
-plus ``ChannelsConfig`` for unified channel architecture.
-"""
+"""Nested config schemas for `SootheDaemonConfig`."""
 
 from __future__ import annotations
 
@@ -24,18 +20,18 @@ class WebSocketConfig(BaseModel):
     WebSocket is the required bidirectional transport for all clients.
 
     Args:
-        enabled: Enable WebSocket server (required).
-        host: Bind address.
-        port: Listen port.
-        tls_enabled: Enable TLS encryption.
-        tls_cert: TLS certificate path.
-        tls_key: TLS key path.
-        cors_origins: Allowed CORS origins.
-        max_frame_size: Maximum WebSocket frame size in bytes.
-        heartbeat_interval_ms: Interval (ms) for protocol-level ping/pong heartbeat
-            declared in the connection_ack handshake. Default 30000.
-        heartbeat_timeout_ms: If no pong is received within this window (ms), the
-            connection is considered dead and closed. Default 10000.
+    enabled: Enable WebSocket server (required).
+    host: Bind address.
+    port: Listen port.
+    tls_enabled: Enable TLS encryption.
+    tls_cert: TLS certificate path.
+    tls_key: TLS key path.
+    cors_origins: Allowed CORS origins.
+    max_frame_size: Maximum WebSocket frame size in bytes.
+    heartbeat_interval_ms: Interval (ms) for protocol-level ping/pong heartbeat
+    declared in the connection_ack handshake. Default 30000.
+    heartbeat_timeout_ms: If no pong is received within this window (ms), the
+    connection is considered dead and closed. Default 10000.
     """
 
     enabled: bool = True
@@ -66,7 +62,7 @@ class TransportConfig(BaseModel):
     WebSocket is required for bidirectional streaming.
 
     Args:
-        websocket: WebSocket configuration (required).
+    websocket: WebSocket configuration (required).
     """
 
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
@@ -85,11 +81,11 @@ class ChannelsConfig(BaseModel):
     - send_max_retries: Retry attempts for outbound messages
 
     Args:
-        websocket: WebSocket channel configuration (required).
-        send_progress: Show progress indicators.
-        send_tool_hints: Show tool hints.
-        show_reasoning: Show reasoning content.
-        send_max_retries: Maximum retry attempts.
+    websocket: WebSocket channel configuration (required).
+    send_progress: Show progress indicators.
+    send_tool_hints: Show tool hints.
+    show_reasoning: Show reasoning content.
+    send_max_retries: Maximum retry attempts.
     """
 
     model_config = ConfigDict(extra="allow")  # Allow per-channel plugin configs
@@ -123,18 +119,18 @@ class WorkerPoolConfig(BaseModel):
     For high-concurrency scenarios, consider PGBouncer as external connection proxy.
 
     Args:
-        enabled: Enable persistent worker pool mode.
-        min_pool_size: Minimum workers to keep pooled (startup baseline).
-        max_pool_size: Maximum workers to scale up under load.
-        idle_timeout_seconds: Idle worker timeout before graceful exit.
-        max_requests_per_worker: Max requests before worker respawn (prevents memory buildup).
-        request_timeout_seconds: Default per-request timeout (0 = no timeout).
-        heartbeat_interval_seconds: Worker heartbeat interval for stuck detection.
-        stuck_worker_timeout_seconds: Time since last heartbeat before marking worker stuck.
-        dispatch_wait_stats_enabled: Log periodic dispatch wait / queue-depth histograms.
-        dispatch_wait_stats_interval_seconds: Seconds between log emissions when enabled.
-        dispatch_wait_stats_idle_pause_seconds: Skip logging if no pool dispatch activity
-            for this many seconds (window discarded, like EventBus size stats).
+    enabled: Enable persistent worker pool mode.
+    min_pool_size: Minimum workers to keep pooled (startup baseline).
+    max_pool_size: Maximum workers to scale up under load.
+    idle_timeout_seconds: Idle worker timeout before graceful exit.
+    max_requests_per_worker: Max requests before worker respawn (prevents memory buildup).
+    request_timeout_seconds: Default per-request timeout (0 = no timeout).
+    heartbeat_interval_seconds: Worker heartbeat interval for stuck detection.
+    stuck_worker_timeout_seconds: Time since last heartbeat before marking worker stuck.
+    dispatch_wait_stats_enabled: Log periodic dispatch wait / queue-depth histograms.
+    dispatch_wait_stats_interval_seconds: Seconds between log emissions when enabled.
+    dispatch_wait_stats_idle_pause_seconds: Skip logging if no pool dispatch activity
+    for this many seconds (window discarded, like EventBus size stats).
     """
 
     enabled: bool = Field(
@@ -224,7 +220,7 @@ class DistributedConfig(BaseModel):
     Ray config is for distributed cluster mode.
 
     Args:
-        enabled: Enable distributed mode (Ray actors).
+    enabled: Enable distributed mode (Ray actors).
     """
 
     enabled: bool = Field(
@@ -238,7 +234,7 @@ class ThreadPoolConfig(BaseModel):
 
     Uses threads instead of subprocesses for lower overhead (~ms vs ~8s spawn).
     Each thread has a dedicated asyncio event loop. One reused SootheRunner per
-    worker (``prepare_for_request`` between turns) balances startup cost and isolation.
+    worker (`prepare_for_request` between turns) balances startup cost and isolation.
 
     PostgreSQL Pool Sharing:
     Daemon-level singleton pools are shared by ALL threads in the pool. This is
@@ -259,13 +255,13 @@ class ThreadPoolConfig(BaseModel):
     Default runner mode: lighter weight, faster startup.
 
     Args:
-        enabled: Enable thread pool mode.
-        min_pool_size: Minimum threads to keep pooled.
-        max_pool_size: Maximum threads to scale up under load.
-        idle_timeout_seconds: Idle thread timeout before graceful exit.
-        max_requests_per_thread: Max requests before thread respawn (prevents memory buildup).
-        request_timeout_seconds: Default per-request timeout (0 = no timeout).
-        thread_startup_timeout_seconds: Timeout for thread startup and event loop init.
+    enabled: Enable thread pool mode.
+    min_pool_size: Minimum threads to keep pooled.
+    max_pool_size: Maximum threads to scale up under load.
+    idle_timeout_seconds: Idle thread timeout before graceful exit.
+    max_requests_per_thread: Max requests before thread respawn (prevents memory buildup).
+    request_timeout_seconds: Default per-request timeout (0 = no timeout).
+    thread_startup_timeout_seconds: Timeout for thread startup and event loop init.
     """
 
     enabled: bool = Field(
@@ -326,7 +322,7 @@ class ThreadPoolConfig(BaseModel):
 
 
 class StaleWorkerReapConfig(BaseModel):
-    """Periodic reap of orphaned ``multiprocessing.spawn`` worker_pool children."""
+    """Periodic reap of orphaned `multiprocessing.spawn` worker_pool children."""
 
     enabled: bool = Field(
         default=True,
@@ -343,9 +339,9 @@ class LoopGcConfig(BaseModel):
     """Background GC for idle loops.
 
     Single periodic sweeper that runs two passes per tick:
-    - Ephemeral pass: ``is_ephemeral=True`` loops idle past ``ephemeral_idle_hours``.
-    - Empty pass: any loop with zero human + zero AI messages idle past ``empty_idle_hours``
-      (bootstrap sessions that never produced a real exchange).
+    - Ephemeral pass: `is_ephemeral=True` loops idle past `ephemeral_idle_hours`.
+    - Empty pass: any loop with zero human + zero AI messages idle past `empty_idle_hours`
+    (bootstrap sessions that never produced a real exchange).
     """
 
     enabled: bool = Field(default=True, description="Run periodic loop GC")
@@ -376,10 +372,10 @@ class LoopGcConfig(BaseModel):
 
 
 class LoopStatusReconciliationConfig(BaseModel):
-    """Periodic reconciliation of stale ``status="running"`` loop rows.
+    """Periodic reconciliation of stale `status="running"` loop rows.
 
-    A row with ``status="running"`` but no active runner on this daemon and
-    ``updated_at`` older than ``stale_running_seconds`` is demoted to ``idle``.
+    A row with `status="running"` but no active runner on this daemon and
+    `updated_at` older than `stale_running_seconds` is demoted to `idle`.
     The runner's heartbeat keeps live loops fresh; rows that miss multiple
     heartbeat windows are presumed orphaned (daemon/runner crash).
     """
@@ -422,10 +418,10 @@ class MemoryProfilingConfig(BaseModel):
     - Memory growth between snapshots
 
     Args:
-        enabled: Enable memory profiling (tracemalloc).
-        trace_depth: Maximum traceback depth for allocations (higher = more detail).
-        top_allocations_limit: Number of top allocations to report in stats.
-        log_growth_threshold_mb: Log warning when memory grows by this amount.
+    enabled: Enable memory profiling (tracemalloc).
+    trace_depth: Maximum traceback depth for allocations (higher = more detail).
+    top_allocations_limit: Number of top allocations to report in stats.
+    log_growth_threshold_mb: Log warning when memory grows by this amount.
     """
 
     enabled: bool = Field(

@@ -1,8 +1,4 @@
-"""Background-thread preparation for daemon stream chunks (TUI turn loop).
-
-Runs CPU-heavy parsing off the main asyncio loop. The applier on the main loop
-consumes ``PreparedTurnChunk`` values and performs widget updates.
-"""
+"""Background-thread preparation for daemon stream chunks (TUI turn loop)."""
 
 from __future__ import annotations
 
@@ -76,8 +72,8 @@ class PreparedTurnChunk:
 class TurnPrepareState:
     """Mutable per-turn state accessed only from the processor thread.
 
-    Tool-call pending buffers and ``StepTaskRouter`` are updated on the main loop
-    only (see ``execute_task_textual`` applier) to avoid races during parallel steps.
+    Tool-call pending buffers and `StepTaskRouter` are updated on the main loop
+    only (see `execute_task_textual` applier) to avoid races during parallel steps.
     """
 
     ev_stats: TurnEventStats

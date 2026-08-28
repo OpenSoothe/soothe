@@ -20,8 +20,8 @@ from soothe_cli.settings import get_glyphs, is_ascii_mode
 class RouterProfileSelectorScreen(ModalScreen[str | None]):
     """Modal list of configured router profile names.
 
-    Returns the selected profile name, ``"--clear"`` to drop the override,
-    or ``None`` on cancel.
+    Returns the selected profile name, `"--clear"` to drop the override,
+    or `None` on cancel.
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -76,9 +76,9 @@ class RouterProfileSelectorScreen(ModalScreen[str | None]):
         """Initialize the selector.
 
         Args:
-            profiles: Configured profile names.
-            active_default: Process ``active_router_profile`` from daemon.
-            current_override: Loop override, if any.
+        profiles: Configured profile names.
+        active_default: Process `active_router_profile` from daemon.
+        current_override: Loop override, if any.
         """
         super().__init__()
         self._profiles = list(profiles)

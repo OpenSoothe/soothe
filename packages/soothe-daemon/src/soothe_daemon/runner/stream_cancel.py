@@ -1,16 +1,4 @@
-"""Cooperative vs unexpected stream cancellation policy.
-
-User / daemon cancel sets a ``cancel_event`` and may cancel the stream task.
-Libraries (LLM/httpx/anyio) can also raise ``asyncio.CancelledError`` without
-that signal. Treating those as user cancel interrupts the loop incorrectly
-(goal_interrupted, stream.end reason=cancelled, TUI cancel UX).
-
-This helper:
-- Cancels the stream task only when ``cancel_event`` is set (and logs it).
-- Retries the stream once when ``CancelledError`` arrives without ``cancel_event``.
-- Surfaces exhausted unexpected cancels as ``RuntimeError`` (error terminal),
-  never as a cooperative cancel.
-"""
+"""Cooperative vs unexpected stream cancellation policy."""
 
 from __future__ import annotations
 
@@ -43,22 +31,22 @@ async def await_cancellable_stream(
     unexpected_retries: int = _DEFAULT_UNEXPECTED_CANCEL_RETRIES,
     poll_interval_s: float = _DEFAULT_POLL_INTERVAL_S,
 ) -> None:
-    """Run ``stream_factory`` with cancel-event polling and unexpected-cancel retry.
+    """Run `stream_factory` with cancel-event polling and unexpected-cancel retry.
 
     Args:
-        stream_factory: Zero-arg factory returning the stream awaitable (fresh
-            each attempt so retries do not reuse a completed coroutine).
-        cancel_event: Cooperative cancel flag from the pool (``threading.Event``
-            or multiprocessing equivalent).
-        worker_id: Worker id for logs.
-        loop_id: Client loop id for logs.
-        request_id: Request id for logs.
-        unexpected_retries: Extra attempts after unexpected ``CancelledError``.
-        poll_interval_s: How often to check ``cancel_event``.
+    stream_factory: Zero-arg factory returning the stream awaitable (fresh
+    each attempt so retries do not reuse a completed coroutine).
+    cancel_event: Cooperative cancel flag from the pool (`threading.Event`
+    or multiprocessing equivalent).
+    worker_id: Worker id for logs.
+    loop_id: Client loop id for logs.
+    request_id: Request id for logs.
+    unexpected_retries: Extra attempts after unexpected `CancelledError`.
+    poll_interval_s: How often to check `cancel_event`.
 
     Raises:
-        asyncio.CancelledError: When ``cancel_event`` is set (cooperative cancel).
-        RuntimeError: When unexpected ``CancelledError`` retries are exhausted.
+    asyncio.CancelledError: When `cancel_event` is set (cooperative cancel).
+    RuntimeError: When unexpected `CancelledError` retries are exhausted.
     """
     attempts = 1 + max(0, int(unexpected_retries))
     for attempt in range(1, attempts + 1):
@@ -128,16 +116,16 @@ def emit_terminal_for_cancelled_error(
     request_id: str,
     where: str,
 ) -> None:
-    """Map a leaked ``CancelledError`` to cancelled vs error terminal.
+    """Map a leaked `CancelledError` to cancelled vs error terminal.
 
     Args:
-        cancel_event: Cooperative cancel flag.
-        emit_cancelled: Emit cooperative cancel terminal.
-        emit_error: Emit error terminal with the given exception.
-        worker_id: Worker id for logs.
-        loop_id: Loop id for logs.
-        request_id: Request id for logs.
-        where: Short site label for logs (e.g. ``_execute``, ``run_until_complete``).
+    cancel_event: Cooperative cancel flag.
+    emit_cancelled: Emit cooperative cancel terminal.
+    emit_error: Emit error terminal with the given exception.
+    worker_id: Worker id for logs.
+    loop_id: Loop id for logs.
+    request_id: Request id for logs.
+    where: Short site label for logs (e.g. `_execute`, `run_until_complete`).
     """
     if cancel_event.is_set():
         logger.warning(

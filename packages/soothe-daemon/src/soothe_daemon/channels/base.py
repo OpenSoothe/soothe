@@ -1,8 +1,4 @@
-"""Channel base class.
-
-All communication endpoints (WebSocket, Telegram, Discord, etc.)
-implement this single Channel abstract class with capability flags.
-"""
+"""Channel base class."""
 
 from __future__ import annotations
 
@@ -53,8 +49,8 @@ class Channel(ABC):
         """Initialize channel.
 
         Args:
-            config: Channel-specific configuration.
-            manager: ChannelManager for inbound routing.
+        config: Channel-specific configuration.
+        manager: ChannelManager for inbound routing.
         """
         self.config = config
         self._manager = manager
@@ -89,11 +85,11 @@ class Channel(ABC):
         """Deliver outbound message to platform.
 
         Args:
-            chat_id: Conversation identifier on this platform.
-            message: Message to deliver.
+        chat_id: Conversation identifier on this platform.
+        message: Message to deliver.
 
         Raises:
-            Exception: On delivery failure (ChannelManager will retry).
+        Exception: On delivery failure (ChannelManager will retry).
         """
 
     async def send_delta(
@@ -108,9 +104,9 @@ class Channel(ABC):
         raise on delivery failure so ChannelManager can retry.
 
         Args:
-            chat_id: Conversation identifier.
-            delta: Text chunk to stream.
-            metadata: Optional metadata (e.g., _stream_id, _stream_end).
+        chat_id: Conversation identifier.
+        delta: Text chunk to stream.
+        metadata: Optional metadata (e.g., _stream_id, _stream_end).
         """
         pass
 
@@ -126,9 +122,9 @@ class Channel(ABC):
         (Slack context block, Telegram expandable blockquote, etc.).
 
         Args:
-            chat_id: Conversation identifier.
-            delta: Reasoning text chunk.
-            metadata: Optional metadata.
+        chat_id: Conversation identifier.
+        delta: Reasoning text chunk.
+        metadata: Optional metadata.
         """
         pass
 
@@ -142,8 +138,8 @@ class Channel(ABC):
         Override in subclasses that buffer reasoning deltas for in-place updates.
 
         Args:
-            chat_id: Conversation identifier.
-            metadata: Optional metadata.
+        chat_id: Conversation identifier.
+        metadata: Optional metadata.
         """
         pass
 
@@ -153,10 +149,10 @@ class Channel(ABC):
         Returns empty string on failure. Override to customize provider.
 
         Args:
-            file_path: Path to audio file.
+        file_path: Path to audio file.
 
         Returns:
-            Transcribed text, or empty string on failure.
+        Transcribed text, or empty string on failure.
         """
         # Defer to ChannelManager's transcription provider
         if hasattr(self._manager, "transcribe_audio"):
@@ -169,10 +165,10 @@ class Channel(ABC):
         Override in subclasses that support interactive authentication.
 
         Args:
-            force: Force re-authentication even if already authenticated.
+        force: Force re-authentication even if already authenticated.
 
         Returns:
-            True if authenticated or login succeeds.
+        True if authenticated or login succeeds.
         """
         return True
 
@@ -190,14 +186,14 @@ class Channel(ABC):
         via is_allowed() is performed by manager.
 
         Args:
-            sender_id: User identifier on this platform.
-            chat_id: Conversation/thread identifier.
-            content: Message text.
-            media: Optional media attachments (URLs or file paths).
-            metadata: Optional channel-specific metadata.
+        sender_id: User identifier on this platform.
+        chat_id: Conversation/thread identifier.
+        content: Message text.
+        media: Optional media attachments (URLs or file paths).
+        metadata: Optional channel-specific metadata.
 
         Returns:
-            loop_id assigned to this conversation, or None if denied.
+        loop_id assigned to this conversation, or None if denied.
         """
         # Permission check
         if not self.is_allowed(sender_id):
@@ -228,10 +224,10 @@ class Channel(ABC):
         """Check sender permission via allow_from whitelist.
 
         Args:
-            sender_id: User identifier.
+        sender_id: User identifier.
 
         Returns:
-            True if sender is allowed.
+        True if sender is allowed.
         """
         allow_list = self._get_allow_list()
         if "*" in allow_list:

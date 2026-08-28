@@ -177,9 +177,9 @@ def _extract_post_content(content_json: dict) -> tuple[str, list[str]]:
     """Extract text and image keys from Feishu post (rich text) message.
 
     Handles three payload shapes:
-    - Direct:    {"title": "...", "content": [[...]]}
+    - Direct: {"title": "...", "content": [[...]]}
     - Localized: {"zh_cn": {"title": "...", "content": [...]}}
-    - Wrapped:   {"post": {"zh_cn": {"title": "...", "content": [...]}}}
+    - Wrapped: {"post": {"zh_cn": {"title": "...", "content": [...]}}}
     """
 
     def _parse_block(block: dict) -> tuple[str | None, list[str]]:
@@ -305,8 +305,8 @@ class FeishuChannel(Channel):
         """Initialize Feishu channel.
 
         Args:
-            config: Feishu configuration.
-            manager: ChannelManager for inbound routing.
+        config: Feishu configuration.
+        manager: ChannelManager for inbound routing.
         """
         super().__init__(config, manager)
         if isinstance(config, dict):
@@ -480,11 +480,11 @@ class FeishuChannel(Channel):
         """Replace @_user_n placeholders with actual user info from mentions.
 
         Args:
-            text: The message text containing @_user_n placeholders
-            mentions: List of mention objects from Feishu message
+        text: The message text containing @_user_n placeholders
+        mentions: List of mention objects from Feishu message
 
         Returns:
-            Text with placeholders replaced by @姓名 (open_id)
+        Text with placeholders replaced by @姓名 (open_id)
         """
         if not mentions or not text:
             return text
@@ -581,7 +581,7 @@ class FeishuChannel(Channel):
 
         Returns the reaction_id on success, None on failure.
         When called via a tracked background task, the returned reaction_id
-        is stored in ``_reaction_ids`` for later cleanup by ``send_delta``.
+        is stored in `_reaction_ids` for later cleanup by `send_delta`.
 
         Common emoji types: THUMBSUP, OK, EYES, DONE, OnIt, HEART
         """
@@ -834,9 +834,9 @@ class FeishuChannel(Channel):
         """Determine the optimal Feishu message format for *content*.
 
         Returns one of:
-        - ``"text"``        – plain text, short and no markdown
-        - ``"post"``        – rich text (links only, moderate length)
-        - ``"interactive"`` – card with full markdown rendering
+        - `"text"` – plain text, short and no markdown
+        - `"post"` – rich text (links only, moderate length)
+        - `"interactive"` – card with full markdown rendering
         """
         stripped = content.strip()
 
@@ -871,7 +871,7 @@ class FeishuChannel(Channel):
     def _markdown_to_post(cls, content: str) -> str:
         """Convert markdown content to Feishu post message JSON.
 
-        Handles links ``[text](url)`` as ``a`` tags; everything else as ``text`` tags.
+        Handles links `[text](url)` as `a` tags; everything else as `text` tags.
         Each line becomes a paragraph (row) in the post body.
         """
         lines = content.strip().split("\n")
@@ -1084,7 +1084,7 @@ class FeishuChannel(Channel):
         """Download media from Feishu and save to local disk.
 
         Returns:
-            (file_path, content_text) - file_path is None if download failed
+        (file_path, content_text) - file_path is None if download failed
         """
         loop = asyncio.get_running_loop()
         media_dir = Path.home() / ".soothe" / "media" / "feishu"
@@ -1194,8 +1194,8 @@ class FeishuChannel(Channel):
         """Reply to an existing Feishu message using the Reply API (synchronous).
 
         Args:
-            reply_in_thread: If True, reply as a thread/topic message
-                in the Feishu client.
+        reply_in_thread: If True, reply as a thread/topic message
+        in the Feishu client.
         """
         from lark_oapi.api.im.v1 import ReplyMessageRequest, ReplyMessageRequestBody
 
@@ -1430,10 +1430,10 @@ class FeishuChannel(Channel):
         """Progressive streaming via CardKit: create card on first delta, stream-update on subsequent.
 
         Supported metadata keys:
-            _stream_end: Finalize the streaming card.
-            _tool_hint:  Delta is a formatted tool hint (for display only).
-            message_id:  Original message id (used with _stream_end for reaction cleanup).
-            chat_type:   "group" or "p2p" — controls reply-in-thread for streaming cards.
+        _stream_end: Finalize the streaming card.
+        _tool_hint: Delta is a formatted tool hint (for display only).
+        message_id: Original message id (used with _stream_end for reaction cleanup).
+        chat_type: "group" or "p2p" — controls reply-in-thread for streaming cards.
         """
         if not self._client:
             return

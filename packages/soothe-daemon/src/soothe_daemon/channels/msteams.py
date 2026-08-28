@@ -1,13 +1,4 @@
-"""Microsoft Teams channel MVP using a tiny built-in HTTP webhook server.
-
-Scope:
-- DM-focused MVP
-- text inbound/outbound
-- conversation reference persistence
-- sender allowlist support
-- optional inbound Bot Framework bearer-token validation
-- no attachments/cards/polls yet
-"""
+"""Microsoft Teams channel MVP using a tiny built-in HTTP webhook server."""
 
 from __future__ import annotations
 
@@ -616,9 +607,9 @@ class MSTeamsChannel(Channel):
     def _load_refs_raw(self) -> tuple[dict[str, Any], dict[str, Any], bool]:
         """Load raw refs/main+meta JSON payloads.
 
-        The per-conversation meta entries are returned in ``meta_data``. The
-        reserved migration sentinel (``MSTEAMS_REF_META_MIGRATION_KEY``) is
-        extracted into ``self._refs_migration`` instead of being returned as a
+        The per-conversation meta entries are returned in `meta_data`. The
+        reserved migration sentinel (`MSTEAMS_REF_META_MIGRATION_KEY`) is
+        extracted into `self._refs_migration` instead of being returned as a
         per-conversation entry, so the load/merge loops never treat it as a ref.
         """
         main_data: dict[str, Any] = {}
@@ -658,8 +649,8 @@ class MSTeamsChannel(Channel):
 
         After the legacy backfill (meta sidecar first-run timestamp init)
         completes, the migration-complete sentinel is recorded on the instance
-        (``self._refs_migration``) and persisted on the next
-        ``_save_refs_locked`` so D8's decommission criterion ("verify
+        (`self._refs_migration`) and persisted on the next
+        `_save_refs_locked` so D8's decommission criterion ("verify
         via audit") can be confirmed from the meta sidecar on disk.
         """
         main_data, meta_data, meta_exists = self._load_refs_raw()

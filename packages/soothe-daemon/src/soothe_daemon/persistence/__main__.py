@@ -1,4 +1,4 @@
-"""Run stale worker cleanup: ``python -m soothe_daemon.persistence``."""
+"""Run stale worker cleanup: `python -m soothe_daemon.persistence`."""
 
 from soothe_daemon.persistence.process_cleanup import reap_from_cli
 

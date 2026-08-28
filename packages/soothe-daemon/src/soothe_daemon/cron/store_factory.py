@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 
 
 def create_cron_job_store(config: SootheConfig | None = None, **kwargs: Any) -> Any:
-    """Return SQLite or PostgreSQL cron store from ``persistence.default_backend``.
+    """Return SQLite or PostgreSQL cron store from `persistence.default_backend`.
 
     Args:
-        config: Active Soothe config. When None or sqlite, returns ``CronJobStore``.
-        **kwargs: Forwarded to ``CronJobStore`` (e.g. ``db_path`` for tests).
+    config: Active Soothe config. When None or sqlite, returns `CronJobStore`.
+    **kwargs: Forwarded to `CronJobStore` (e.g. `db_path` for tests).
 
     Returns:
-        CronJobStore or PostgresCronJobStore with the same async API.
+    CronJobStore or PostgresCronJobStore with the same async API.
     """
     if config is not None and config.persistence.default_backend == "postgresql":
         from soothe_daemon.cron.store_postgres import PostgresCronJobStore

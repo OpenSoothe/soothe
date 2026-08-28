@@ -1,16 +1,4 @@
-"""Cron Service for Autopilot — Natural Language Scheduled Jobs.
-
-This module provides natural language scheduled job submission for Autopilot.
-Users describe jobs in plain language; the daemon extracts schedule semantics
-via LLM, persists jobs to database, monitors for due jobs, and executes them
-through the existing AutopilotService goal workflow.
-
-Key components:
-- CronService: Orchestrator for NL extraction, persistence, and execution
-- CronExtractionService: LLM-based schedule extraction
-- CronJob: Data model for scheduled jobs
-- CronJobStore: Database persistence adapter
-"""
+"""Cron Service for Autopilot — Natural Language Scheduled Jobs."""
 
 from __future__ import annotations
 

@@ -1,9 +1,4 @@
-"""Daemon-backed session helpers for the Textual TUI.
-
-Thin CLI wrapper over ``soothe_client.appkit.DaemonSession`` that derives
-WebSocket URL / stream delivery from CLI config and uses the richer CLI early
-chunk filter (LangChain-aware).
-"""
+"""Daemon-backed session helpers for the Textual TUI."""
 
 from __future__ import annotations
 
@@ -45,8 +40,8 @@ class TuiDaemonSession(DaemonSession):
     def _resolve_stream_delivery_mode(self) -> str:
         """Determine stream delivery mode from config.
 
-        Returns one of ``batch`` | ``adaptive`` | ``streaming``. CLI override
-        wins, then config; defaults to ``adaptive``.
+        Returns one of `batch` | `adaptive` | `streaming`. CLI override
+        wins, then config; defaults to `adaptive`.
         """
         if (
             self._cfg
@@ -67,12 +62,12 @@ class TuiDaemonSession(DaemonSession):
         limit: int = 20,
         workspace: str | None = None,
     ) -> dict[str, Any]:
-        """Return ``loop_list`` via the RPC sidecar.
+        """Return `loop_list` via the RPC sidecar.
 
         Args:
-            limit: Maximum number of loops to return.
-            workspace: When set, pass ``filter.workspace`` so the daemon
-                returns only loops recorded for this host path.
+        limit: Maximum number of loops to return.
+        workspace: When set, pass `filter.workspace` so the daemon
+        returns only loops recorded for this host path.
         """
         params: dict[str, Any] = {"limit": limit}
         if workspace:

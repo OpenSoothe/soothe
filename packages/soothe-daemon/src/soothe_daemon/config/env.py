@@ -1,4 +1,4 @@
-"""Environment-variable overrides for ``SootheDaemonConfig``."""
+"""Environment-variable overrides for `SootheDaemonConfig`."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 def apply_env_overrides(config: SootheDaemonConfig) -> None:
     """Apply environment-variable overrides to a daemon config in place.
 
-    Currently handles ``SOOTHE_DISTRIBUTED=1/true/yes`` -> enable Ray loop
+    Currently handles `SOOTHE_DISTRIBUTED=1/true/yes` -> enable Ray loop
     execution.
     """
 

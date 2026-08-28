@@ -1,17 +1,4 @@
-"""Protocol infrastructure for daemon communication.
-
-This submodule provides:
-- MessageRouter: Transport-agnostic message dispatch
-- ErrorCode: Numeric error code registry
-- RpcProtocolError: Structured exception with numeric code
-- build_error_response: Wire-ready error envelope constructor
-- validate_message: Pydantic schema validation at transport boundary
-- validate_message_size: Message size validation
-- PARAMS_REGISTRY: Maps (type, method) to Pydantic params model
-
-The numeric error model (ErrorCode / RpcProtocolError / build_error_response)
-is the protocol-1 canonical API.
-"""
+"""Protocol infrastructure for daemon communication."""
 
 from soothe_daemon.protocol.error_codes import (
     ErrorCode,

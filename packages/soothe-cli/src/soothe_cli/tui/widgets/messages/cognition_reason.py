@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class CognitionReasonMessage(Vertical):
     """Single card for plan assessment and plan reasoning.
 
-    Header uses the same stateful prefix glyph plus foreground body as ``CognitionStepMessage``.
+    Header uses the same stateful prefix glyph plus foreground body as `CognitionStepMessage`.
     """
 
     ALLOW_SELECT = True
@@ -50,12 +50,12 @@ class CognitionReasonMessage(Vertical):
         """Initialize a plan-reason card.
 
         Args:
-            status: Plan status (continue, replan, done).
-            iteration: Agent-loop iteration index.
-            plan_action: ``keep`` or ``new`` (internal execution strategy, not displayed).
-            assessment_reasoning: Phase-1 status justification from plan-assess.
-            plan_reasoning: Optional strategy/summary line (e.g. step completion).
-            **kwargs: Passed to ``Vertical``.
+        status: Plan status (continue, replan, done).
+        iteration: Agent-loop iteration index.
+        plan_action: `keep` or `new` (internal execution strategy, not displayed).
+        assessment_reasoning: Phase-1 status justification from plan-assess.
+        plan_reasoning: Optional strategy/summary line (e.g. step completion).
+        **kwargs: Passed to `Vertical`.
         """
         super().__init__(**kwargs)
         self._status = status

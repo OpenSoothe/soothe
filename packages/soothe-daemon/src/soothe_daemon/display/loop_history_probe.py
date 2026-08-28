@@ -39,7 +39,7 @@ def filter_derivable_log_events(raw_log: list[Any]) -> list[dict[str, Any]]:
 
 
 async def langgraph_checkpoint_exists(thread_id: str) -> bool:
-    """Return True when LangGraph has a checkpoint row for ``thread_id``."""
+    """Return True when LangGraph has a checkpoint row for `thread_id`."""
     db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
     if not db_path.is_file():
         return False

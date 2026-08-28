@@ -105,8 +105,8 @@ def _sig_render_table(table_lines: list[str]) -> str:
 def _markdown_to_signal(text: str) -> tuple[str, list[str]]:
     """Convert markdown text to Signal plain text + textStyle ranges.
 
-    Returns ``(plain_text, text_styles)`` where ``text_styles`` are
-    ``"start:length:STYLE"`` strings for the signal-cli ``textStyle`` parameter.
+    Returns `(plain_text, text_styles)` where `text_styles` are
+    `"start:length:STYLE"` strings for the signal-cli `textStyle` parameter.
     """
     if not text:
         return text, []
@@ -232,10 +232,10 @@ def _partition_styles(
 ) -> list[list[str]]:
     """Partition Signal textStyle ranges across message chunks.
 
-    ``split_message`` slices ``plain_text`` into pieces (optionally trimming
+    `split_message` slices `plain_text` into pieces (optionally trimming
     whitespace at the boundaries), but the style ranges produced by
-    ``_markdown_to_signal`` are expressed in UTF-16 offsets relative to the
-    full ``plain_text``. This redistributes them per chunk with offsets
+    `_markdown_to_signal` are expressed in UTF-16 offsets relative to the
+    full `plain_text`. This redistributes them per chunk with offsets
     rebased to each chunk's start. Ranges that span a boundary are split
     across the chunks they touch; ranges that fall entirely in trimmed
     whitespace are dropped.
@@ -322,7 +322,7 @@ class SignalConfig:
 
         Returns the union of dm.allow_from and group.allow_from so the base
         channel gate sees a populated list when either sub-policy is configured.
-        A ``"*"`` wildcard in either sub-list propagates to allow all.
+        A `"*"` wildcard in either sub-list propagates to allow all.
         """
         return list(dict.fromkeys(self.dm.allow_from + self.group.allow_from))
 
@@ -411,10 +411,10 @@ class SignalChannel(Channel):
     def is_allowed(self, sender_id: str) -> bool:
         """Override base check to normalize and split pipe-joined identifiers.
 
-        ``sender_id`` from Signal is the pipe-joined composite produced by
-        ``_collect_sender_id_parts``; allow_from entries may be single
-        identifiers or composites and may use the ``+`` prefix variant or
-        not. Delegates to ``_sender_matches_allowlist`` so the base gate
+        `sender_id` from Signal is the pipe-joined composite produced by
+        `_collect_sender_id_parts`; allow_from entries may be single
+        identifiers or composites and may use the `+` prefix variant or
+        not. Delegates to `_sender_matches_allowlist` so the base gate
         matches the per-policy DM gate.
         """
         allow_list = self.config.allow_from
@@ -436,8 +436,8 @@ class SignalChannel(Channel):
     ) -> None:
         """Handle an inbound message whose policy has already been checked.
 
-        ``_check_inbound_policy`` is the authoritative gate for DM/group
-        access, so we skip the base-class ``is_allowed()`` check and route
+        `_check_inbound_policy` is the authoritative gate for DM/group
+        access, so we skip the base-class `is_allowed()` check and route
         directly through the manager.
         """
         meta = metadata or {}
@@ -668,7 +668,7 @@ class SignalChannel(Channel):
     async def _safe_handle(self, action: str, payload: Any = None) -> AsyncIterator[None]:
         """Swallow and log any exception from a top-level handler block.
 
-        Logs error with the action name, the exception, and a bounded ``repr``
+        Logs error with the action name, the exception, and a bounded `repr`
         of the offending payload so the offending input is recoverable from
         logs without having to correlate by timestamp.
         """
@@ -835,7 +835,7 @@ class SignalChannel(Channel):
     ) -> tuple[bool, str]:
         """Decide whether to route an inbound message past DM/group policy.
 
-        Returns ``(allow, chat_id)``. Has one side effect: when a group
+        Returns `(allow, chat_id)`. Has one side effect: when a group
         message passes the enabled+allowlist gates, it is appended to the
         group's rolling context buffer before the mention check.
         """
@@ -898,7 +898,7 @@ class SignalChannel(Channel):
         is_group_message: bool,
         chat_id: str,
     ) -> tuple[str, list[str]]:
-        """Build ``(content, media_paths)`` for an inbound message.
+        """Build `(content, media_paths)` for an inbound message.
 
         Pulls in group context, strips bot mentions, prefixes the sender's
         display name on group messages, and copies any attachments from
@@ -960,11 +960,11 @@ class SignalChannel(Channel):
         Add a message to the group's rolling buffer.
 
         Args:
-            group_id: The group ID
-            sender_name: Display name of sender
-            sender_number: Phone number of sender
-            message_text: The message content
-            timestamp: Message timestamp
+        group_id: The group ID
+        sender_name: Display name of sender
+        sender_number: Phone number of sender
+        message_text: The message content
+        timestamp: Message timestamp
         """
         # Create buffer for this group if it doesn't exist
         if group_id not in self._group_buffers:
@@ -992,10 +992,10 @@ class SignalChannel(Channel):
         Get formatted context from the group's message buffer.
 
         Args:
-            group_id: The group ID
+        group_id: The group ID
 
         Returns:
-            Formatted string of recent messages (excluding the current one)
+        Formatted string of recent messages (excluding the current one)
         """
         if group_id not in self._group_buffers:
             return ""
@@ -1019,8 +1019,8 @@ class SignalChannel(Channel):
     def _signal_attachments_dir(self) -> Path:
         """Return the directory signal-cli writes inbound attachments to.
 
-        Defaults to ``~/.local/share/signal-cli/attachments`` (the daemon's
-        platform default on Linux) when ``config.attachments_dir`` is unset.
+        Defaults to `~/.local/share/signal-cli/attachments` (the daemon's
+        platform default on Linux) when `config.attachments_dir` is unset.
         """
         configured = self.config.attachments_dir
         if configured:
@@ -1045,11 +1045,11 @@ class SignalChannel(Channel):
     def _sender_matches_allowlist(cls, sender_id: str, allow_list: list[str]) -> bool:
         """Return True if any normalized variant of sender_id is on allow_list.
 
-        Both ``sender_id`` and each allow_list entry can be a single
+        Both `sender_id` and each allow_list entry can be a single
         identifier or a pipe-joined composite of several (e.g.
-        ``"+1234567890|uuid-abc"``); both sides are split on ``|`` and each
-        part is run through ``_normalize_signal_id`` so an allowlist entry
-        like ``1234567890`` matches a sender ``+1234567890`` (and vice
+        `"+1234567890|uuid-abc"`); both sides are split on `|` and each
+        part is run through `_normalize_signal_id` so an allowlist entry
+        like `1234567890` matches a sender `+1234567890` (and vice
         versa), and case-only differences in UUIDs/ACIs match too.
         """
         if not allow_list:
@@ -1191,11 +1191,11 @@ class SignalChannel(Channel):
         Determine if the bot should respond to a group message.
 
         Args:
-            message_text: The message text content
-            mentions: List of mentions from Signal (format: [{"number": "+1234567890", "start": 0, "length": 10}])
+        message_text: The message text content
+        mentions: List of mentions from Signal (format: [{"number": "+1234567890", "start": 0, "length": 10}])
 
         Returns:
-            True if bot should respond, False otherwise
+        True if bot should respond, False otherwise
         """
         # Group reply behavior is controlled only by group.require_mention.
         if not self.config.group.require_mention:
@@ -1247,11 +1247,11 @@ class SignalChannel(Channel):
         the mentions array which provides start position and length.
 
         Args:
-            text: Original message text
-            mentions: List of mention objects with start/length positions
+        text: Original message text
+        mentions: List of mention objects with start/length positions
 
         Returns:
-            Text with bot mentions removed
+        Text with bot mentions removed
         """
         if not text:
             return text

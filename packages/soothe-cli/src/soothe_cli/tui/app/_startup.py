@@ -168,7 +168,7 @@ class _StartupMixin:
         Daemon connection runs independently (started in on_mount) so it can
         proceed while prewarm loads heavy modules. Post-paint init is scheduled
         only after prewarm completes so its inline imports are cheap
-        ``sys.modules`` lookups instead of cold loads on the UI thread.
+        `sys.modules` lookups instead of cold loads on the UI thread.
         """
         try:
             await asyncio.to_thread(self._prewarm_deferred_imports)
@@ -187,7 +187,7 @@ class _StartupMixin:
 
         Everything here is non-blocking: workers and thread-offloaded calls
         so the UI stays responsive. Import prewarm must finish before this
-        runs (see ``_run_deferred_startup``) so adapter construction does not
+        runs (see `_run_deferred_startup`) so adapter construction does not
         cold-load langchain/runtime stacks on the Textual message loop.
         """
         # Create UI adapter unconditionally — it only holds UI callbacks.
@@ -308,7 +308,7 @@ class _StartupMixin:
 
     @staticmethod
     def _format_local_skills_catalog_text(skills: list[Any]) -> str:
-        """Human-readable listing for bare ``/skill:`` in local (non-daemon) mode."""
+        """Human-readable listing for bare `/skill:` in local (non-daemon) mode."""
         lines: list[str] = ["Available skills:\n"]
         for s in sorted(skills, key=lambda m: str(m.get("name", "")).lower()):
             name = str(s.get("name", ""))
@@ -320,7 +320,7 @@ class _StartupMixin:
 
     @staticmethod
     def _format_daemon_skills_catalog_text(rows: list[dict[str, Any]]) -> str:
-        """Human-readable listing for bare ``/skill:`` when backed by the daemon."""
+        """Human-readable listing for bare `/skill:` when backed by the daemon."""
         lines = ["Available skills (from daemon):\n"]
         for row in sorted(rows, key=lambda r: str(r.get("name", "")).lower()):
             name = str(row.get("name", ""))
@@ -331,7 +331,7 @@ class _StartupMixin:
         return "\n".join(lines)
 
     async def _mount_bare_skill_list(self, command: str) -> None:
-        """Show every known skill when the user submits ``/skill:`` with no name."""
+        """Show every known skill when the user submits `/skill:` with no name."""
         await self._mount_message(UserMessage(command))
         if self._daemon_session is not None:
             rows = self._daemon_skills_wire
@@ -369,7 +369,7 @@ class _StartupMixin:
         )
 
     async def _invoke_skill_daemon(self, command: str, skill_name: str, args: str) -> None:
-        """Daemon path: RPC loads ``SKILL.md`` on the server; TUI only streams the turn."""
+        """Daemon path: RPC loads `SKILL.md` on the server; TUI only streams the turn."""
         if self._daemon_session is None:
             return
         if self._agent_running or self._shell_running:
@@ -434,7 +434,7 @@ class _StartupMixin:
         access — all skill discovery and invocation handled by daemon.
 
         Returns:
-            List of skill metadata dicts from daemon RPC.
+        List of skill metadata dicts from daemon RPC.
         """
         from soothe_cli.tui.skills.invocation import discover_skills_async
 
@@ -491,14 +491,14 @@ class _StartupMixin:
         """Wait for daemon readiness and bootstrap one TUI session.
 
         Args:
-            attempt: Current connect attempt (1-based).
+        attempt: Current connect attempt (1-based).
 
         Returns:
-            Tuple of ``(TuiDaemonSession, status_event)``.
+        Tuple of `(TuiDaemonSession, status_event)`.
 
         Raises:
-            ConnectionError: If the daemon is not reachable or ready in time.
-            Exception: If loop bootstrap fails.
+        ConnectionError: If the daemon is not reachable or ready in time.
+        Exception: If loop bootstrap fails.
         """
         from soothe_client import (
             is_daemon_live,
@@ -720,7 +720,7 @@ class _StartupMixin:
         )
 
     async def _prewarm_model_caches(self) -> None:
-        """Prewarm ``/model`` selector data via the connected daemon session."""
+        """Prewarm `/model` selector data via the connected daemon session."""
         session = self._daemon_session
         if session is None:
             logger.debug("Skipping model cache prewarm - daemon session not ready")

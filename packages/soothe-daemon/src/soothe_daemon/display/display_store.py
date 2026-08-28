@@ -1,12 +1,4 @@
-"""Display card mutation persistence.
-
-SQLite (``databases/display.db``) is the default. When ``persistence.default_backend`` is
-``postgresql``, the process configures a PostgreSQL store in ``soothe_metadata``.
-
-Moved from ``soothe_nano`` to the daemon (PR-2): display cards are a
-daemon display concept with no standalone-nano consumers; the store and its
-DDL belong here beside ``LoopCardLedger`` / ``LoopCardManager``.
-"""
+"""Display card mutation persistence."""
 
 from __future__ import annotations
 
@@ -94,7 +86,7 @@ class DisplayCardStoreProtocol(Protocol):
 
 
 class DisplayCardStore:
-    """Append-only SQLite store for ``CardMutation`` rows (Runtime-backed)."""
+    """Append-only SQLite store for `CardMutation` rows (Runtime-backed)."""
 
     def __init__(self, db_path: Path | None = None) -> None:
         from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
@@ -108,7 +100,7 @@ class DisplayCardStore:
         return self._db_path
 
     def list_mutations(self, loop_id: str) -> list[CardMutation]:
-        """Load all mutations for a loop ordered by ``seq``."""
+        """Load all mutations for a loop ordered by `seq`."""
 
         def _read(conn: Any) -> list[CardMutation]:
             cursor = conn.execute(
@@ -138,7 +130,7 @@ class DisplayCardStore:
         return self._runtime.run_read_sync(_read)
 
     def append_mutations(self, loop_id: str, mutations: list[CardMutation]) -> None:
-        """Insert mutations; ignores duplicates on ``(loop_id, seq)``."""
+        """Insert mutations; ignores duplicates on `(loop_id, seq)`."""
         if not mutations:
             return
         rows = [
@@ -214,7 +206,7 @@ class DisplayCardStore:
         self._runtime.run_write_sync(_write)
 
     def list_goal_snapshots(self, loop_id: str) -> list[dict[str, Any]]:
-        """Load goal display snapshots ordered by ``goal_index``."""
+        """Load goal display snapshots ordered by `goal_index`."""
 
         def _read(conn: Any) -> list[dict[str, Any]]:
             cursor = conn.execute(
@@ -257,7 +249,7 @@ class DisplayCardStore:
         goal_id: str | None,
         snapshot: dict[str, Any],
     ) -> tuple[int, str]:
-        """Reserve ``goal_index`` and insert the snapshot in one critical section."""
+        """Reserve `goal_index` and insert the snapshot in one critical section."""
 
         def _write(conn: Any) -> tuple[int, str]:
             row = conn.execute(
@@ -342,7 +334,7 @@ class DisplayCardStore:
         *,
         max_chars: int = 120,
     ) -> str | None:
-        """Return the first user card content for ``loop_id``, if present."""
+        """Return the first user card content for `loop_id`, if present."""
 
         def _read(conn: Any) -> str | None:
             row = conn.execute(
@@ -381,7 +373,7 @@ class DisplayCardStore:
         *,
         max_chars: int = 120,
     ) -> str | None:
-        """Return the latest assistant card content for ``loop_id``, if present."""
+        """Return the latest assistant card content for `loop_id`, if present."""
 
         def _read(conn: Any) -> str | None:
             row = conn.execute(
@@ -436,7 +428,7 @@ def _close_shared_store_unlocked() -> None:
 
 
 def configure_display_card_store(config: SootheConfig) -> DisplayCardStoreProtocol:
-    """Select SQLite or PostgreSQL display store from ``persistence.default_backend``.
+    """Select SQLite or PostgreSQL display store from `persistence.default_backend`.
 
     Call once during process startup after PostgreSQL databases are provisioned.
     """
@@ -461,7 +453,7 @@ def configure_display_card_store(config: SootheConfig) -> DisplayCardStoreProtoc
 def get_display_card_store(db_path: Path | None = None) -> DisplayCardStoreProtocol:
     """Return the process-wide display card store singleton.
 
-    Pass ``db_path`` only in tests to force an isolated SQLite file.
+    Pass `db_path` only in tests to force an isolated SQLite file.
     """
     global _shared_store
     with _shared_store_lock:

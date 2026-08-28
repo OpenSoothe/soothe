@@ -1,8 +1,4 @@
-"""Message widgets for Soothe TUI.
-
-This package provides various message card widgets for the terminal UI.
-Each widget type is in its own module for better organization.
-"""
+"""Message widgets for Soothe TUI."""
 
 from soothe_cli.tui.widgets.messages._helpers import (
     _assemble_card_header,

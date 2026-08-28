@@ -12,8 +12,8 @@ def _read_config_yaml_skills_dirs() -> list[str] | None:
     """Read `[skills].extra_allowed_dirs` from `SOOTHE_HOME/config/cli.yml`.
 
     Returns:
-        List of path strings, or `None` if the key is absent or the file
-            cannot be read.
+    List of path strings, or `None` if the key is absent or the file
+    cannot be read.
     """
     import yaml
 
@@ -58,13 +58,13 @@ def _parse_extra_skills_dirs(
     precedence: when set, `cli.yml` values are ignored.
 
     Args:
-        env_raw: Value of `SOOTHE_EXTRA_SKILLS_DIRS` (colon-separated), or
-            `None` if unset.
-        config_yaml_dirs: List of path strings from
-            `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/cli.yml`.
+    env_raw: Value of `SOOTHE_EXTRA_SKILLS_DIRS` (colon-separated), or
+    `None` if unset.
+    config_yaml_dirs: List of path strings from
+    `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/cli.yml`.
 
     Returns:
-        List of resolved `Path` objects, or `None` if not configured.
+    List of resolved `Path` objects, or `None` if not configured.
     """
     # Env var takes precedence when set
     if env_raw:

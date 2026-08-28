@@ -26,9 +26,9 @@ def run_headless(
     """Run a single prompt with streaming output and progress events.
 
     Connects to running daemon via WebSocket if available to avoid database lock conflicts.
-    Auto-starts daemon if not running (RFC-0013 daemon lifecycle).
+    Auto-starts daemon if not running ( daemon lifecycle).
 
-    Note (RFC-0013): Daemon persists after request completion. Use 'soothed stop'
+    Note: Daemon persists after request completion. Use 'soothed stop'
     to explicitly shutdown the daemon.
     """
     from soothe_cli.cli.execution.daemon import run_headless_via_daemon

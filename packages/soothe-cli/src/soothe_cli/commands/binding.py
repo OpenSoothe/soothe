@@ -24,7 +24,7 @@ def message_to_widget(data: MessageData) -> Widget:
     """Recreate a widget from this message data.
 
     Returns:
-        The appropriate message widget for this data.
+    The appropriate message widget for this data.
     """
     # Import here to avoid circular imports
     from soothe_cli.tui.widgets.messages import (
@@ -177,10 +177,10 @@ def message_from_widget(widget: Widget) -> MessageData:
     """Create MessageData from an existing widget.
 
     Args:
-        widget: The message widget to serialize.
+    widget: The message widget to serialize.
 
     Returns:
-        MessageData containing all the widget's state.
+    MessageData containing all the widget's state.
     """
     # Deferred: prevents import-order issue — both modules live in the
     # widgets package, and messages is re-exported from widgets/__init__.

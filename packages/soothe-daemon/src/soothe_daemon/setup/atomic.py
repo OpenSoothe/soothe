@@ -9,9 +9,9 @@ def atomic_write_text(path: Path, content: str, *, encoding: str = "utf-8") -> N
     """Write *content* to *path* via a temp file + replace.
 
     Args:
-        path: Destination file path.
-        content: Text to write.
-        encoding: Text encoding (default UTF-8).
+    path: Destination file path.
+    content: Text to write.
+    encoding: Text encoding (default UTF-8).
     """
     path = path.expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)

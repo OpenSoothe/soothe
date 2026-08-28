@@ -26,7 +26,7 @@ def _safe_read(path: Path) -> str | None:
     """Read file content, returning None on failure.
 
     Returns:
-        File content as string, or None if reading fails.
+    File content as string, or None if reading fails.
     """
     try:
         return path.read_text(encoding="utf-8")
@@ -39,7 +39,7 @@ def read_physical_file_text(path: Path | None) -> str | None:
     """Read UTF-8 text from a resolved physical path.
 
     Returns:
-        File content, or None when ``path`` is missing or unreadable.
+    File content, or None when `path` is missing or unreadable.
     """
     if path is None:
         return None
@@ -57,14 +57,14 @@ def compute_unified_diff(
     """Compute a unified diff between before and after content.
 
     Args:
-        before: Original content
-        after: New content
-        display_path: Path for display in diff headers
-        max_lines: Maximum number of diff lines (None for unlimited)
-        context_lines: Number of context lines around changes (default 3)
+    before: Original content
+    after: New content
+    display_path: Path for display in diff headers
+    max_lines: Maximum number of diff lines (None for unlimited)
+    context_lines: Number of context lines around changes (default 3)
 
     Returns:
-        Unified diff string or None if no changes
+    Unified diff string or None if no changes
     """
     before_lines = before.splitlines()
     after_lines = after.splitlines()
@@ -107,7 +107,7 @@ def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Pat
     """Convert a virtual/relative path to a physical filesystem path.
 
     Returns:
-        Resolved physical Path, or None if path is empty or resolution fails.
+    Resolved physical Path, or None if path is empty or resolution fails.
     """
     if not path_str:
         return None
@@ -127,10 +127,10 @@ def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Pat
 
 
 def parse_insert_line_arg(args: dict[str, Any]) -> int | None:
-    """Parse ``line`` from insert_lines tool args (1-indexed).
+    """Parse `line` from insert_lines tool args (1-indexed).
 
     Returns:
-        Line number or None when missing or not an integer.
+    Line number or None when missing or not an integer.
     """
     line = args.get("line")
     if isinstance(line, bool):
@@ -143,10 +143,10 @@ def parse_insert_line_arg(args: dict[str, Any]) -> int | None:
 
 
 def parse_line_range_args(args: dict[str, Any]) -> tuple[int, int] | None:
-    """Parse ``start_line`` and ``end_line`` from tool args (1-indexed inclusive).
+    """Parse `start_line` and `end_line` from tool args (1-indexed inclusive).
 
     Returns:
-        ``(start_line, end_line)`` or None when missing or not integers.
+    `(start_line, end_line)` or None when missing or not integers.
     """
     start = args.get("start_line")
     end = args.get("end_line")
@@ -165,10 +165,10 @@ def parse_line_range_args(args: dict[str, Any]) -> tuple[int, int] | None:
 
 
 def extract_line_range_text(content: str, start_line: int, end_line: int) -> str:
-    """Return the text of lines ``start_line``..``end_line`` (1-indexed inclusive).
+    """Return the text of lines `start_line`..`end_line` (1-indexed inclusive).
 
     Returns:
-        Joined line text including original line endings, or empty when out of range.
+    Joined line text including original line endings, or empty when out of range.
     """
     lines = content.splitlines(keepends=True)
     total = len(lines)
@@ -181,10 +181,10 @@ def extract_line_range_text(content: str, start_line: int, end_line: int) -> str
 
 
 def apply_insert_lines_to_content(content: str, line: int, insert_content: str) -> str | None:
-    """Insert ``insert_content`` before line ``line`` (matches middleware semantics).
+    """Insert `insert_content` before line `line` (matches middleware semantics).
 
     Returns:
-        Modified file text, or None when ``line`` is out of range for ``content``.
+    Modified file text, or None when `line` is out of range for `content`.
     """
     lines = content.splitlines(keepends=True)
     total = len(lines)
@@ -209,7 +209,7 @@ def apply_edit_lines_to_content(
     """Apply a line-range replacement to file content (matches middleware semantics).
 
     Returns:
-        Modified file text, or None when the line range is invalid for ``content``.
+    Modified file text, or None when the line range is invalid for `content`.
     """
     lines = content.splitlines(keepends=True)
     total = len(lines)
@@ -229,7 +229,7 @@ def format_display_path(path_str: str | None) -> str:
     """Format a path for display.
 
     Returns:
-        Formatted path string suitable for display.
+    Formatted path string suitable for display.
     """
     if not path_str:
         return "(unknown)"
@@ -243,13 +243,13 @@ def format_display_path(path_str: str | None) -> str:
 
 
 def _is_opaque_provider_call_fragment(tool_info: str) -> bool:
-    """True for provider opaque ids preserved as ``call_<uuid>`` fragments."""
+    """True for provider opaque ids preserved as `call_<uuid>` fragments."""
     info = (tool_info or "").strip()
     return info.startswith("call_")
 
 
 def _is_stream_predicted_tool_index(tool_info: str, tool_name: str) -> bool:
-    """True when ``tool_info`` looks like a stream-predicted ``{tool}:{idx}`` id."""
+    """True when `tool_info` looks like a stream-predicted `{tool}:{idx}` id."""
     tname = str(tool_name or "").strip()
     info = (tool_info or "").strip()
     if not tname or not info:
@@ -268,7 +268,7 @@ def file_change_tool_call_ids_match(
 ) -> bool:
     """True when two tool_call_ids refer to the same logical file-change invocation.
 
-    Handles provider opaque ``call_*`` ids vs stream-predicted ``edit_file:N`` keys
+    Handles provider opaque `call_*` ids vs stream-predicted `edit_file:N` keys
     on the same execute step (Kimi/OpenAI-style providers).
     """
     from soothe_sdk.display.message_processing import _pending_or_overlay_id_matches_lookup
@@ -325,7 +325,7 @@ def resolve_active_file_operation(
     """Resolve a pending :class:`FileOperationRecord` for a tool result id.
 
     Returns:
-        ``(active_dict_key, record)`` when a unique match exists, else ``(None, None)``.
+    `(active_dict_key, record)` when a unique match exists, else `(None, None)`.
     """
     tcid = str(tool_call_id or "").strip()
     if not tcid:
@@ -407,7 +407,7 @@ def file_change_operation_already_tracked(
     *,
     tool_name: str,
 ) -> bool:
-    """Return True when ``active`` already holds this logical file-change operation."""
+    """Return True when `active` already holds this logical file-change operation."""
     tcid = str(tool_call_id or "").strip()
     if not tcid:
         return False
@@ -478,7 +478,7 @@ class FileOpTracker:
         """Complete a file operation with the tool message result.
 
         Returns:
-            The completed FileOperationRecord, or None if no matching operation.
+        The completed FileOperationRecord, or None if no matching operation.
         """
         tool_call_id = getattr(tool_message, "tool_call_id", None)
         tool_name = str(getattr(tool_message, "name", "") or "").strip()
@@ -554,11 +554,11 @@ class FileOpTracker:
     ) -> FileOperationRecord | None:
         """Remember a filesystem tool result that arrived before tracking started.
 
-        Used when the CLI receives ``ToolMessage`` before streamed args mount a
+        Used when the CLI receives `ToolMessage` before streamed args mount a
         preview card. Late mounts consult :attr:`recently_completed`.
 
         Returns:
-            The stashed record, or None when the message is not a file-change tool.
+        The stashed record, or None when the message is not a file-change tool.
         """
         tool_name = str(getattr(tool_message, "name", "") or "").strip()
         if tool_name not in FILE_CHANGE_TOOLS:
@@ -670,8 +670,8 @@ def file_change_label(
 ) -> str:
     """Single-word action prefix for a file-change card header.
 
-    ``pending`` is used while the tool is still running (progressive tense),
-    and ``success`` is used once the tool completes (past tense).
+    `pending` is used while the tool is still running (progressive tense),
+    and `success` is used once the tool completes (past tense).
     """
     if phase == "pending":
         if tool_name in ("delete_file", "delete_lines"):

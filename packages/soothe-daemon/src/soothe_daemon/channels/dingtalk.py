@@ -781,14 +781,14 @@ class DingTalkChannel:
         via is_allowed() is performed before routing.
 
         Args:
-            sender_id: User identifier on this platform.
-            chat_id: Conversation/thread identifier.
-            content: Message text.
-            media: Optional media attachments (URLs or file paths).
-            metadata: Optional channel-specific metadata.
+        sender_id: User identifier on this platform.
+        chat_id: Conversation/thread identifier.
+        content: Message text.
+        media: Optional media attachments (URLs or file paths).
+        metadata: Optional channel-specific metadata.
 
         Returns:
-            loop_id assigned to this conversation, or None if denied.
+        loop_id assigned to this conversation, or None if denied.
         """
         # Permission check
         if not self.is_allowed(sender_id):

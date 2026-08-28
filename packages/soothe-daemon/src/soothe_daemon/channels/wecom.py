@@ -397,7 +397,7 @@ class WecomChannel(Channel):
         Download and decrypt media from WeCom.
 
         Returns:
-            file_path or None if download failed
+        file_path or None if download failed
         """
         try:
             data, fname = await self._client.download_file(file_url, aes_key)
@@ -438,11 +438,11 @@ class WecomChannel(Channel):
         """Upload a local file to WeCom via WebSocket 3-step protocol (base64).
 
         Uses the WeCom WebSocket upload commands directly via
-        ``client._ws_manager.send_reply()``:
+        `client._ws_manager.send_reply()`:
 
-          ``aibot_upload_media_init``   -> upload_id
-          ``aibot_upload_media_chunk`` x N  (<=512 KB raw per chunk, base64)
-          ``aibot_upload_media_finish`` -> media_id
+        `aibot_upload_media_init` -> upload_id
+        `aibot_upload_media_chunk` x N (<=512 KB raw per chunk, base64)
+        `aibot_upload_media_finish` -> media_id
 
         Returns (media_id, media_type) on success, (None, None) on failure.
         """

@@ -167,15 +167,15 @@ class SootheApp(
         """Initialize the Textual application (daemon-backed execution only).
 
         Args:
-            daemon_config: Loaded Soothe configuration (WebSocket URL, etc.).
-            assistant_id: Agent identifier for memory storage.
-            cwd: Current working directory to display.
-            resume_loop_id: Initial StrangeLoop id when attaching to an existing loop.
-            initial_prompt: Optional prompt to auto-submit when session starts.
-            initial_skill: Optional skill name to invoke when session starts.
-            mcp_server_info: MCP server metadata for the `/mcp` viewer.
-            profile_override: Extra profile fields from ``--profile-override``.
-            **kwargs: Additional arguments passed to the Textual ``App``.
+        daemon_config: Loaded Soothe configuration (WebSocket URL, etc.).
+        assistant_id: Agent identifier for memory storage.
+        cwd: Current working directory to display.
+        resume_loop_id: Initial StrangeLoop id when attaching to an existing loop.
+        initial_prompt: Optional prompt to auto-submit when session starts.
+        initial_skill: Optional skill name to invoke when session starts.
+        mcp_server_info: MCP server metadata for the `/mcp` viewer.
+        profile_override: Extra profile fields from `--profile-override`.
+        **kwargs: Additional arguments passed to the Textual `App`.
         """
         super().__init__(**kwargs)
 
@@ -379,7 +379,7 @@ class SootheApp(
     ) -> None:
         """Exit with Soothe shutdown prep.
 
-        ``App.exit`` appears before ``_MessagesMixin`` in the MRO, so this
+        `App.exit` appears before `_MessagesMixin` in the MRO, so this
         delegate ensures custom teardown (worker cancel, stats merge, iTerm2
         restore) runs for every quit path.
         """
@@ -400,7 +400,7 @@ class SootheApp(
         """Cycle through rotating tips in the status footer at a fixed interval.
 
         Args:
-            interval: Seconds between tip rotations.
+        interval: Seconds between tip rotations.
         """
         self.stop_tip_rotation()
         self._tip_rotation_timer = self.set_interval(interval, self._rotate_session_tip)
@@ -468,12 +468,12 @@ class SootheApp(
         """Return custom CSS variable defaults for the current theme.
 
         Most styling uses Textual's built-in variables (`$primary`,
-        `$text-muted`, `$error-muted`, etc.).  This override injects the
+        `$text-muted`, `$error-muted`, etc.). This override injects the
         app-specific variables (`$mode-bash`, `$mode-command`, `$cognition`)
         that have no Textual equivalent.
 
         Returns:
-            Dict of CSS variable names to hex color values.
+        Dict of CSS variable names to hex color values.
         """
         colors = theme.get_theme_colors(self)
         return theme.get_css_variable_defaults(colors=colors)
@@ -482,7 +482,7 @@ class SootheApp(
         """Compose the application layout.
 
         Yields:
-            UI components for the main chat area and status bar.
+        UI components for the main chat area and status bar.
         """
         # Pinned goal bar — docks to the top of the screen. Hidden by
         # default; appears when the user scrolls away from the bottom.

@@ -62,21 +62,21 @@ def parse_shell_allow_list(allow_list_str: str | None) -> list[str] | None:
     """Parse shell allow-list from string.
 
     Args:
-        allow_list_str: Comma-separated list of commands, or `'recommended'`
-            for safe defaults, or `'all'` to allow any command.
+    allow_list_str: Comma-separated list of commands, or `'recommended'`
+    for safe defaults, or `'all'` to allow any command.
 
-            `'all'` must be the sole value — it is not recognized inside a
-            comma-separated list (unlike `'recommended'`).
+    `'all'` must be the sole value — it is not recognized inside a
+    comma-separated list (unlike `'recommended'`).
 
-            Can also include `'recommended'` in the list to merge with custom
-            commands.
+    Can also include `'recommended'` in the list to merge with custom
+    commands.
 
     Returns:
-        List of allowed commands, `SHELL_ALLOW_ALL` if `'all'` was specified,
-            or `None` if no allow-list configured.
+    List of allowed commands, `SHELL_ALLOW_ALL` if `'all'` was specified,
+    or `None` if no allow-list configured.
 
     Raises:
-        ValueError: If `'all'` is combined with other commands.
+    ValueError: If `'all'` is combined with other commands.
     """
     if not allow_list_str:
         return None

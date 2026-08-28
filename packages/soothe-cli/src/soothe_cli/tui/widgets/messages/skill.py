@@ -25,10 +25,10 @@ def _strip_frontmatter(text: str) -> str:
     """Remove YAML frontmatter delimited by `---` markers.
 
     Args:
-        text: Raw `SKILL.md` content.
+    text: Raw `SKILL.md` content.
 
     Returns:
-        Body text with frontmatter removed and leading whitespace stripped.
+    Body text with frontmatter removed and leading whitespace stripped.
     """
     from soothe_cli.tui.skills.load import strip_skill_frontmatter
 
@@ -77,7 +77,7 @@ class SkillMessage(Vertical):
 
     Shows skill name, source badge, description, and user args as a compact
     header. The full SKILL.md body (frontmatter stripped) is hidden behind a
-    preview/expand toggle (click or Ctrl+O).  The expanded view renders
+    preview/expand toggle (click or Ctrl+O). The expanded view renders
     markdown via Rich's `Markdown` inside a single `Static` widget.
 
     Visibility is driven by a CSS class (`-expanded`) toggled via a Textual
@@ -142,12 +142,12 @@ class SkillMessage(Vertical):
         """Initialize a skill message.
 
         Args:
-            skill_name: Skill identifier.
-            description: Short description of the skill.
-            source: Origin label (e.g., `'built-in'`, `'user'`).
-            body: Full SKILL.md content (frontmatter included).
-            args: User-provided arguments.
-            **kwargs: Additional arguments passed to parent.
+        skill_name: Skill identifier.
+        description: Short description of the skill.
+        source: Origin label (e.g., `'built-in'`, `'user'`).
+        body: Full SKILL.md content (frontmatter included).
+        args: User-provided arguments.
+        **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
         self._skill_name = skill_name
@@ -168,7 +168,7 @@ class SkillMessage(Vertical):
         """Compose the skill message layout.
 
         Yields:
-            Widgets for header, description, args, and collapsible body.
+        Widgets for header, description, args, and collapsible body.
         """
         colors = theme.get_theme_colors()
         source_tag = f" [{self._source}]" if self._source else ""
@@ -231,7 +231,7 @@ class SkillMessage(Vertical):
         """Set initial hint text. Full body render is deferred to first expand.
 
         Args:
-            body: Stripped markdown body text.
+        body: Stripped markdown body text.
         """
         lines = body.split("\n")
         total_lines = len(lines)
@@ -263,7 +263,7 @@ class SkillMessage(Vertical):
         """Render markdown into the Static widget on first call, then no-op.
 
         Args:
-            body: Stripped markdown body text.
+        body: Stripped markdown body text.
         """
         if self._md_rendered or not self._md_widget:
             return

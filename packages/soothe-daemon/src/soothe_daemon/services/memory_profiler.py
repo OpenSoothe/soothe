@@ -1,18 +1,4 @@
-"""Memory profiling service using tracemalloc.
-
-Provides real-time memory inspection via tracemalloc with:
-- HTTP endpoints for snapshot comparison and top allocations
-- Automatic periodic logging of memory growth
-- Integration with daemon lifecycle
-- Large allocation sampling (captures multi-MB objects)
-- Queue depth metrics for stream backpressure debugging
-
-tracemalloc is chosen over objgraph/meliae because:
-- Built-in to Python 3.4+ (no external dependencies)
-- Low overhead (~5-10% performance impact)
-- Shows allocation source (file/line) and traceback chains
-- Supports snapshot comparison for leak detection
-"""
+"""Memory profiling service using tracemalloc."""
 
 from __future__ import annotations
 
@@ -42,12 +28,12 @@ class MemoryProfiler:
 
     additions:
     - `get_large_allocations()`: Captures multi-MB objects that standard
-      statistics("lineno") misses due to count-based aggregation
+    statistics("lineno") misses due to count-based aggregation
     - `get_queue_metrics()`: Reports response queue depths for diagnosing
-      stream backpressure issues
+    stream backpressure issues
 
     Args:
-        config: MemoryProfilingConfig with tracing parameters.
+    config: MemoryProfilingConfig with tracing parameters.
     """
 
     def __init__(self, config: MemoryProfilingConfig) -> None:
@@ -100,7 +86,7 @@ class MemoryProfiler:
         """Take a new tracemalloc snapshot.
 
         Returns:
-            Current memory allocation snapshot.
+        Current memory allocation snapshot.
         """
         if not self._running:
             raise RuntimeError("MemoryProfiler not running")
@@ -110,7 +96,7 @@ class MemoryProfiler:
         """Get current memory statistics.
 
         Returns:
-            Dict with RSS, VSZ, tracemalloc tracked size, and top allocations.
+        Dict with RSS, VSZ, tracemalloc tracked size, and top allocations.
         """
         mem_info = self._process.memory_info()
         rss_mb = mem_info.rss / 1024 / 1024
@@ -192,11 +178,11 @@ class MemoryProfiler:
         that statistics("lineno") misses because it groups by count.
 
         Args:
-            snapshot: Snapshot to analyze (takes new if None).
-            min_size_kb: Minimum allocation size to include (default 100KB).
+        snapshot: Snapshot to analyze (takes new if None).
+        min_size_kb: Minimum allocation size to include (default 100KB).
 
         Returns:
-            List of large allocations with traceback, size, and count.
+        List of large allocations with traceback, size, and count.
         """
         if not self._running:
             return []
@@ -233,7 +219,7 @@ class MemoryProfiler:
         delivery is slower than worker production.
 
         Returns:
-            Dict with pending_responses count and per-worker queue metrics.
+        Dict with pending_responses count and per-worker queue metrics.
         """
         try:
             from soothe_daemon.runner.thread_runner import ThreadPool
@@ -289,7 +275,7 @@ class MemoryProfiler:
         """Get counts of Python objects by type using gc.get_objects().
 
         Returns:
-            Dict mapping type name to count for top 30 object types.
+        Dict mapping type name to count for top 30 object types.
         """
         gc.collect()
         from collections import Counter
@@ -305,11 +291,11 @@ class MemoryProfiler:
         """Compare two snapshots and return allocation differences.
 
         Args:
-            old_snapshot: Earlier snapshot (uses last_snapshot if None).
-            new_snapshot: Later snapshot (takes new if None).
+        old_snapshot: Earlier snapshot (uses last_snapshot if None).
+        new_snapshot: Later snapshot (takes new if None).
 
         Returns:
-            Dict with growth statistics and per-allocation changes.
+        Dict with growth statistics and per-allocation changes.
         """
         if not self._running:
             raise RuntimeError("MemoryProfiler not running")
@@ -395,7 +381,7 @@ class MemoryProfiler:
         """Force garbage collection and report collected objects.
 
         Returns:
-            Dict with GC statistics and memory before/after.
+        Dict with GC statistics and memory before/after.
         """
         before_rss = self._process.memory_info().rss / 1024 / 1024
 

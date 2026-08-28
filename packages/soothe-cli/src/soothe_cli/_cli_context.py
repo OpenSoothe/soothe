@@ -1,9 +1,4 @@
-"""Lightweight runtime context type for CLI model overrides.
-
-Extracted from `configurable_model` so hot-path modules (`app`,
-`textual_adapter`) can import `CLIContext` without pulling in the langchain
-middleware stack.
-"""
+"""Lightweight runtime context type for CLI model overrides."""
 
 from __future__ import annotations
 

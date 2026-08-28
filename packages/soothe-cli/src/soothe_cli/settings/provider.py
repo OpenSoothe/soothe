@@ -13,16 +13,16 @@ def detect_provider(model_name: str) -> str | None:
     **before** calling `init_chat_model` in order to:
 
     1. Build provider-specific kwargs (API base URLs, headers, etc.) that are
-       passed *into* `init_chat_model`.
+    passed *into* `init_chat_model`.
     2. Validate credentials early to surface user-friendly errors.
 
     Args:
-        model_name: Model name to detect provider from.
+    model_name: Model name to detect provider from.
 
     Returns:
-        Provider name (openai, anthropic, google_genai, google_vertexai,
-            nvidia) or `None` if the provider cannot be determined from the
-            name alone.
+    Provider name (openai, anthropic, google_genai, google_vertexai,
+    nvidia) or `None` if the provider cannot be determined from the
+    name alone.
     """
     model_lower = model_name.lower()
 

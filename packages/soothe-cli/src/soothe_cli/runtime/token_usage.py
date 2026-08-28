@@ -16,7 +16,7 @@ __all__ = [
 
 
 def coerce_total_tokens_used(value: Any) -> int:
-    """Parse a non-negative ``total_tokens_used`` field from event payloads."""
+    """Parse a non-negative `total_tokens_used` field from event payloads."""
     try:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
@@ -28,7 +28,7 @@ def _coerce_int(value: Any) -> int:
 
 
 def _usage_from_mapping(usage: dict[str, Any]) -> tuple[int, int, int]:
-    """Return ``(input_tokens, output_tokens, total_tokens)`` from a usage dict."""
+    """Return `(input_tokens, output_tokens, total_tokens)` from a usage dict."""
     input_toks = _coerce_int(usage.get("input_tokens") or usage.get("prompt_tokens"))
     output_toks = _coerce_int(usage.get("output_tokens") or usage.get("completion_tokens"))
     total_toks = _coerce_int(usage.get("total_tokens"))
@@ -41,8 +41,8 @@ def extract_stream_message_token_usage(message: Any) -> tuple[int, int, int]:
     """Extract token usage from a streamed LangChain or wire-format message.
 
     Providers vary:
-    - LangChain ``usage_metadata`` (``input_tokens`` / ``output_tokens``)
-    - OpenAI-style ``response_metadata.token_usage`` (``prompt_tokens`` / ``completion_tokens``)
+    - LangChain `usage_metadata` (`input_tokens` / `output_tokens`)
+    - OpenAI-style `response_metadata.token_usage` (`prompt_tokens` / `completion_tokens`)
     - Flat wire dicts with either shape
     """
     if message is None:

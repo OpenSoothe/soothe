@@ -1,8 +1,4 @@
-"""Error formatting utilities for daemon query-engine output.
-
-Host-owned: nano 1.1.12 excised ``soothe_nano.utils.error_format`` back to
-the daemon package (the only consumer of ``emit_error_event``).
-"""
+"""Error formatting utilities for daemon query-engine output."""
 
 from __future__ import annotations
 
@@ -27,12 +23,12 @@ def format_cli_error(
     terminal output. Full details remain in log files.
 
     Args:
-        error: Exception instance or error message string.
-        context: Optional context about what operation failed.
-        show_type: Whether to include exception type name.
+    error: Exception instance or error message string.
+    context: Optional context about what operation failed.
+    show_type: Whether to include exception type name.
 
     Returns:
-        Simplified error message for CLI display.
+    Simplified error message for CLI display.
     """
     if isinstance(error, Exception):
         error_type = type(error).__name__
@@ -72,7 +68,7 @@ def _simplify_error_message(error_type: str, error_msg: str) -> str:
     """Simplify verbose error messages for CLI display.
 
     Multi-line / stack-trace-laden errors are reduced to their first
-    meaningful line, capped at ``_MAX_ERROR_MSG_LENGTH`` chars. Known
+    meaningful line, capped at `_MAX_ERROR_MSG_LENGTH` chars. Known
     error types with actionable suggestions are mapped explicitly.
     """
     if not error_msg:
@@ -132,11 +128,11 @@ def emit_error_event(
     """Create a soothe.error.general event dict with simplified message.
 
     Args:
-        error: Exception or error message.
-        context: Optional context about what failed.
+    error: Exception or error message.
+    context: Optional context about what failed.
 
     Returns:
-        Event dict with type='soothe.error.general' and simplified message.
+    Event dict with type='soothe.error.general' and simplified message.
     """
     from soothe.events import ERROR
 

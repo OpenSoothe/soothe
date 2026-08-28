@@ -1,4 +1,4 @@
-"""Daemon configuration: ``SootheDaemonConfig`` + nested schemas."""
+"""Daemon configuration: `SootheDaemonConfig` + nested schemas."""
 
 from soothe_daemon.config.env import apply_env_overrides
 from soothe_daemon.config.models import (

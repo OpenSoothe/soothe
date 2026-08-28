@@ -1,13 +1,4 @@
-"""Event infrastructure for the daemon.
-
-This submodule provides:
-- EventBus: Topic-based pub/sub with lock-free publishing
-- EventSizeDistributionCollector: Wire-size histogram monitoring
-- loop_event_topic: Topic string utility for loop-scoped routing
-- handle_loop_reattach: History reconstruction for client reattachment
-
-Internal API - imported by daemon components, not user-facing.
-"""
+"""Event infrastructure for the daemon."""
 
 from soothe_daemon.event.bus import EventBus
 from soothe_daemon.event.reattachment import handle_loop_reattach, schedule_loop_reattach

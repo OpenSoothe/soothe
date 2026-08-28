@@ -45,9 +45,9 @@ class WelcomeBanner(Static):
         """Initialize the welcome banner.
 
         Args:
-            loop_id: Optional StrangeLoop id to display in the banner.
-            mcp_tool_count: Number of MCP tools loaded at startup.
-            **kwargs: Additional arguments passed to parent.
+        loop_id: Optional StrangeLoop id to display in the banner.
+        mcp_tool_count: Number of MCP tools loaded at startup.
+        **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
         self._cli_loop_id: str | None = loop_id
@@ -63,7 +63,7 @@ class WelcomeBanner(Static):
         """Update the displayed loop ID and re-render the banner.
 
         Args:
-            loop_id: The new loop id to display.
+        loop_id: The new loop id to display.
         """
         self._cli_loop_id = loop_id
         self.update(self._build_banner())
@@ -72,7 +72,7 @@ class WelcomeBanner(Static):
         """Refresh the banner after the daemon session is ready.
 
         Args:
-            mcp_tool_count: Number of MCP tools loaded during connection.
+        mcp_tool_count: Number of MCP tools loaded during connection.
         """
         self._failed = False
         self._mcp_tool_count = mcp_tool_count
@@ -82,7 +82,7 @@ class WelcomeBanner(Static):
         """Transition from "connecting" to a persistent failure state.
 
         Args:
-            error: Error message describing the server startup failure.
+        error: Error message describing the server startup failure.
         """
         self._failed = True
         self._failure_error = error
@@ -92,7 +92,7 @@ class WelcomeBanner(Static):
         """Show or hide the \"update available\" line in the welcome area.
 
         Args:
-            latest: Newer version from PyPI, or ``None`` to remove the line.
+        latest: Newer version from PyPI, or `None` to remove the line.
         """
         cleaned = str(latest).strip() if latest else ""
         self._update_latest = cleaned or None
@@ -106,7 +106,7 @@ class WelcomeBanner(Static):
         """Build the banner content.
 
         Returns:
-            Content object containing the formatted banner.
+        Content object containing the formatted banner.
         """
         parts: list[str | tuple[str, str | TStyle] | Content] = []
         colors = theme.get_theme_colors(self)
@@ -179,10 +179,10 @@ def build_failure_footer(error: str) -> Content:
     """Build a footer shown when the daemon connection failed.
 
     Args:
-        error: Error message describing the failure.
+    error: Error message describing the failure.
 
     Returns:
-        Content with a persistent failure message.
+    Content with a persistent failure message.
     """
     colors = theme.get_theme_colors()
     return Content.assemble(

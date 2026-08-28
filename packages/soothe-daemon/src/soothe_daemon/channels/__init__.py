@@ -1,30 +1,4 @@
-"""Channel module.
-
-Provides unified Channel abstraction for all communication endpoints:
-- WebSocket (built-in, supports streaming)
-- External plugins (Telegram, Discord, Slack, etc.) via entry_points
-
-Key exports:
-- Channel: Abstract base class for all channels
-- ChannelMessage: Channel-layer message for platform routing
-- WebSocketChannel: WebSocket implementation with streaming
-- TelegramChannel: Telegram bot implementation (migrated from nanoBot)
-- DiscordChannel: Discord bot implementation (migrated from nanoBot)
-- SlackChannel: Slack bot implementation (migrated from nanoBot)
-- EmailChannel: Email IMAP/SMTP implementation
-- WhatsAppChannel: WhatsApp via Node.js bridge
-- DingTalkChannel: DingTalk via Stream Mode
-- QQChannel: QQ via qq-botpy SDK
-- MatrixChannel: Matrix/Element via matrix-nio (optional)
-- SignalChannel: Signal via signal-cli HTTP JSON-RPC
-- FeishuChannel: Feishu/Lark via lark-oapi SDK
-- WeixinChannel: WeChat via iLink HTTP API (optional crypto deps)
-- WecomChannel: WeCom via wecom-aibot-sdk (optional)
-- MSTeamsChannel: Microsoft Teams via Bot Framework (optional)
-- MochatChannel: Mochat via Socket.IO + HTTP fallback
-- discover_channel_names(): List available channel modules (no imports)
-- discover_enabled(): Load enabled channels (built-in + plugins)
-"""
+"""Channel module."""
 
 from soothe_daemon.channels.base import Channel
 from soothe_daemon.channels.events import (

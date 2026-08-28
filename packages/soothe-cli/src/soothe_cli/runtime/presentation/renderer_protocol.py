@@ -1,8 +1,4 @@
-"""Abstract callback interface for CLI/TUI event rendering.
-
-This module defines the RendererProtocol that CLI and TUI renderers implement.
-The EventProcessor calls these callbacks; implementations handle mode-specific display.
-"""
+"""Abstract callback interface for CLI/TUI event rendering."""
 
 from __future__ import annotations
 
@@ -37,10 +33,10 @@ class RendererProtocol(Protocol):
         """Assistant text chunk or complete message.
 
         Args:
-            text: Text content to display.
-            is_main: True if from main agent, False if from subagent.
-            is_streaming: True if partial chunk, False if complete.
-            task_scope: When provided for subgraph output, ``(task_tool_call_id, subagent_type)``.
+        text: Text content to display.
+        is_main: True if from main agent, False if from subagent.
+        is_streaming: True if partial chunk, False if complete.
+        task_scope: When provided for subgraph output, `(task_tool_call_id, subagent_type)`.
         """
         ...
 
@@ -52,20 +48,20 @@ class RendererProtocol(Protocol):
         is_chunk: bool,
         namespace: tuple[str, ...],
     ) -> None:
-        """Streaming output chunk from unified framework (RFC-614).
+        """Streaming output chunk from unified framework.
 
         Optional method - default implementation may delegate to on_assistant_text.
         Implementations may choose different display styles for different event types.
 
         Args:
-            event_type: Event type string.
-            text: Text content (may be chunk or final).
-            is_chunk: True if partial chunk, False if final.
-            namespace: Namespace tuple for stream context.
+        event_type: Event type string.
+        text: Text content (may be chunk or final).
+        is_chunk: True if partial chunk, False if final.
+        namespace: Namespace tuple for stream context.
 
         Note:
-            This is optional - default implementation may delegate to on_assistant_text.
-            Implementations may choose different display styles for different event types.
+        This is optional - default implementation may delegate to on_assistant_text.
+        Implementations may choose different display styles for different event types.
         """
         ...
 
@@ -81,11 +77,11 @@ class RendererProtocol(Protocol):
         """Tool invocation started.
 
         Args:
-            name: Tool name (snake_case internal name).
-            args: Parsed argument dictionary.
-            tool_call_id: Unique identifier for correlation with result.
-            is_main: True if from main agent.
-            task_scope: Parent Task delegation scope for subgraph tools.
+        name: Tool name (snake_case internal name).
+        args: Parsed argument dictionary.
+        tool_call_id: Unique identifier for correlation with result.
+        is_main: True if from main agent.
+        task_scope: Parent Task delegation scope for subgraph tools.
         """
         ...
 
@@ -102,12 +98,12 @@ class RendererProtocol(Protocol):
         """Tool returned a result.
 
         Args:
-            name: Tool name.
-            result: Result content (may be truncated).
-            tool_call_id: Correlates with on_tool_call.
-            is_error: True if result indicates failure.
-            is_main: True if from main agent.
-            task_scope: Parent Task delegation scope for subgraph tools.
+        name: Tool name.
+        result: Result content (may be truncated).
+        tool_call_id: Correlates with on_tool_call.
+        is_error: True if result indicates failure.
+        is_main: True if from main agent.
+        task_scope: Parent Task delegation scope for subgraph tools.
         """
         ...
 
@@ -115,7 +111,7 @@ class RendererProtocol(Protocol):
         """Daemon state changed.
 
         Args:
-            state: One of "idle", "running", "stopped".
+        state: One of "idle", "running", "stopped".
         """
         ...
 
@@ -123,8 +119,8 @@ class RendererProtocol(Protocol):
         """Error occurred.
 
         Args:
-            error: Error message.
-            context: Optional context (e.g., "tool_execution", "daemon").
+        error: Error message.
+        context: Optional context (e.g., "tool_execution", "daemon").
         """
         ...
 
@@ -141,10 +137,10 @@ class RendererProtocol(Protocol):
         Catch-all for events not covered by specific callbacks.
 
         Args:
-            event_type: Full event type string (e.g., ``soothe.subagent.deep_research.started``).
-            data: Event payload.
-            namespace: Subagent namespace tuple (empty for main agent).
-            task_scope: When subgraph streams are bound to a Task tool call.
+        event_type: Full event type string (e.g., `soothe.subagent.deep_research.started`).
+        data: Event payload.
+        namespace: Subagent namespace tuple (empty for main agent).
+        task_scope: When subgraph streams are bound to a Task tool call.
         """
         ...
 
@@ -157,7 +153,7 @@ class RendererProtocol(Protocol):
         Default implementation may delegate to on_progress_event.
 
         Args:
-            plan: The created plan object.
+        plan: The created plan object.
         """
         ...
 

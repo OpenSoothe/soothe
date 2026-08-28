@@ -1,12 +1,4 @@
-"""Per-turn routing for StrangeLoop steps, root tools, and subagent task namespaces.
-
-Owns associations between execute ``step_id``, root ``tool_call_id``, LangGraph
-subgraph ``namespace``, and ``task`` delegations. Designed for parallel execute waves
-where a single "active step" hint is unreliable.
-
-The SDK helpers in ``soothe_sdk.ux.task_namespace`` remain the pure binding core;
-this module adds TUI-oriented buffers and lifecycle for multiple concurrent steps.
-"""
+"""Per-turn routing for StrangeLoop steps, root tools, and subagent task namespaces."""
 
 from __future__ import annotations
 
@@ -84,7 +76,7 @@ class StepTaskRouter:
     """High-performance per-turn router for steps, tools, and task namespaces.
 
     Attributes:
-        active_step_ids: Execute steps currently in the running phase.
+    active_step_ids: Execute steps currently in the running phase.
     """
 
     active_step_ids: set[str] = field(default_factory=set)
@@ -180,10 +172,10 @@ class StepTaskRouter:
         *,
         step_cards: dict[str, StepWidget],
     ) -> None:
-        """Promote a pending step card to running only when it is executing (RFC-628).
+        """Promote a pending step card to running only when it is executing.
 
         Future steps are not pre-mounted in the message list; only the active step
-        may transition to ``running`` before ``step.started`` when tools arrive early.
+        may transition to `running` before `step.started` when tools arrive early.
         """
         if getattr(step_w, "_status", "") != "pending":
             return
@@ -286,10 +278,10 @@ class StepTaskRouter:
         *,
         step_id: str = "",
     ) -> bool:
-        """Register a main-graph ``task`` spawn and bind deferred namespaces.
+        """Register a main-graph `task` spawn and bind deferred namespaces.
 
         Returns:
-            True when this ``(step_id, tool_call_id)`` pair is newly recorded.
+        True when this `(step_id, tool_call_id)` pair is newly recorded.
         """
         tcid = str(tool_call_id).strip()
         if not tcid or is_inner_subgraph_task_tool_id(tcid):
@@ -328,9 +320,9 @@ class StepTaskRouter:
         return True
 
     def normalize_task_delegation_id(self, *, step_id: str, tool_call_id: str) -> str:
-        """Return canonical ``{step}:s:task:{idx}`` for main ``task`` delegations.
+        """Return canonical `{step}:s:task:{idx}` for main `task` delegations.
 
-        Some providers emit unified ids like ``{step}:s:call_<uuid>`` that do not
+        Some providers emit unified ids like `{step}:s:call_<uuid>` that do not
         encode a task index. In that case allocate a stable per-step synthetic
         index so task activity rows stay 1:1 with delegated task markers.
         """
@@ -412,7 +404,7 @@ class StepTaskRouter:
         self,
         predicate: Callable[[PendingMainTool], bool],
     ) -> list[PendingMainTool]:
-        """Remove and return buffered main tools for which ``predicate`` is true."""
+        """Remove and return buffered main tools for which `predicate` is true."""
         if not self._pending_main_tools:
             return []
         taken: list[PendingMainTool] = []
@@ -434,7 +426,7 @@ class StepTaskRouter:
         """Attach buffered root tools to step cards when binding or cards exist.
 
         Returns:
-            Number of tools routed out of the pending buffer.
+        Number of tools routed out of the pending buffer.
         """
         if not self._pending_main_tools:
             return 0
@@ -583,7 +575,7 @@ class StepTaskRouter:
         """Attach a subgraph tool to its parent step card for running-line stats.
 
         Returns:
-            True when the tool was ingested on a step card; False when buffered.
+        True when the tool was ingested on a step card; False when buffered.
         """
         item = PendingSubgraphTool(
             ns_key=ns_key,
@@ -655,7 +647,7 @@ class StepTaskRouter:
         """Attach buffered subgraph tools when namespace bindings exist.
 
         Returns:
-            Number of tools routed out of the pending buffer.
+        Number of tools routed out of the pending buffer.
         """
         if not self._pending_subgraph_tools:
             return 0

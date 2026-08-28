@@ -8,14 +8,14 @@ from soothe_sdk.wire.codec import flatten_enveloped_message_dict
 
 
 def wire_message_body(msg: Any) -> Any:
-    """Return the flat wire body for a daemon message dict (unwrap ``data`` envelope)."""
+    """Return the flat wire body for a daemon message dict (unwrap `data` envelope)."""
     if not isinstance(msg, dict):
         return msg
     return flatten_enveloped_message_dict(msg)
 
 
 def extract_text_from_message_content(content: Any) -> str:
-    """Flatten message ``content`` (str or block list) to plain text."""
+    """Flatten message `content` (str or block list) to plain text."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):

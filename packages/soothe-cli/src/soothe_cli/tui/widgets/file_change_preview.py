@@ -1,8 +1,4 @@
-"""Non-blocking file change preview widgets (write / edit / delete).
-
-Shown when a filesystem tool call is recognized so the user can see what will
-change. These widgets are informational only and do not block execution.
-"""
+"""Non-blocking file change preview widgets (write / edit / delete)."""
 
 from __future__ import annotations
 

@@ -1,17 +1,4 @@
-"""Structured multi-question option-picker widget for ``ask_user`` (RFC-622 §9c).
-
-Mounted when a structured ``ask_user`` clarification request arrives (generic
-``execute`` origin). The LLM emits ``QuestionSpec`` objects with a question,
-header, and 2-4 options (each with label + description). The recommended
-option has "(Recommended)" in its label. The widget renders tabs for
-multi-question navigation (←/→), hover-preview option selection (↑/↓ + Enter),
-an implicit "Other" custom free-text row, and a persistent footer with
-Submit/Abandon + inline recap before final submit.
-
-HITL plan-review and tool-approval origins stay on ``ClarificationInputMessage``;
-this widget is only for the generic (execute) render path. A degraded mode
-handles in-flight plain-string questions from before the schema upgrade.
-"""
+"""Structured multi-question option-picker widget for `ask_user`."""
 
 from __future__ import annotations
 
@@ -40,12 +27,12 @@ _ORIGIN_EXECUTE = "execute"
 
 
 class StructuredAskUserWidget(Vertical):
-    """Structured multi-question option-picker for generic ``ask_user``.
+    """Structured multi-question option-picker for generic `ask_user`.
 
     Two modes:
     - **Structured** (default): tabs + options + hover-preview + footer.
-    - **Degraded**: plain free-text ``Input`` per question + Submit button.
-      Used for in-flight plain-string questions from before the schema upgrade.
+    - **Degraded**: plain free-text `Input` per question + Submit button.
+    Used for in-flight plain-string questions from before the schema upgrade.
     """
 
     can_focus = True
@@ -645,7 +632,7 @@ class StructuredAskUserWidget(Vertical):
 
         The TUI's chat input is the default focus target — the screen's
         post-mount layout, click handlers, and other lifecycle events all
-        re-focus it.  While the QA widget is waiting for an answer we
+        re-focus it. While the QA widget is waiting for an answer we
         need keyboard input to reach the widget, not the chat prompt.
         """
 
@@ -683,7 +670,7 @@ class StructuredAskUserWidget(Vertical):
         """Keep focus pinned to the widget for a brief window after mount.
 
         Textual's post-mount layout can move focus to the chat input or
-        another child after ``call_after_refresh`` fires.  Repeated
+        another child after `call_after_refresh` fires. Repeated
         focused attempts at increasing intervals ensure the widget
         retains keyboard navigation so arrow keys / Enter work
         immediately on appear.
@@ -726,7 +713,7 @@ class StructuredAskUserWidget(Vertical):
             pass
 
     def _focus_is_on_chat(self, focused: Any) -> bool:
-        """Return True if ``focused`` is the chat input (or its TextArea child)."""
+        """Return True if `focused` is the chat input (or its TextArea child)."""
         if focused is None:
             return False
         if focused.id == "chat-input":

@@ -37,7 +37,7 @@ def _copy_osc52(text: str) -> None:
 def _copy_native(text: str) -> None:
     """Copy text using native OS clipboard command (pbcopy/xclip/xsel).
 
-    Raises ``RuntimeError`` when the native clipboard command is unavailable
+    Raises `RuntimeError` when the native clipboard command is unavailable
     or exits nonzero — the caller falls through to the next backend (OSC 52).
     """
     if sys.platform == "darwin":
@@ -69,7 +69,7 @@ def _shorten_preview(texts: list[str]) -> str:
     """Shorten text for notification preview.
 
     Returns:
-        Shortened preview text suitable for notification display.
+    Shortened preview text suitable for notification display.
     """
     glyphs = get_glyphs()
     dense_text = glyphs.newline.join(texts).replace("\n", glyphs.newline)
@@ -109,7 +109,7 @@ def _get_selected_text(widget: Widget) -> str | None:
 def _prefer_tty_osc52() -> bool:
     """Return True when clipboard should use tmux-wrapped OSC 52 on /dev/tty.
 
-    Textual's ``copy_to_clipboard`` emits unwrapped OSC 52 via the driver and
+    Textual's `copy_to_clipboard` emits unwrapped OSC 52 via the driver and
     never raises, so it would block the tmux-aware path if tried first.
     """
     return bool(os.environ.get("TMUX") or os.environ.get("SSH_CONNECTION"))
@@ -172,8 +172,8 @@ def _copy_texts_to_clipboard(app: App, selected_texts: list[str]) -> None:
 def screen_has_text_selection(screen: object | None) -> bool:
     """Return True when the screen still has an active text selection.
 
-      Prefer this over ``screen.get_selected_text()`` for click guards: animated
-    widgets can hold stale line offsets that make extraction raise ``IndexError``.
+    Prefer this over `screen.get_selected_text()` for click guards: animated
+    widgets can hold stale line offsets that make extraction raise `IndexError`.
     """
     if screen is None:
         return False
@@ -241,12 +241,12 @@ def copy_selection_to_clipboard(
     """Copy selected text from the TUI to the system clipboard.
 
     Args:
-        app: The running Textual app.
-        candidate_widgets: Optional widgets to inspect before a full DOM scan.
-        notify_if_empty: When True, show a hint if nothing is selected.
+    app: The running Textual app.
+    candidate_widgets: Optional widgets to inspect before a full DOM scan.
+    notify_if_empty: When True, show a hint if nothing is selected.
 
     Returns:
-        True when text was copied, False otherwise.
+    True when text was copied, False otherwise.
     """
     selected_texts = _collect_selected_texts(app, candidate_widgets=candidate_widgets)
     if not selected_texts:

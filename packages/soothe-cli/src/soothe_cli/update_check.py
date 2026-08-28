@@ -1,12 +1,4 @@
-"""Update lifecycle for `soothe`.
-
-Handles version checking against PyPI (with caching), install-method detection,
-auto-upgrade execution, config-driven opt-in/out, and "what's new" tracking.
-
-Most public entry points absorb errors and return sentinel values.
-`set_auto_update` raises on write failures so callers can surface
-actionable feedback.
-"""
+"""Update lifecycle for `soothe`."""
 
 from __future__ import annotations
 
@@ -57,10 +49,10 @@ def _parse_version(v: str) -> Version:
     Supports stable (`1.2.3`) and pre-release (`1.2.3a1`, `1.2.3rc2`) versions.
 
     Args:
-        v: Version string like `'1.2.3'` or `'1.2.3a1'`.
+    v: Version string like `'1.2.3'` or `'1.2.3a1'`.
 
     Returns:
-        A `packaging.version.Version` instance.
+    A `packaging.version.Version` instance.
     """
     return Version(v.strip())  # raises InvalidVersion for non-PEP 440 strings
 
@@ -76,11 +68,11 @@ def _latest_from_releases(
     *include_prereleases* is `False`, skips pre-release versions.
 
     Args:
-        releases: The `releases` dict from the PyPI JSON API.
-        include_prereleases: Whether to consider pre-release versions.
+    releases: The `releases` dict from the PyPI JSON API.
+    include_prereleases: Whether to consider pre-release versions.
 
     Returns:
-        The highest matching version string, or `None` if none qualify.
+    The highest matching version string, or `None` if none qualify.
     """
     best: Version | None = None
     best_str: str | None = None
@@ -112,12 +104,12 @@ def get_latest_version(
     single PyPI request serves both code paths.
 
     Args:
-        bypass_cache: Skip the cache and always hit PyPI.
-        include_prereleases: When `True`, consider pre-release versions
-            (alpha, beta, rc). Stable users should leave this `False`.
+    bypass_cache: Skip the cache and always hit PyPI.
+    include_prereleases: When `True`, consider pre-release versions
+    (alpha, beta, rc). Stable users should leave this `False`.
 
     Returns:
-        The latest version string, or `None` on any failure.
+    The latest version string, or `None` on any failure.
     """
     cache_key = "version_prerelease" if include_prereleases else "version"
 
@@ -182,14 +174,14 @@ def is_update_available(*, bypass_cache: bool = False) -> tuple[bool, str | None
     Stable installs only compare against stable PyPI releases.
 
     Args:
-        bypass_cache: Skip the cache and always hit PyPI.
+    bypass_cache: Skip the cache and always hit PyPI.
 
     Returns:
-        A `(available, latest)` tuple.
+    A `(available, latest)` tuple.
 
-            `available` is `True` when the PyPI version is strictly newer than
-            the installed version; `latest` is the version string (or `None`
-            when the check fails).
+    `available` is `True` when the PyPI version is strictly newer than
+    the installed version; `latest` is the version string (or `None`
+    when the check fails).
     """
     try:
         installed = _parse_version(__version__)
@@ -228,8 +220,8 @@ def detect_install_method() -> InstallMethod:
     Checks `sys.prefix` against known paths for uv and Homebrew.
 
     Returns:
-        The detected install method: `'uv'`, `'brew'`, `'pip'`, or `'unknown'`
-            (editable/dev installs).
+    The detected install method: `'uv'`, `'brew'`, `'pip'`, or `'unknown'`
+    (editable/dev installs).
     """
     from soothe_cli.settings import _is_editable_install
 
@@ -252,9 +244,9 @@ def upgrade_command(method: InstallMethod | None = None) -> str:
     Falls back to the pip command for unrecognized install methods.
 
     Args:
-        method: Install method override.
+    method: Install method override.
 
-            Auto-detected if `None`.
+    Auto-detected if `None`.
     """
     if method is None:
         method = detect_install_method()
@@ -268,7 +260,7 @@ async def perform_upgrade() -> tuple[bool, str]:
     managers to avoid cross-environment contamination.
 
     Returns:
-        `(success, output)` — *output* is the combined stdout/stderr.
+    `(success, output)` — *output* is the combined stdout/stderr.
     """
     method = detect_install_method()
     if method == "unknown":
@@ -319,11 +311,11 @@ async def perform_upgrade() -> tuple[bool, str]:
 def is_update_check_enabled() -> bool:
     """Return whether startup update checks are enabled.
 
-    Disabled when ``SOOTHE_CLI_NO_UPDATE_CHECK`` is set. When
-    ``SOOTHE_CLI_UPDATE_CHECK`` is ``1``/``true``/``yes``, checks are
-    enabled (including when ``[update].check: false`` would otherwise turn them
-    off). Otherwise, respects ``[update].check`` in ``cli.yml`` when
-    present; defaults to on. Use ``/update`` to check manually any time.
+    Disabled when `SOOTHE_CLI_NO_UPDATE_CHECK` is set. When
+    `SOOTHE_CLI_UPDATE_CHECK` is `1`/`true`/`yes`, checks are
+    enabled (including when `[update].check: false` would otherwise turn them
+    off). Otherwise, respects `[update].check` in `cli.yml` when
+    present; defaults to on. Use `/update` to check manually any time.
     """
     from soothe_cli._env_vars import NO_UPDATE_CHECK, UPDATE_CHECK
 
@@ -338,10 +330,10 @@ def is_update_check_enabled() -> bool:
 
 
 def _auto_update_env_override() -> bool | None:
-    """Return env-forced auto-update flag, or ``None`` if unset.
+    """Return env-forced auto-update flag, or `None` if unset.
 
-    ``SOOTHE_CLI_AUTO_UPDATE`` may be ``1``/``true``/``yes`` to force on or
-    ``0``/``false``/``no`` to to force off.
+    `SOOTHE_CLI_AUTO_UPDATE` may be `1`/`true`/`yes` to force on or
+    `0`/`false`/`no` to to force off.
     """
     from soothe_cli._env_vars import AUTO_UPDATE
 
@@ -361,8 +353,8 @@ def is_auto_update_enabled() -> bool:
 
     Always disabled for editable installs.
 
-    Otherwise, ``SOOTHE_CLI_AUTO_UPDATE`` forces on or off when set. When
-    unset, ``[update].auto_update`` in ``cli.yml`` is used if present;
+    Otherwise, `SOOTHE_CLI_AUTO_UPDATE` forces on or off when set. When
+    unset, `[update].auto_update` in `cli.yml` is used if present;
     defaults to on.
     """
     from soothe_cli.settings import _is_editable_install
@@ -384,7 +376,7 @@ def set_auto_update(enabled: bool) -> None:
     Writes `[update].auto_update` so the setting survives across sessions.
 
     Args:
-        enabled: Whether auto-update should be enabled.
+    enabled: Whether auto-update should be enabled.
     """
     import contextlib
     import tempfile
@@ -419,7 +411,7 @@ def _read_update_config() -> dict[str, bool]:
     """Read `[update]` section from `cli.yml`.
 
     Returns:
-        A dict of boolean config values, empty on missing/unreadable file.
+    A dict of boolean config values, empty on missing/unreadable file.
     """
     import yaml
 

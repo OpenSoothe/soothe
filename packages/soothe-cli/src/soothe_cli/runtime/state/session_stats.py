@@ -1,10 +1,4 @@
-"""Lightweight session statistics and token formatting utilities.
-
-This module is intentionally kept free of heavy dependencies (no pydantic, no
-config, no widget imports) so that `app.py` can import `SessionStats` and
-`format_token_count` at module level without pulling in the full
-`textual_adapter` dependency tree.
-"""
+"""Lightweight session statistics and token formatting utilities."""
 
 from __future__ import annotations
 
@@ -26,9 +20,9 @@ class ModelStats:
     """Token stats for a single model within a session.
 
     Attributes:
-        request_count: Number of LLM API requests made to this model.
-        input_tokens: Cumulative input tokens sent to this model.
-        output_tokens: Cumulative output tokens received from this model.
+    request_count: Number of LLM API requests made to this model.
+    input_tokens: Cumulative input tokens sent to this model.
+    output_tokens: Cumulative output tokens received from this model.
     """
 
     request_count: int = 0
@@ -41,16 +35,16 @@ class SessionStats:
     """Stats accumulated over a single agent turn (or full session).
 
     Attributes:
-        request_count: Total LLM API requests made (each chunk with
-            usage_metadata counts as one completed request).
-        input_tokens: Cumulative input tokens across all LLM requests.
-        output_tokens: Cumulative output tokens across all LLM requests.
-        wall_time_seconds: Wall-clock duration from stream start to end.
-        per_model: Per-model breakdown keyed by model name.
-            Populated only when `record_request` receives a non-empty
-            `model_name`. Empty dict means no named-model requests were
-            recorded; `print_usage_table` omits the model table in that case and
-            shows only the wall-time line (if applicable).
+    request_count: Total LLM API requests made (each chunk with
+    usage_metadata counts as one completed request).
+    input_tokens: Cumulative input tokens across all LLM requests.
+    output_tokens: Cumulative output tokens across all LLM requests.
+    wall_time_seconds: Wall-clock duration from stream start to end.
+    per_model: Per-model breakdown keyed by model name.
+    Populated only when `record_request` receives a non-empty
+    `model_name`. Empty dict means no named-model requests were
+    recorded; `print_usage_table` omits the model table in that case and
+    shows only the wall-time line (if applicable).
     """
 
     request_count: int = 0
@@ -71,11 +65,11 @@ class SessionStats:
         Updates both the session totals and the per-model breakdown.
 
         Args:
-            model_name: The model that served this request (used as the
-                per-model key). Pass an empty string to skip the per-model
-                breakdown for this request.
-            input_toks: Input tokens for this request.
-            output_toks: Output tokens for this request.
+        model_name: The model that served this request (used as the
+        per-model key). Pass an empty string to skip the per-model
+        breakdown for this request.
+        input_toks: Input tokens for this request.
+        output_toks: Output tokens for this request.
         """
         self.request_count += 1
         self.input_tokens += input_toks
@@ -92,7 +86,7 @@ class SessionStats:
         Used to accumulate per-turn stats into a session-level total.
 
         Args:
-            other: The stats to fold in.
+        other: The stats to fold in.
         """
         self.request_count += other.request_count
         self.input_tokens += other.input_tokens
@@ -114,10 +108,10 @@ class TurnLatencyStats:
     """Phase 3: end-to-end turn latency observability.
 
     Attributes:
-        turn_start_monotonic: Monotonic timestamp when the turn began.
-        time_to_first_chunk_ms: Milliseconds from turn start to first applied chunk.
-        synthesis_visible_ms: Milliseconds from turn start to first goal_completion apply.
-        goal_completion_applied: Whether a goal_completion chunk was applied.
+    turn_start_monotonic: Monotonic timestamp when the turn began.
+    time_to_first_chunk_ms: Milliseconds from turn start to first applied chunk.
+    synthesis_visible_ms: Milliseconds from turn start to first goal_completion apply.
+    goal_completion_applied: Whether a goal_completion chunk was applied.
     """
 
     turn_start_monotonic: float = 0.0
@@ -128,7 +122,7 @@ class TurnLatencyStats:
     def record_first_chunk(self) -> None:
         """Record time-to-first-chunk once per turn.
 
-        Part of the ``SupportsTurnLatency`` protocol consumed by the external
+        Part of the `SupportsTurnLatency` protocol consumed by the external
         turn pipeline (client/python); cannot be inlined without breaking the
         submodule contract.
         """
@@ -139,7 +133,7 @@ class TurnLatencyStats:
     def record_goal_completion(self) -> None:
         """Record synthesis-visible latency once per turn.
 
-        Part of the ``SupportsTurnLatency`` protocol consumed by the external
+        Part of the `SupportsTurnLatency` protocol consumed by the external
         turn pipeline (client/python); cannot be inlined without breaking the
         submodule contract.
         """
@@ -174,17 +168,17 @@ class TurnEventStats:
     can be diagnosed from CLI logs.
 
     Attributes:
-        total: Total chunks yielded to the turn loop.
-        messages: Chunks with ``mode="messages"``.
-        updates: Chunks with ``mode="updates"``.
-        custom: Chunks with ``mode="custom"``.
-        skipped: Chunks discarded as invalid.
-        tool_calls: ``messages`` chunks containing tool-call blocks.
-        tool_results: ``messages`` chunks containing tool-result blocks.
-        text_chunks: ``messages`` chunks containing assistant text deltas.
-        heartbeats_dropped: Heartbeat events silently dropped before yielding.
-        post_idle_drained: Chunks received during the post-idle drain window.
-        filtered_early: Chunks dropped before the turn pipeline (noop updates/empty AI).
+    total: Total chunks yielded to the turn loop.
+    messages: Chunks with `mode="messages"`.
+    updates: Chunks with `mode="updates"`.
+    custom: Chunks with `mode="custom"`.
+    skipped: Chunks discarded as invalid.
+    tool_calls: `messages` chunks containing tool-call blocks.
+    tool_results: `messages` chunks containing tool-result blocks.
+    text_chunks: `messages` chunks containing assistant text deltas.
+    heartbeats_dropped: Heartbeat events silently dropped before yielding.
+    post_idle_drained: Chunks received during the post-idle drain window.
+    filtered_early: Chunks dropped before the turn pipeline (noop updates/empty AI).
     """
 
     total: int = 0
@@ -212,10 +206,10 @@ class TurnEventStats:
         """Increment counters for one received chunk.
 
         Args:
-            mode: Stream mode (``"messages"``, ``"updates"``, or ``"custom"``).
-            is_tool_call: Chunk carries at least one tool-call block.
-            is_tool_result: Chunk carries at least one tool-result block.
-            is_text: Chunk carries assistant text content.
+        mode: Stream mode (`"messages"`, `"updates"`, or `"custom"`).
+        is_tool_call: Chunk carries at least one tool-call block.
+        is_tool_result: Chunk carries at least one tool-result block.
+        is_text: Chunk carries assistant text content.
         """
         self.total += 1
         if mode == "messages":
@@ -232,10 +226,10 @@ class TurnEventStats:
             self.text_chunks += 1
 
     def merge(self, other: TurnEventStats) -> None:
-        """Merge another ``TurnEventStats`` into this one (mutates *self*).
+        """Merge another `TurnEventStats` into this one (mutates *self*).
 
         Args:
-            other: The stats to fold in.
+        other: The stats to fold in.
         """
         self.total += other.total
         self.messages += other.messages
@@ -259,7 +253,7 @@ class TurnEventStats:
         return {key: value for key, value in fields.items() if value}
 
     def to_log_dict(self) -> dict[str, Any]:
-        """Return structured event counters for ``cli.log`` JSON lines."""
+        """Return structured event counters for `cli.log` JSON lines."""
         payload: dict[str, Any] = {"total": self.total}
 
         modes = self._nonzero_fields(
@@ -308,7 +302,7 @@ def build_goal_completed_log_event(
     total_steps: int,
     elapsed_seconds: float,
 ) -> dict[str, Any]:
-    """Build a structured goal-completion record for ``cli.log``."""
+    """Build a structured goal-completion record for `cli.log`."""
     event: dict[str, Any] = {
         "event": "goal_completed",
         "elapsed_s": round(elapsed_seconds, 1),
@@ -328,7 +322,7 @@ def build_turn_finished_log_event(
     *,
     wall_seconds: float,
 ) -> dict[str, Any]:
-    """Build a structured turn-finished record for ``cli.log``."""
+    """Build a structured turn-finished record for `cli.log`."""
     return {
         "event": "turn_finished",
         "wall_s": round(wall_seconds, 1),
@@ -345,10 +339,10 @@ def format_token_count(count: int) -> str:
     """Format a token count into a human-readable short string.
 
     Args:
-        count: Number of tokens.
+    count: Number of tokens.
 
     Returns:
-        Formatted string like `'12.5K'`, `'1.2M'`, or `'500'`.
+    Formatted string like `'12.5K'`, `'1.2M'`, or `'500'`.
     """
     if count >= 1_000_000:  # noqa: PLR2004
         return f"{count / 1_000_000:.1f}M"

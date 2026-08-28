@@ -40,8 +40,8 @@ class AppMessage(Static):
         """Initialize a system message.
 
         Args:
-            message: The system message as a string or pre-styled `Content`.
-            **kwargs: Additional arguments passed to parent
+        message: The system message as a string or pre-styled `Content`.
+        **kwargs: Additional arguments passed to parent
         """
         # Store raw content for serialization
         self._content = message
@@ -75,11 +75,11 @@ class SummarizationMessage(AppMessage):
         """Initialize a summarization notification message.
 
         Args:
-            message: Optional message override used when rehydrating from the
-                message store.
+        message: Optional message override used when rehydrating from the
+        message store.
 
-                Defaults to the standard summary notification.
-            **kwargs: Additional arguments passed to parent.
+        Defaults to the standard summary notification.
+        **kwargs: Additional arguments passed to parent.
         """
         self._raw_message = message
         # Pass the default text to AppMessage for _content serialization;
@@ -90,7 +90,7 @@ class SummarizationMessage(AppMessage):
         """Render with theme-aware colors.
 
         Returns:
-            Styled summarization content with theme-appropriate color.
+        Styled summarization content with theme-appropriate color.
         """
         colors = theme.get_theme_colors(self)
         if self._raw_message is None:

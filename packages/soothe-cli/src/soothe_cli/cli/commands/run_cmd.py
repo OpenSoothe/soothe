@@ -26,14 +26,14 @@ def run_impl(
     """Core implementation for running Soothe agent.
 
     Args:
-        prompt: Optional user message; non-empty prompt defaults to a headless
-            one-shot run unless ``tui_with_prompt`` is set or a loop is being
-            resumed (``resume_loop_id``).
-        resume_loop_id: Existing loop id to attach to (optional)
-        no_tui: Require headless mode (must include a non-empty prompt)
-        tui_with_prompt: When True with a prompt, open the TUI instead of headless.
-        mcp_config: Deprecated. MCP servers must be configured on the daemon;
-            passing this flag only emits a warning.
+    prompt: Optional user message; non-empty prompt defaults to a headless
+    one-shot run unless `tui_with_prompt` is set or a loop is being
+    resumed (`resume_loop_id`).
+    resume_loop_id: Existing loop id to attach to (optional)
+    no_tui: Require headless mode (must include a non-empty prompt)
+    tui_with_prompt: When True with a prompt, open the TUI instead of headless.
+    mcp_config: Deprecated. MCP servers must be configured on the daemon;
+    passing this flag only emits a warning.
     """
     startup_start = time.perf_counter()
     use_headless: bool | None = None  # Track execution mode for exit tip

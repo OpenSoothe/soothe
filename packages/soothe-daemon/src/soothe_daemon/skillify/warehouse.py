@@ -24,7 +24,7 @@ class SkillWarehouse:
     def scan(self) -> list[SkillRecord]:
         """Scan all warehouse paths and return deduped skill records.
 
-        Deduplication is by normalized skill name (frontmatter ``name`` when
+        Deduplication is by normalized skill name (frontmatter `name` when
         present, otherwise directory name). Later configured paths override
         earlier paths (last-wins).
         """

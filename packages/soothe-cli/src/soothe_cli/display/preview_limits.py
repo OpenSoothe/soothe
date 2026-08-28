@@ -1,8 +1,4 @@
-"""Central numeric limits for TUI preview and truncated displays.
-
-Single place to tune how many lines, characters, or items appear in collapsed
-or toast-style UI surfaces.
-"""
+"""Central numeric limits for TUI preview and truncated displays."""
 
 from __future__ import annotations
 

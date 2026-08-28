@@ -32,8 +32,8 @@ class ErrorMessage(Static):
         """Initialize an error message.
 
         Args:
-            error: The error message
-            **kwargs: Additional arguments passed to parent
+        error: The error message
+        **kwargs: Additional arguments passed to parent
         """
         # Store raw content for serialization
         self._content = error
@@ -43,7 +43,7 @@ class ErrorMessage(Static):
         """Render with theme-aware colors.
 
         Returns:
-            Styled error content with theme-appropriate color.
+        Styled error content with theme-appropriate color.
         """
         colors = theme.get_theme_colors(self)
         return Content.assemble(

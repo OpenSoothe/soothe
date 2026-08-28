@@ -1,24 +1,4 @@
-"""LangChain brand colors and semantic constants for the CLI.
-
-Single source of truth for color values used in Python code (Rich markup,
-`Content.styled`, `Content.from_markup`).  CSS-side styling should reference
-Textual CSS variables: built-in variables
-(`$primary`, `$background`, `$text-muted`, `$error-muted`, etc.) are set via
-`register_theme()` in `SootheApp.__init__`, while the few app-specific
-variables (`$mode-bash`, `$mode-command`, `$cognition`) are backed by these constants via
-`App.get_theme_variable_defaults()`.
-
-Code that needs custom CSS variable values should call
-`get_css_variable_defaults(dark=...)`. For the full semantic color palette, look
-up the `ThemeColors` instance via `ThemeEntry.REGISTRY`.
-
-Users can define custom themes in `~/SOOTHE_HOME/config/cli.yml` under
-`[themes.<name>]` sections. Each new theme section must include `label` (str);
-`dark` (bool) defaults to `False` if omitted (set to `True` for dark themes).
-Color fields are optional and fall back to the built-in dark/light palette based
-on the `dark` flag. Sections whose name matches a built-in theme override its
-colors without replacing it. See `_load_user_themes()` for details.
-"""
+"""LangChain brand colors and semantic constants for the CLI."""
 
 from __future__ import annotations
 
@@ -417,7 +397,7 @@ class ThemeColors:
         """Validate that every field is a valid hex color.
 
         Raises:
-            ValueError: If any field is not a 7-character hex color string.
+        ValueError: If any field is not a 7-character hex color string.
         """
         for f in fields(self):
             val = getattr(self, f.name)
@@ -434,12 +414,12 @@ class ThemeColors:
         colors they want to customize.
 
         Args:
-            base: Fallback color set for any field not in `overrides`.
-            overrides: Field-name to hex-color mapping. Unknown keys are
-                silently ignored.
+        base: Fallback color set for any field not in `overrides`.
+        overrides: Field-name to hex-color mapping. Unknown keys are
+        silently ignored.
 
         Returns:
-            New `ThemeColors` with merged values.
+        New `ThemeColors` with merged values.
         """
         valid_names = {f.name for f in fields(cls)}
         kwargs = {f.name: getattr(base, f.name) for f in fields(cls)}
@@ -543,7 +523,7 @@ class ThemeEntry:
         """Validate that the label is a non-empty string.
 
         Raises:
-            ValueError: If `label` is empty or whitespace-only.
+        ValueError: If `label` is empty or whitespace-only.
         """
         if not self.label.strip():
             msg = "ThemeEntry.label must be a non-empty string"
@@ -554,7 +534,7 @@ def _builtin_themes() -> dict[str, ThemeEntry]:
     """Return the built-in theme entries as a mutable dict.
 
     Returns:
-        Dict of built-in theme names to `ThemeEntry` instances.
+    Dict of built-in theme names to `ThemeEntry` instances.
     """
     r: dict[str, ThemeEntry] = {}
     r["langchain"] = ThemeEntry(
@@ -628,7 +608,7 @@ def _load_user_themes(
     - `label` (str) — human-readable name shown in the theme picker.
     - `dark` (bool, optional) — whether this is a dark-mode variant.
 
-        Defaults to `False` (light).
+    Defaults to `False` (light).
 
     **Built-in overrides** — if `<name>` matches a built-in theme, only color
     fields are read; `label` and `dark` are inherited from the built-in.
@@ -657,9 +637,9 @@ def _load_user_themes(
     ```
 
     Args:
-        builtins: Mutable dict to update (new themes are added, built-in
-            overrides replace existing entries).
-        config_path: Override for the config file path (testing).
+    builtins: Mutable dict to update (new themes are added, built-in
+    overrides replace existing entries).
+    config_path: Override for the config file path (testing).
     """
     if config_path is None:
         try:
@@ -788,10 +768,10 @@ def _build_registry(*, config_path: Path | None = None) -> MappingProxyType[str,
     """Build and freeze the theme registry (built-in + user themes).
 
     Args:
-        config_path: Override for the config file path (testing).
+    config_path: Override for the config file path (testing).
 
     Returns:
-        Read-only mapping of theme names to `ThemeEntry` instances.
+    Read-only mapping of theme names to `ThemeEntry` instances.
     """
     r = _builtin_themes()
     _load_user_themes(r, config_path=config_path)
@@ -817,7 +797,7 @@ def reload_registry() -> MappingProxyType[str, ThemeEntry]:
     `/reload` can pick up config changes without restarting the app.
 
     Returns:
-        The new frozen registry.
+    The new frozen registry.
     """
     ThemeEntry.REGISTRY = _build_registry()
     return ThemeEntry.REGISTRY
@@ -829,15 +809,15 @@ def get_css_variable_defaults(
     """Return custom CSS variable defaults for the given mode.
 
     Most styling is handled by Textual's built-in CSS variables (`$primary`,
-    `$text-muted`, `$error-muted`, etc.).  This function only returns
+    `$text-muted`, `$error-muted`, etc.). This function only returns
     app-specific semantic variables that have no Textual equivalent.
 
     Args:
-        dark: Selects `DARK_COLORS` or `LIGHT_COLORS` when `colors` is None.
-        colors: Explicit color set to use. Takes precedence over `dark`.
+    dark: Selects `DARK_COLORS` or `LIGHT_COLORS` when `colors` is None.
+    colors: Explicit color set to use. Takes precedence over `dark`.
 
     Returns:
-        Dict of CSS variable names to hex color values.
+    Dict of CSS variable names to hex color values.
     """
     c = colors if colors is not None else (DARK_COLORS if dark else LIGHT_COLORS)
     return {
@@ -851,10 +831,10 @@ def _resolve_app(widget_or_app: object) -> object:
     """Resolve a widget or App to the App instance.
 
     Args:
-        widget_or_app: Textual `App` or a mounted widget.
+    widget_or_app: Textual `App` or a mounted widget.
 
     Returns:
-        The resolved App instance.
+    The resolved App instance.
     """
     return (
         widget_or_app.app  # type: ignore[attr-defined]
@@ -867,7 +847,7 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
     """Construct `ThemeColors` from the app's active Textual theme.
 
     Reads standard properties (primary, secondary, etc.) from the resolved
-    theme so Python-side styling matches CSS.  `muted` falls back to the
+    theme so Python-side styling matches CSS. `muted` falls back to the
     dark/light base unconditionally (no Textual equivalent).
     `mode_bash` is derived from the theme's `error` color, and `mode_command`
     from `secondary`, falling back to the base palette when non-hex.
@@ -876,10 +856,10 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
     back to the base palette automatically.
 
     Args:
-        app: The Textual App instance.
+    app: The Textual App instance.
 
     Returns:
-        `ThemeColors` derived from the active theme.
+    `ThemeColors` derived from the active theme.
     """
     ct = app.current_theme  # type: ignore[attr-defined]
     dark: bool = ct.dark
@@ -889,12 +869,12 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
         """Return `val` if it is a valid `#RRGGBB` hex color, else `fallback`.
 
         Args:
-            val: Color string from the active Textual theme (may be `None` or
-                a non-hex name like `ansi_blue`).
-            fallback: Guaranteed-hex value from our base palette.
+        val: Color string from the active Textual theme (may be `None` or
+        a non-hex name like `ansi_blue`).
+        fallback: Guaranteed-hex value from our base palette.
 
         Returns:
-            `val` if it matches `#RRGGBB`, otherwise `fallback`.
+        `val` if it matches `#RRGGBB`, otherwise `fallback`.
         """
         if val is not None and _HEX_RE.match(val):
             return val
@@ -933,7 +913,7 @@ def get_theme_colors(widget_or_app: App | object | None = None) -> ThemeColors:
     """Return the `ThemeColors` for the active Textual theme.
 
     For custom themes (LangChain-branded and user-defined), the pre-built
-    `ThemeColors` from the registry is returned directly.  For Textual built-in
+    `ThemeColors` from the registry is returned directly. For Textual built-in
     themes, colors are resolved dynamically from the actual theme properties so
     Python-side styling stays in sync with CSS variables.
 
@@ -941,10 +921,10 @@ def get_theme_colors(widget_or_app: App | object | None = None) -> ThemeColors:
     ANSI constants, which are intended for Rich console output only.
 
     Args:
-        widget_or_app: Textual `App`, a mounted widget, or `None`.
+    widget_or_app: Textual `App`, a mounted widget, or `None`.
 
     Returns:
-        `ThemeColors` for the active theme.
+    `ThemeColors` for the active theme.
     """
     if widget_or_app is None:
         # Fall back to the active Textual app context var when no explicit

@@ -1,9 +1,4 @@
-"""Query execution lifecycle for the daemon.
-
-Owns streaming, cancellation, and per-thread logging hooks. Uses
-``SootheRunner`` public APIs only (no direct ``_durability`` access from
-handlers).
-"""
+"""Query execution lifecycle for the daemon."""
 
 from __future__ import annotations
 
@@ -64,7 +59,7 @@ async def _peek_goal_completion_from_ledger(card_manager: Any, loop_id: str) -> 
 
 
 class QueryAdmission(StrEnum):
-    """Result of daemon query admission under ``_query_state_lock``."""
+    """Result of daemon query admission under `_query_state_lock`."""
 
     ADMITTED = "admitted"
     DAEMON_BUSY = "daemon_busy"
@@ -103,8 +98,8 @@ class AsyncCancelOrchestrator:
         Deduplicates cancel requests: only one background task per loop_id.
 
         Args:
-            loop_id: The loop to cancel.
-            already_signaled: If True, runner.cancel() was already called by caller.
+        loop_id: The loop to cancel.
+        already_signaled: If True, runner.cancel() was already called by caller.
         """
         # Deduplicate: only one cancel task per loop
         if loop_id in self._active_cancel_tasks:
@@ -129,8 +124,8 @@ class AsyncCancelOrchestrator:
         Always succeeds: either cooperative cancel works, or force kill terminates.
 
         Args:
-            loop_id: The loop to cancel.
-            already_signaled: If True, runner.cancel() was already called by caller.
+        loop_id: The loop to cancel.
+        already_signaled: If True, runner.cancel() was already called by caller.
         """
         config = self._daemon._daemon_config
         max_retries = getattr(config, "cancel_retry_count", 3)
@@ -234,7 +229,7 @@ class AsyncCancelOrchestrator:
         return False
 
     async def _drain_loop_shells_on_cancel(self, loop_id: str) -> None:
-        """Kill in-flight ``run_command`` / ``run_background`` for the loop workspace."""
+        """Kill in-flight `run_command` / `run_background` for the loop workspace."""
         lid = str(loop_id or "").strip()
         if not lid:
             return
@@ -303,16 +298,16 @@ class AsyncCancelOrchestrator:
 
 
 class QueryEngine:
-    """Runs ``SootheRunner.astream`` and manages cancel/ownership for the daemon.
+    """Runs `SootheRunner.astream` and manages cancel/ownership for the daemon.
 
-    Locals named ``thread_id`` in this module are LangGraph **checkpoint ids**
-    (``configurable.thread_id``). Client-visible scope is always ``loop_id`` /
-    ``effective_loop_id``; ``_loop_scoped_client_message`` strips stray ``thread_id``
+    Locals named `thread_id` in this module are LangGraph **checkpoint ids**
+    (`configurable.thread_id`). Client-visible scope is always `loop_id` /
+    `effective_loop_id`; `_loop_scoped_client_message` strips stray `thread_id`
     keys from outbound frames.
     """
 
     def __init__(self, daemon: Any) -> None:
-        """Attach to the running ``SootheDaemon`` instance (expects ``_runner_factory`` after ``start()``)."""
+        """Attach to the running `SootheDaemon` instance (expects `_runner_factory` after `start()`)."""
         self._daemon = daemon
         # RFC-221: per-loop runner instances keyed by loop_id (turn-scoped).
         self._active_runners: dict[str, _ActiveLoopRunner] = {}
@@ -339,10 +334,10 @@ class QueryEngine:
         self._loops_turn_starting: set[str] = set()
 
     def mark_loop_turn_starting(self, loop_id: str) -> None:
-        """Record that a loop turn is starting (pre-``run_query`` race window).
+        """Record that a loop turn is starting (pre-`run_query` race window).
 
-        Called when the loop worker emits early ``running`` so a concurrent
-        ``/cancel`` can arm ``_pending_cancels`` without treating idle cancels as
+        Called when the loop worker emits early `running` so a concurrent
+        `/cancel` can arm `_pending_cancels` without treating idle cancels as
         pre-start aborts.
         """
         lid = str(loop_id or "").strip()
@@ -350,7 +345,7 @@ class QueryEngine:
             self._loops_turn_starting.add(lid)
 
     def is_cancel_in_progress(self, loop_id: str) -> bool:
-        """Return whether a background cancel task is still running for ``loop_id``."""
+        """Return whether a background cancel task is still running for `loop_id`."""
         orchestrator = self._cancel_orchestrator
         if orchestrator is None:
             return False
@@ -358,7 +353,7 @@ class QueryEngine:
         return task is not None and not task.done()
 
     def _owns_turn(self, loop_id: str | None, turn_generation: int) -> bool:
-        """Return whether ``turn_generation`` is still the active turn for ``loop_id``."""
+        """Return whether `turn_generation` is still the active turn for `loop_id`."""
         if not loop_id:
             return True
         return self._loop_turn_generation.get(loop_id) == turn_generation
@@ -373,7 +368,7 @@ class QueryEngine:
     async def await_loop_ready_for_turn(self, loop_id: str) -> None:
         """Wait for cancel orchestration and worker teardown before a new turn.
 
-        Queued ``loop_input`` after Ctrl+C must not race the prior turn's
+        Queued `loop_input` after Ctrl+C must not race the prior turn's
         asyncio finally block or an in-flight pool worker.
         """
         lid = str(loop_id or "").strip()
@@ -430,7 +425,7 @@ class QueryEngine:
         self._loops_turn_starting.discard(loop_id)
 
     def collect_active_tasks_for_loop(self, loop_id: str) -> list[tuple[str, asyncio.Task]]:
-        """Return in-flight query asyncio tasks bound to ``loop_id``."""
+        """Return in-flight query asyncio tasks bound to `loop_id`."""
         d = self._daemon
         tasks: list[tuple[str, asyncio.Task]] = []
         seen: set[int] = set()
@@ -460,7 +455,7 @@ class QueryEngine:
         return tasks
 
     def _next_loop_seq(self, loop_id: str) -> int:
-        """Allocate the next monotonic outbound seq for ``loop_id``."""
+        """Allocate the next monotonic outbound seq for `loop_id`."""
         lid = str(loop_id or "").strip()
         nxt = self._loop_event_seq.get(lid, 0) + 1
         self._loop_event_seq[lid] = nxt
@@ -469,10 +464,10 @@ class QueryEngine:
     def _resolve_broadcast_generation(
         self, loop_id: str, turn_generation: int | None = None
     ) -> int:
-        """Return generation to stamp on outbound frames for ``loop_id``.
+        """Return generation to stamp on outbound frames for `loop_id`.
 
-        Pass ``turn_generation=0`` to omit ``turn_id`` (pre-admit early
-        ``running`` must not reuse the prior turn's generation).
+        Pass `turn_generation=0` to omit `turn_id` (pre-admit early
+        `running` must not reuse the prior turn's generation).
         """
         if turn_generation is not None:
             return max(0, int(turn_generation))
@@ -502,7 +497,7 @@ class QueryEngine:
         *,
         turn_generation: int | None = None,
     ) -> dict[str, Any]:
-        """Build a client-visible frame: ``loop_id``, ``turn_id``, ``seq``."""
+        """Build a client-visible frame: `loop_id`, `turn_id`, `seq`."""
         from soothe_daemon.query.turn_boundary import format_turn_id
 
         out = dict(payload)
@@ -547,7 +542,7 @@ class QueryEngine:
         reason: str | None = None,
         turn_generation: int | None = None,
     ) -> None:
-        """Broadcast ``soothe.stream.end`` with ``scope=turn``."""
+        """Broadcast `soothe.stream.end` with `scope=turn`."""
         from soothe_sdk.core.events import STREAM_END
 
         from soothe_daemon.query.turn_boundary import format_turn_id
@@ -579,7 +574,7 @@ class QueryEngine:
         """Reserve daemon / per-loop query capacity atomically.
 
         Returns:
-            Tuple of admission result and turn generation (0 when not loop-scoped).
+        Tuple of admission result and turn generation (0 when not loop-scoped).
         """
         d = self._daemon
         max_concurrent = getattr(d._daemon_config, "max_concurrent_threads", 100)
@@ -607,7 +602,7 @@ class QueryEngine:
         self._loops_turn_starting.discard(effective_loop_id)
 
     async def _register_query_task(self, thread_id: str, task: asyncio.Task[Any]) -> None:
-        """Register a background query task under ``_query_state_lock``."""
+        """Register a background query task under `_query_state_lock`."""
         d = self._daemon
         async with d._query_state_lock:
             d._active_threads[thread_id] = task
@@ -616,11 +611,11 @@ class QueryEngine:
     async def _unregister_query_task(
         self, thread_id: str, task: asyncio.Task[Any] | None = None
     ) -> None:
-        """Remove a query task registration under ``_query_state_lock``.
+        """Remove a query task registration under `_query_state_lock`.
 
-        When ``task`` is provided the entry is only dropped if it still matches,
+        When `task` is provided the entry is only dropped if it still matches,
         so a superseded turn cannot evict a successor that reused the same
-        checkpoint ``thread_id``.
+        checkpoint `thread_id`.
         """
         d = self._daemon
         async with d._query_state_lock:
@@ -830,9 +825,9 @@ class QueryEngine:
     ) -> int:
         """Suspend active ContextEngine goals so interrupt resume can reactivate them.
 
-        User-interrupt parks CE goals as ``suspended`` (not terminal ``cancelled``)
-        so ``retry`` / ``resume`` reuses the same CE goal and step DAG. The
-        ``goal_interrupted`` ledger marker still bounds partial work for projection.
+        User-interrupt parks CE goals as `suspended` (not terminal `cancelled`)
+        so `retry` / `resume` reuses the same CE goal and step DAG. The
+        `goal_interrupted` ledger marker still bounds partial work for projection.
         """
         lid = str(loop_id or "").strip()
         if not lid:
@@ -917,9 +912,9 @@ class QueryEngine:
     ) -> str:
         """Pick LangGraph checkpoint id for this query.
 
-        When ``loop_input`` already ran ``bind_execution_thread_for_loop``, callers pass
+        When `loop_input` already ran `bind_execution_thread_for_loop`, callers pass
         that checkpoint here so workspace/registry state matches the subprocess run.
-        Otherwise fall back to the utility runner singleton + ``ensure_active_*``.
+        Otherwise fall back to the utility runner singleton + `ensure_active_*`.
         """
         d = self._daemon
         tid = str(checkpoint_thread_id or "").strip()
@@ -1751,7 +1746,7 @@ class QueryEngine:
         response_schema_strict: bool | None = None,
         turn_generation: int = 0,
     ) -> None:
-        """Spawn background task for ``intent_hint`` turns (no agent subprocess)."""
+        """Spawn background task for `intent_hint` turns (no agent subprocess)."""
         d = self._daemon
 
         async def _run_intent_hint() -> None:
@@ -1804,7 +1799,7 @@ class QueryEngine:
         response_schema_strict: bool | None = None,
         turn_generation: int = 0,
     ) -> None:
-        """Execute one intent-hint call and broadcast a single assistant ``messages`` event."""
+        """Execute one intent-hint call and broadcast a single assistant `messages` event."""
         d = self._daemon
         self._broadcast_turn_generation[effective_loop_id] = turn_generation
 
@@ -1908,7 +1903,7 @@ class QueryEngine:
                     d._current_query_task = None
 
     async def cancel_loop(self, loop_id: str) -> None:
-        """Cancel running query tasks bound to ``loop_id``.
+        """Cancel running query tasks bound to `loop_id`.
 
         Signals cancellation immediately (runner.cancel() called before return),
         then kicks off async background task that guarantees completion via

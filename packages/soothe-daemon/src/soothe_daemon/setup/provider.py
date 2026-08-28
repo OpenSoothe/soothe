@@ -65,7 +65,7 @@ class ProviderSetupSkippedError(Exception):
 
 
 def load_yaml_dict(path: Path) -> dict[str, Any]:
-    """Load a YAML mapping from *path*, or ``{}`` if missing/invalid."""
+    """Load a YAML mapping from *path*, or `{}` if missing/invalid."""
     if not path.is_file():
         return {}
     payload = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -89,13 +89,13 @@ def run_provider_wizard(
     stderr: TextIO | None = None,
     fetch_models_fn: Any | None = None,
 ) -> dict[str, Any]:
-    """Interactively configure a provider in ``nano.yml``.
+    """Interactively configure a provider in `nano.yml`.
 
     Returns:
-        Updated config dict that was written.
+    Updated config dict that was written.
 
     Raises:
-        ProviderSetupCancelledError: On user cancel / EOF.
+    ProviderSetupCancelledError: On user cancel / EOF.
     """
     inn = stdin if stdin is not None else sys.stdin
     out = stdout if stdout is not None else sys.stdout
@@ -198,10 +198,10 @@ def merge_provider_from_env(nano_path: Path) -> dict[str, Any] | None:
     """Non-interactive: ensure a provider exists when env API keys are set.
 
     Uses existing scaffolded providers when present; otherwise upserts a
-    minimal OpenAI/Anthropic provider from env and sets ``router.default``.
+    minimal OpenAI/Anthropic provider from env and sets `router.default`.
 
     Returns:
-        Updated config dict if a write occurred, else ``None``.
+    Updated config dict if a write occurred, else `None`.
     """
     existing = load_yaml_dict(nano_path)
     openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -261,7 +261,7 @@ def choose_provider_interactive(
     stdin: TextIO,
     stdout: TextIO,
 ) -> dict[str, Any] | None:
-    """Pick an existing provider, ``{}`` to add new, or ``None`` to cancel."""
+    """Pick an existing provider, `{}` to add new, or `None` to cancel."""
     if not providers:
         stdout.write("No existing providers found; will add a new one.\n")
         return {}
@@ -302,7 +302,7 @@ def choose_provider_interactive(
 
 
 def resolve_config_value(value: str, *, field: str) -> str:
-    """Expand ``${ENV_VAR}`` placeholders; raise if any remain unresolved."""
+    """Expand `${ENV_VAR}` placeholders; raise if any remain unresolved."""
     resolved = _resolve_env(value)
     match = _ENV_VAR_RE.search(resolved)
     if match:
@@ -380,7 +380,7 @@ def update_config_for_model(
     profile_name: str | None = None,
     provider_type: str = DEFAULT_PROVIDER_TYPE,
 ) -> dict[str, Any]:
-    """Upsert provider and point the active router profile at ``provider:model``."""
+    """Upsert provider and point the active router profile at `provider:model`."""
     cfg = dict(existing)
     name = _slugify_provider_name(provider_name) or DEFAULT_NEW_PROVIDER_NAME
     profile = profile_name or str(cfg.get("active_router_profile") or DEFAULT_ROUTER_PROFILE)
@@ -600,7 +600,7 @@ def _prompt_secret_with_default(
 
 
 def _read_secret_masked(prompt: str) -> str:
-    """Read a secret, echoing ``*`` per character (including paste)."""
+    """Read a secret, echoing `*` per character (including paste)."""
     if termios is None or tty is None or not sys.stdin.isatty() or not sys.stdout.isatty():
         return getpass.getpass(prompt)
 

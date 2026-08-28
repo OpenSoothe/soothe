@@ -74,7 +74,7 @@ class ThemeSelectorScreen(ModalScreen[str | None]):
         """Initialize the ThemeSelectorScreen.
 
         Args:
-            current_theme: The currently active theme name (to highlight).
+        current_theme: The currently active theme name (to highlight).
         """
         super().__init__()
         self._current_theme = current_theme
@@ -84,7 +84,7 @@ class ThemeSelectorScreen(ModalScreen[str | None]):
         """Compose the screen layout.
 
         Yields:
-            Widgets for the theme selector UI.
+        Widgets for the theme selector UI.
         """
         glyphs = get_glyphs()
         options: list[Option] = []
@@ -116,7 +116,7 @@ class ThemeSelectorScreen(ModalScreen[str | None]):
         """Live-preview the highlighted theme.
 
         Args:
-            event: The option highlighted event.
+        event: The option highlighted event.
         """
         name = event.option.id
         if name is not None and name in theme.ThemeEntry.REGISTRY:
@@ -143,7 +143,7 @@ class ThemeSelectorScreen(ModalScreen[str | None]):
         """Commit the selected theme.
 
         Args:
-            event: The option selected event.
+        event: The option selected event.
         """
         name = event.option.id
         if name is not None and name in theme.ThemeEntry.REGISTRY:

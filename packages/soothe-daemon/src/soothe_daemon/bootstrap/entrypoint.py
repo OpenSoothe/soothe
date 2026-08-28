@@ -29,11 +29,11 @@ def run_daemon(
     """Start the daemon in the current process (blocking).
 
     Args:
-        config: Agent ``SootheConfig`` (in-proc agent core, ``nano.yml`` [+ ``soothe.yml``]).
-        daemon_config: Daemon-server ``SootheDaemonConfig`` (transports,
-            worker pool, distributed runner, ``daemon.yml``).
-        detached: Whether daemon is running as a detached background process.
-            In detached mode, SIGINT shutdown handling is disabled.
+    config: Agent `SootheConfig` (in-proc agent core, `nano.yml` [+ `soothe.yml`]).
+    daemon_config: Daemon-server `SootheDaemonConfig` (transports,
+    worker pool, distributed runner, `daemon.yml`).
+    detached: Whether daemon is running as a detached background process.
+    In detached mode, SIGINT shutdown handling is disabled.
     """
     daemon = SootheDaemon(
         config,
@@ -50,7 +50,7 @@ def run_daemon(
 
 
 def _load_daemon_config(daemon_config_path: str | None) -> SootheDaemonConfig:
-    """Load ``SootheDaemonConfig`` from explicit path or default location."""
+    """Load `SootheDaemonConfig` from explicit path or default location."""
     if daemon_config_path:
         return SootheDaemonConfig.from_yaml_file(daemon_config_path)
     return SootheDaemonConfig.from_default_yaml()

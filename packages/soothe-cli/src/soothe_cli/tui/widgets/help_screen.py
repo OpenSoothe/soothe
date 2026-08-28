@@ -28,7 +28,7 @@ def build_command_rows() -> list[tuple[str, str]]:
     """Return slash-command rows for the help modal.
 
     Returns:
-        Sorted list of ``(command, description)`` tuples.
+    Sorted list of `(command, description)` tuples.
     """
     rows: list[tuple[str, str]] = []
     for cmd in SLASH_COMMANDS:
@@ -45,7 +45,7 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
     """Return keyboard shortcut rows for the TUI help modal.
 
     Returns:
-        Ordered list of ``(shortcut, description)`` tuples.
+    Ordered list of `(shortcut, description)` tuples.
     """
     newline = newline_shortcut()
     return [
@@ -80,11 +80,11 @@ def _format_section(title: str, rows: list[tuple[str, str]]) -> Content:
     """Format a titled two-column section for the help body.
 
     Args:
-        title: Section heading.
-        rows: ``(label, description)`` rows to render.
+    title: Section heading.
+    rows: `(label, description)` rows to render.
 
     Returns:
-        Styled ``Content`` for a ``Static`` widget.
+    Styled `Content` for a `Static` widget.
     """
     if not rows:
         return Content.from_markup(f"[bold]{title}[/]\n[dim italic]None[/]")
@@ -99,7 +99,7 @@ def build_help_content() -> Content:
     """Build the full scrollable help body.
 
     Returns:
-        Combined help ``Content`` with commands, input modes, shortcuts, and docs link.
+    Combined help `Content` with commands, input modes, shortcuts, and docs link.
     """
     command_section = _format_section("Slash Commands", build_command_rows())
     shortcut_section = _format_section("Keyboard Shortcuts", build_keyboard_shortcut_rows())
@@ -192,7 +192,7 @@ class HelpScreen(ModalScreen[None]):
         self.dismiss(None)
 
     def _scroll(self, *, delta: int) -> None:
-        """Scroll the help body by ``delta`` lines."""
+        """Scroll the help body by `delta` lines."""
         body = self.query_one(ScrollableContainer)
         body.scroll_relative(y=delta, animate=False)
 

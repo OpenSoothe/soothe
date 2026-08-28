@@ -84,10 +84,10 @@ class Settings:
         """Create settings by detecting the current environment.
 
         Args:
-            start_path: Directory to start project detection from (defaults to cwd)
+        start_path: Directory to start project detection from (defaults to cwd)
 
         Returns:
-            Settings instance with detected configuration
+        Settings instance with detected configuration
         """
         # Detect API keys (normalize empty strings to None).
         from soothe_cli.model_config import resolve_env_var
@@ -147,16 +147,16 @@ class Settings:
 
         !!! note
 
-            `.env` files are loaded with `override=False`, so shell-exported
-            variables always take precedence.  To override a shell-exported key
-            from `.env`, use the `SOOTHE_` prefix (e.g.
-            `SOOTHE_OPENAI_API_KEY`).
+        `.env` files are loaded with `override=False`, so shell-exported
+        variables always take precedence. To override a shell-exported key
+        from `.env`, use the `SOOTHE_` prefix (e.g.
+        `SOOTHE_OPENAI_API_KEY`).
 
         Args:
-            start_path: Directory to start project detection from (defaults to cwd).
+        start_path: Directory to start project detection from (defaults to cwd).
 
         Returns:
-            A list of human-readable change descriptions.
+        A list of human-readable change descriptions.
         """
         from soothe_cli.settings.bootstrap import _load_dotenv
 
@@ -274,7 +274,7 @@ class Settings:
         """Validate to prevent invalid filesystem paths and security issues.
 
         Returns:
-            True if the agent name is valid, False otherwise.
+        True if the agent name is valid, False otherwise.
         """
         if not agent_name or not agent_name.strip():
             return False
@@ -285,13 +285,13 @@ class Settings:
         """Get the global agent directory path.
 
         Args:
-            agent_name: Name of the agent
+        agent_name: Name of the agent
 
         Returns:
-            Path to ~/SOOTHE_HOME/{agent_name}
+        Path to ~/SOOTHE_HOME/{agent_name}
 
         Raises:
-            ValueError: If the agent name contains invalid characters.
+        ValueError: If the agent name contains invalid characters.
         """
         if not self._is_valid_agent_name(agent_name):
             msg = (
@@ -310,7 +310,7 @@ def _get_settings() -> Settings:
     `from config import settings` in other modules — resolves instantly.
 
     Returns:
-        The global `Settings` singleton.
+    The global `Settings` singleton.
     """
     cached = globals().get("settings")
     if cached is not None:

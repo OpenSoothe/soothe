@@ -23,8 +23,8 @@ class ProjectContext:
     """Explicit user/project path context for project-sensitive behavior.
 
     Attributes:
-        user_cwd: Authoritative working directory from the CLI invocation.
-        project_root: Resolved project root for `user_cwd`, if one exists.
+    user_cwd: Authoritative working directory from the CLI invocation.
+    project_root: Resolved project root for `user_cwd`, if one exists.
     """
 
     user_cwd: Path
@@ -34,7 +34,7 @@ class ProjectContext:
         """Validate that path fields are absolute.
 
         Raises:
-            ValueError: If `user_cwd` or `project_root` is not absolute.
+        ValueError: If `user_cwd` or `project_root` is not absolute.
         """
         if not self.user_cwd.is_absolute():
             msg = f"user_cwd must be absolute, got {self.user_cwd!r}"
@@ -50,10 +50,10 @@ def get_server_project_context(
     """Read the server project context from environment transport data.
 
     Args:
-        env: Environment mapping to read from.
+    env: Environment mapping to read from.
 
     Returns:
-        Reconstructed project context, or `None` if no server context exists.
+    Reconstructed project context, or `None` if no server context exists.
     """
     environment = os.environ if env is None else env
     raw_cwd = environment.get(f"{SERVER_ENV_PREFIX}CWD")
@@ -86,11 +86,11 @@ def find_project_root(start_path: str | Path | None = None) -> Path | None:
     directory, which indicates the project root.
 
     Args:
-        start_path: Directory to start searching from.
-            Defaults to current working directory.
+    start_path: Directory to start searching from.
+    Defaults to current working directory.
 
     Returns:
-        Path to the project root if found, None otherwise.
+    Path to the project root if found, None otherwise.
     """
     current = Path(start_path or Path.cwd()).expanduser().resolve()
 

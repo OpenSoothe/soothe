@@ -24,11 +24,11 @@ def split_unified_diff_body_line(line: str) -> tuple[str | None, str]:
     """Split a unified-diff body line into marker and payload.
 
     Args:
-        line: One line from a unified diff body (excluding ``---``/``+++`` headers).
+    line: One line from a unified diff body (excluding `---`/`+++` headers).
 
     Returns:
-        ``(marker, content)`` where marker is ``+``, ``-``, `` `` for diff rows,
-        or ``None`` for hunk headers, truncation markers, and other lines.
+    `(marker, content)` where marker is `+`, `-`, ` ` for diff rows,
+    or `None` for hunk headers, truncation markers, and other lines.
     """
     if not line:
         return None, ""
@@ -88,11 +88,11 @@ def compose_diff_line_list(
     """Yield per-line Static widgets for unified diff body lines.
 
     Args:
-        diff_lines: Unified diff lines (may include ``---``/``+++`` headers).
-        max_lines: Maximum number of rendered body lines (None for unlimited).
+    diff_lines: Unified diff lines (may include `---`/`+++` headers).
+    max_lines: Maximum number of rendered body lines (None for unlimited).
 
     Yields:
-        Static widgets for each diff row.
+    Static widgets for each diff row.
     """
     if not diff_lines:
         yield Static(Content.styled("No changes detected", "dim"))
@@ -166,16 +166,16 @@ def compose_diff_lines(
 ) -> ComposeResult:
     """Yield per-line Static widgets for a unified diff.
 
-    Each added/removed line gets a CSS class (``.diff-line-added``,
-    ``.diff-line-removed``) so background colors are driven by CSS variables
+    Each added/removed line gets a CSS class (`.diff-line-added`,
+    `.diff-line-removed`) so background colors are driven by CSS variables
     and update automatically on theme change.
 
     Args:
-        diff: Unified diff string.
-        max_lines: Maximum number of diff lines to show (None for unlimited).
+    diff: Unified diff string.
+    max_lines: Maximum number of diff lines to show (None for unlimited).
 
     Yields:
-        Static widgets — stats header plus one widget per diff line.
+    Static widgets — stats header plus one widget per diff line.
     """
     if not diff:
         yield Static(Content.styled("No changes detected", "dim"))

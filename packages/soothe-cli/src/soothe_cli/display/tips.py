@@ -1,10 +1,4 @@
-"""Rotating session tips for the status bar below the chat input.
-
-Tips render only in the status footer (see :class:`~soothe_cli.tui.widgets.status.StatusBar`).
-The welcome banner no longer holds a tip, so there is a single tip surface.
-:class:`TipRotator` cycles through the pool so the footer rotates tips on an
-interval instead of showing one fixed string for the whole session.
-"""
+"""Rotating session tips for the status bar below the chat input."""
 
 from __future__ import annotations
 
@@ -66,8 +60,8 @@ class TipRotator:
         """Return the next tip in the rotation.
 
         Returns:
-            A tip string from the pool. Returns an empty string when the pool
-            is empty.
+        A tip string from the pool. Returns an empty string when the pool
+        is empty.
         """
         if not self._tips:
             return ""

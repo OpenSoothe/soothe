@@ -1,8 +1,4 @@
-"""Message store for virtualized chat history (DOM window only).
-
-Transcript models live in ``soothe_sdk.display.transcript_types``. Widget
-construction uses ``soothe_cli.commands.binding``.
-"""
+"""Message store for virtualized chat history (DOM window only)."""
 
 from __future__ import annotations
 
@@ -39,12 +35,12 @@ class MessageStore:
     of widgets that are actually mounted in the DOM.
 
     Attributes:
-        WINDOW_SIZE: Maximum number of widgets to keep in DOM.
+    WINDOW_SIZE: Maximum number of widgets to keep in DOM.
 
-            Balances DOM performance with smooth scrolling experience.
-        HYDRATE_BUFFER: Number of messages to hydrate when scrolling near edge.
+    Balances DOM performance with smooth scrolling experience.
+    HYDRATE_BUFFER: Number of messages to hydrate when scrolling near edge.
 
-            Provides enough buffer to avoid visible loading pauses.
+    Provides enough buffer to avoid visible loading pauses.
     """
 
     WINDOW_SIZE: int = 200
@@ -90,7 +86,7 @@ class MessageStore:
         """Add a new message to the store.
 
         Args:
-            message: The message data to add.
+        message: The message data to add.
         """
         if message.id in self._index:
             logger.warning(
@@ -114,12 +110,12 @@ class MessageStore:
         visible (i.e. will need DOM widgets).
 
         Args:
-            messages: Ordered list of message data to load.
-            replace: When ``True``, discard any prior store contents first.
-                Use for loop resume so repeated loads do not append duplicates.
+        messages: Ordered list of message data to load.
+        replace: When `True`, discard any prior store contents first.
+        Use for loop resume so repeated loads do not append duplicates.
 
         Returns:
-            Tuple of (archived, visible) message lists.
+        Tuple of (archived, visible) message lists.
         """
         if replace:
             self.clear()
@@ -148,10 +144,10 @@ class MessageStore:
         """Get a message by its ID.
 
         Args:
-            message_id: The ID of the message to find.
+        message_id: The ID of the message to find.
 
         Returns:
-            The message data, or None if not found.
+        The message data, or None if not found.
         """
         return self._index.get(message_id)
 
@@ -159,10 +155,10 @@ class MessageStore:
         """Get a message by its index.
 
         Args:
-            index: The index of the message.
+        index: The index of the message.
 
         Returns:
-            The message data, or None if index is out of bounds.
+        The message data, or None if index is out of bounds.
         """
         if 0 <= index < len(self._messages):
             return self._messages[index]
@@ -175,15 +171,15 @@ class MessageStore:
         names raise `ValueError` to catch typos early.
 
         Args:
-            message_id: The ID of the message to update.
-            **updates: Fields to update.
+        message_id: The ID of the message to update.
+        **updates: Fields to update.
 
         Returns:
-            True if the message was found and updated.
+        True if the message was found and updated.
 
         Raises:
-            ValueError: If any key in `updates` is not in the updatable
-                allowlist.
+        ValueError: If any key in `updates` is not in the updatable
+        allowlist.
         """
         unknown = set(updates) - _UPDATABLE_FIELDS
         if unknown:
@@ -207,7 +203,7 @@ class MessageStore:
         Active messages are never archived.
 
         Args:
-            message_id: The ID of the active message, or None to clear.
+        message_id: The ID of the active message, or None to clear.
         """
         self._active_message_id = message_id
 
@@ -215,10 +211,10 @@ class MessageStore:
         """Check if a message is the active streaming message.
 
         Args:
-            message_id: The message ID to check.
+        message_id: The message ID to check.
 
         Returns:
-            True if this is the active message.
+        True if this is the active message.
         """
         return message_id == self._active_message_id
 
@@ -226,7 +222,7 @@ class MessageStore:
         """Check if the visible window exceeds the maximum size.
 
         Returns:
-            True if we should prune some widgets.
+        True if we should prune some widgets.
         """
         return self.visible_count > self.WINDOW_SIZE
 
@@ -238,11 +234,11 @@ class MessageStore:
         in the visible window (which would desync store state from the DOM).
 
         Args:
-            count: Number of messages to prune, or None to prune
-                enough to get back to WINDOW_SIZE.
+        count: Number of messages to prune, or None to prune
+        enough to get back to WINDOW_SIZE.
 
         Returns:
-            List of messages to prune (remove widgets for).
+        List of messages to prune (remove widgets for).
         """
         if count is None:
             count = max(0, self.visible_count - self.WINDOW_SIZE)
@@ -270,7 +266,7 @@ class MessageStore:
         of the window.
 
         Args:
-            message_ids: IDs of messages that were pruned.
+        message_ids: IDs of messages that were pruned.
         """
         pruned_set = set(message_ids)
         while (
@@ -283,10 +279,10 @@ class MessageStore:
         """Get messages above the visible window to hydrate.
 
         Args:
-            count: Number of messages to hydrate, or None for `HYDRATE_BUFFER`.
+        count: Number of messages to hydrate, or None for `HYDRATE_BUFFER`.
 
         Returns:
-            List of messages to hydrate (create widgets for), in order.
+        List of messages to hydrate (create widgets for), in order.
         """
         if count is None:
             count = self.HYDRATE_BUFFER
@@ -301,7 +297,7 @@ class MessageStore:
         """Mark that messages above were hydrated.
 
         Args:
-            count: Number of messages that were hydrated.
+        count: Number of messages that were hydrated.
         """
         self._visible_start = max(0, self._visible_start - count)
 
@@ -309,11 +305,11 @@ class MessageStore:
         """Check if we should hydrate messages above the current view.
 
         Args:
-            scroll_position: Current scroll Y position.
-            viewport_height: Height of the viewport.
+        scroll_position: Current scroll Y position.
+        viewport_height: Height of the viewport.
 
         Returns:
-            True if user is scrolling near the top and we have archived messages.
+        True if user is scrolling near the top and we have archived messages.
         """
         if not self.has_messages_above:
             return False
@@ -328,16 +324,16 @@ class MessageStore:
         """Check if we should prune messages below the current view.
 
         Note:
-            Not yet integrated into the scroll handler. Intended for future
-            pruning of messages below the viewport when the user scrolls far up.
+        Not yet integrated into the scroll handler. Intended for future
+        pruning of messages below the viewport when the user scrolls far up.
 
         Args:
-            scroll_position: Current scroll Y position.
-            viewport_height: Height of the viewport.
-            content_height: Total height of all content.
+        scroll_position: Current scroll Y position.
+        viewport_height: Height of the viewport.
+        content_height: Total height of all content.
 
         Returns:
-            True if we have too many widgets and bottom ones are far from view.
+        True if we have too many widgets and bottom ones are far from view.
         """
         if self.visible_count <= self.WINDOW_SIZE:
             return False
@@ -359,7 +355,7 @@ class MessageStore:
         """Get the range of visible message indices.
 
         Returns:
-            Tuple of (start_index, end_index).
+        Tuple of (start_index, end_index).
         """
         return (self._visible_start, self._visible_end)
 
@@ -367,7 +363,7 @@ class MessageStore:
         """Get all stored messages.
 
         Returns:
-            List of all message data (shallow copy).
+        List of all message data (shallow copy).
         """
         return list(self._messages)
 
@@ -375,6 +371,6 @@ class MessageStore:
         """Get messages in the visible window.
 
         Returns:
-            List of visible message data.
+        List of visible message data.
         """
         return self._messages[self._visible_start : self._visible_end]

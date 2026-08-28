@@ -30,14 +30,14 @@ logger = logging.getLogger(__name__)
 def textual_widget_id(prefix: str, tool_call_id: str) -> str:
     """Build a Textual-safe widget id from a unified tool call id.
 
-    Unified ids use colons (e.g. ``JWZ_01:s:write_file:23``) which Textual rejects.
+    Unified ids use colons (e.g. `JWZ_01:s:write_file:23`) which Textual rejects.
 
     Args:
-        prefix: Stable prefix (e.g. ``file-preview``).
-        tool_call_id: LangChain / unified tool call id.
+    prefix: Stable prefix (e.g. `file-preview`).
+    tool_call_id: LangChain / unified tool call id.
 
     Returns:
-        Identifier containing only letters, digits, underscores, and hyphens.
+    Identifier containing only letters, digits, underscores, and hyphens.
     """
     raw = f"{prefix}-{tool_call_id}"
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in raw)
@@ -83,19 +83,19 @@ async def mount_file_change_preview(
     """Mount a preview card once per tool call when args are known.
 
     Does not block tool execution; duplicates are suppressed via
-    ``adapter._file_change_previews_shown``.
+    `adapter._file_change_previews_shown`.
 
-    When ``file_op_tracker`` already holds a completed record for this call
+    When `file_op_tracker` already holds a completed record for this call
     (result-before-preview race), the card is mounted as finalized past tense
-    (e.g. ``Edited``) instead of an in-flight ``Editing`` preview.
+    (e.g. `Edited`) instead of an in-flight `Editing` preview.
 
     Args:
-        adapter: Active textual UI adapter for the turn.
-        tool_name: Filesystem tool name.
-        args: Parsed tool arguments.
-        tool_call_id: LangChain tool call id.
-        assistant_id: Agent id for path resolution.
-        file_op_tracker: Optional tracker with ``recently_completed`` lookups.
+    adapter: Active textual UI adapter for the turn.
+    tool_name: Filesystem tool name.
+    args: Parsed tool arguments.
+    tool_call_id: LangChain tool call id.
+    assistant_id: Agent id for path resolution.
+    file_op_tracker: Optional tracker with `recently_completed` lookups.
     """
     if tool_name not in FILE_CHANGE_TOOLS:
         return
@@ -169,7 +169,7 @@ async def finalize_file_change_preview(
     """Upgrade a mounted preview card to its completed state.
 
     Returns:
-        True when an existing preview widget was finalized in place.
+    True when an existing preview widget was finalized in place.
     """
     tcid = str(record.tool_call_id or "").strip()
     if not tcid:
@@ -206,7 +206,7 @@ async def mount_completed_file_change_preview(
     """Mount a collapsed completed preview when no in-flight card was shown.
 
     Returns:
-        True when a completed preview card was mounted from the tracker record.
+    True when a completed preview card was mounted from the tracker record.
     """
     tool_name = str(record.tool_name or "").strip()
     tcid = str(record.tool_call_id or "").strip()
@@ -266,7 +266,7 @@ def handle_file_change_result_without_active_track(
     """DEBUG-log and stash a filesystem tool result that beat the preview mount.
 
     Returns:
-        Stashed :class:`FileOperationRecord` for late mount finalization, or None.
+    Stashed :class:`FileOperationRecord` for late mount finalization, or None.
     """
     logger.debug(
         "File-change tool result with no active track tool=%s tool_call_id=%s "

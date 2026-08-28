@@ -1,8 +1,4 @@
-"""Channel manager for coordinating all communication channels.
-
-Coordinates inbound routing, outbound dispatch, streaming, and retry policy
-for WebSocket and plugin channels.
-"""
+"""Channel manager for coordinating all communication channels."""
 
 from __future__ import annotations
 
@@ -37,14 +33,14 @@ class ChannelManager:
     5. Applies retry policy on send failures
 
     Args:
-        config: Daemon configuration.
-        event_bus: EventBus for routing events.
-        runner: Optional SootheRunner (for command handlers).
-        soothe_config: Optional SootheConfig (for command handlers).
-        session_manager: Optional ClientSessionManager for WebSocket sessions.
-        autopilot_service: Optional AutopilotService for WebSocket command handlers.
-        cron_service: Optional CronService for WebSocket command handlers.
-        memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
+    config: Daemon configuration.
+    event_bus: EventBus for routing events.
+    runner: Optional SootheRunner (for command handlers).
+    soothe_config: Optional SootheConfig (for command handlers).
+    session_manager: Optional ClientSessionManager for WebSocket sessions.
+    autopilot_service: Optional AutopilotService for WebSocket command handlers.
+    cron_service: Optional CronService for WebSocket command handlers.
+    memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
     """
 
     def __init__(
@@ -61,14 +57,14 @@ class ChannelManager:
         """Initialize channel manager.
 
         Args:
-            config: Daemon configuration.
-            event_bus: EventBus for routing events.
-            runner: Optional SootheRunner (for command handlers).
-            soothe_config: Optional SootheConfig (for command handlers).
-            session_manager: Optional ClientSessionManager for session management.
-            autopilot_service: Optional daemon-owned AutopilotService.
-            cron_service: Optional daemon-owned CronService.
-            memory_profiler: Optional MemoryProfiler for memory command handlers.
+        config: Daemon configuration.
+        event_bus: EventBus for routing events.
+        runner: Optional SootheRunner (for command handlers).
+        soothe_config: Optional SootheConfig (for command handlers).
+        session_manager: Optional ClientSessionManager for session management.
+        autopilot_service: Optional daemon-owned AutopilotService.
+        cron_service: Optional daemon-owned CronService.
+        memory_profiler: Optional MemoryProfiler for memory command handlers.
         """
         self._config = config
         self._event_bus = event_bus
@@ -109,8 +105,8 @@ class ChannelManager:
         """Set the unified message handler for all channels.
 
         Args:
-            handler: Callback to handle incoming messages from any channel.
-                Takes (client_id, message) as arguments.
+        handler: Callback to handle incoming messages from any channel.
+        Takes (client_id, message) as arguments.
         """
         self._message_handler = handler
 
@@ -118,7 +114,7 @@ class ChannelManager:
         """Set the handshake callback for initial client messages.
 
         Args:
-            callback: Callback to generate initial handshake messages.
+        callback: Callback to generate initial handshake messages.
         """
         self._handshake_callback = callback
 
@@ -137,15 +133,15 @@ class ChannelManager:
         publishes ChannelMessageReceived to EventBus.
 
         Args:
-            channel: Channel name (e.g., "websocket", "telegram").
-            chat_id: Conversation identifier on the platform.
-            sender_id: User identifier on the platform.
-            content: Message text.
-            media: Optional attachments.
-            metadata: Optional channel-specific metadata.
+        channel: Channel name (e.g., "websocket", "telegram").
+        chat_id: Conversation identifier on the platform.
+        sender_id: User identifier on the platform.
+        content: Message text.
+        media: Optional attachments.
+        metadata: Optional channel-specific metadata.
 
         Returns:
-            loop_id for this conversation.
+        loop_id for this conversation.
         """
         # Create or retrieve loop_id
         loop_id = self._get_or_create_loop_id(channel, chat_id)
@@ -179,11 +175,11 @@ class ChannelManager:
         """Get existing loop_id or create new one for (channel, chat_id).
 
         Args:
-            channel: Channel name.
-            chat_id: Conversation identifier.
+        channel: Channel name.
+        chat_id: Conversation identifier.
 
         Returns:
-            loop_id for this conversation.
+        loop_id for this conversation.
         """
         key = (channel, chat_id)
 
@@ -294,7 +290,7 @@ class ChannelManager:
         """Start all enabled channels.
 
         Raises:
-            RuntimeError: If no message handler set or WebSocket not enabled.
+        RuntimeError: If no message handler set or WebSocket not enabled.
         """
         if self._started:
             logger.warning("Channel manager already started")
@@ -359,7 +355,7 @@ class ChannelManager:
         """Broadcast message to all channels.
 
         Args:
-            message: Message dict to broadcast.
+        message: Message dict to broadcast.
         """
         if not self._started:
             logger.warning("Broadcast called but channel manager not started")
@@ -396,9 +392,9 @@ class ChannelManager:
         """Send message to specific channel/chat.
 
         Args:
-            channel_name: Target channel name.
-            chat_id: Target conversation identifier.
-            message: ChannelMessage or dict to send.
+        channel_name: Target channel name.
+        chat_id: Target conversation identifier.
+        message: ChannelMessage or dict to send.
         """
         channel = self._channels.get(channel_name)
         if channel is None:
@@ -422,9 +418,9 @@ class ChannelManager:
         """Send with exponential backoff retry.
 
         Args:
-            channel: Channel instance.
-            chat_id: Target conversation.
-            message: Message to send.
+        channel: Channel instance.
+        chat_id: Target conversation.
+        message: Message to send.
         """
         max_retries = getattr(self._config.channels, "send_max_retries", 3)
         max_attempts = max(max_retries, 1)
@@ -459,10 +455,10 @@ class ChannelManager:
         """Transcribe audio via configured provider.
 
         Args:
-            file_path: Path to audio file.
+        file_path: Path to audio file.
 
         Returns:
-            Transcribed text, or empty string on failure.
+        Transcribed text, or empty string on failure.
         """
         # TODO: Implement transcription using configured provider
         # (moved from nanobot channel-level to manager-level)
@@ -472,10 +468,10 @@ class ChannelManager:
         """Get channel by name.
 
         Args:
-            name: Channel name.
+        name: Channel name.
 
         Returns:
-            Channel instance, or None if not found.
+        Channel instance, or None if not found.
         """
         return self._channels.get(name)
 
@@ -483,11 +479,11 @@ class ChannelManager:
         """Get loop_id for a (channel, chat_id) pair.
 
         Args:
-            channel: Channel name.
-            chat_id: Conversation identifier.
+        channel: Channel name.
+        chat_id: Conversation identifier.
 
         Returns:
-            loop_id, or None if not mapped.
+        loop_id, or None if not mapped.
         """
         return self._channel_to_loop.get((channel, chat_id))
 
@@ -495,10 +491,10 @@ class ChannelManager:
         """Get (channel, chat_id) for a loop_id.
 
         Args:
-            loop_id: Loop identifier.
+        loop_id: Loop identifier.
 
         Returns:
-            (channel, chat_id) tuple, or None if not mapped.
+        (channel, chat_id) tuple, or None if not mapped.
         """
         return self._loop_to_channel.get(loop_id)
 
@@ -516,7 +512,7 @@ class ChannelManager:
         """Get information about all channels.
 
         Returns:
-            List of channel info dicts.
+        List of channel info dicts.
         """
         return [
             {
@@ -552,9 +548,9 @@ class ChannelManager:
         For non-streaming channels, buffers deltas until stream end.
 
         Args:
-            channel_name: Target channel name.
-            chat_id: Target conversation.
-            message: ChannelMessage with streaming metadata.
+        channel_name: Target channel name.
+        chat_id: Target conversation.
+        message: ChannelMessage with streaming metadata.
         """
         channel = self._channels.get(channel_name)
         if channel is None:
@@ -596,9 +592,9 @@ class ChannelManager:
         """Send streaming delta to channel (with optional coalescing).
 
         Args:
-            channel: Channel instance.
-            chat_id: Target conversation.
-            message: Delta message.
+        channel: Channel instance.
+        chat_id: Target conversation.
+        message: Delta message.
         """
         # Coalesce deltas if enabled
         coalesced = await self._coalesce_stream_delta(channel, chat_id, message)
@@ -623,9 +619,9 @@ class ChannelManager:
         """Send stream end marker.
 
         Args:
-            channel: Channel instance.
-            chat_id: Target conversation.
-            message: End marker message.
+        channel: Channel instance.
+        chat_id: Target conversation.
+        message: End marker message.
         """
         # Send any remaining delta content with end flag
         if hasattr(channel, "send_delta"):
@@ -648,12 +644,12 @@ class ChannelManager:
         Simple implementation: just return the message (coalescing is optional).
 
         Args:
-            channel: Channel instance.
-            chat_id: Target conversation.
-            message: Incoming delta.
+        channel: Channel instance.
+        chat_id: Target conversation.
+        message: Incoming delta.
 
         Returns:
-            Coalesced message (or original if no coalescing).
+        Coalesced message (or original if no coalescing).
         """
         # For now, return original message
         # Full coalescing implementation would buffer and merge consecutive deltas
@@ -668,9 +664,9 @@ class ChannelManager:
         """Buffer delta for non-streaming channel.
 
         Args:
-            channel_name: Channel name.
-            chat_id: Target conversation.
-            message: Delta to buffer.
+        channel_name: Channel name.
+        chat_id: Target conversation.
+        message: Delta to buffer.
         """
         key = (channel_name, chat_id)
         if key not in self._stream_buffers:
@@ -685,8 +681,8 @@ class ChannelManager:
         """Flush buffered deltas as complete message.
 
         Args:
-            channel_name: Channel name.
-            chat_id: Target conversation.
+        channel_name: Channel name.
+        chat_id: Target conversation.
         """
         key = (channel_name, chat_id)
         if key not in self._stream_buffers:

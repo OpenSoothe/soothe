@@ -36,12 +36,12 @@ class NotifyDispatcher:
         self._global_targets: list[NotifyTarget] = []
 
     def register(self, sink: NotifySink) -> None:
-        """Register a sink (replaces same ``name`` if already present)."""
+        """Register a sink (replaces same `name` if already present)."""
         self._sinks = [s for s in self._sinks if s.name != sink.name]
         self._sinks.append(sink)
 
     def set_global_targets(self, targets: list[NotifyTarget]) -> None:
-        """Default targets from ``notify.targets`` config."""
+        """Default targets from `notify.targets` config."""
         self._global_targets = list(targets)
 
     @property

@@ -1,4 +1,4 @@
-"""``intent_hint`` validation for daemon ``loop_input`` non-agent turns."""
+"""`intent_hint` validation for daemon `loop_input` non-agent turns."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ STRUCTURED_OUTPUT_HINTS: frozenset[str] = frozenset({TEXT_COMPLETION, IMAGE_TO_T
 
 
 def is_daemon_intent_hint(hint: str | None) -> bool:
-    """Return True when ``hint`` selects a daemon-side intent-hint turn."""
+    """Return True when `hint` selects a daemon-side intent-hint turn."""
     return bool(hint and hint in DAEMON_INTENT_HINTS)
 
 
@@ -26,17 +26,17 @@ def validate_and_normalize_intent_hint(
     has_attachments: bool,
     has_response_schema: bool,
 ) -> tuple[str | None, str | None]:
-    """Validate ``loop_input`` intent hint.
+    """Validate `loop_input` intent hint.
 
     Args:
-        hint: Normalized lowercase hint from the wire message.
-        prompt_text: Coerced user text, or ``None`` when empty.
-        has_attachments: Whether normalized image attachments are present.
-        has_response_schema: Whether the client supplied ``response_schema``.
+    hint: Normalized lowercase hint from the wire message.
+    prompt_text: Coerced user text, or `None` when empty.
+    has_attachments: Whether normalized image attachments are present.
+    has_response_schema: Whether the client supplied `response_schema`.
 
     Returns:
-        ``(normalized_hint, error_message)``. On success ``error_message`` is ``None``.
-        When ``hint`` is unset, returns ``(None, None)`` if content is present, else an error.
+    `(normalized_hint, error_message)`. On success `error_message` is `None`.
+    When `hint` is unset, returns `(None, None)` if content is present, else an error.
     """
     if not hint:
         if prompt_text is None:

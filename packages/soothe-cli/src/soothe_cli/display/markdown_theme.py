@@ -1,10 +1,4 @@
-"""Named markdown appearance presets for TUI Rich rendering.
-
-Display labels and stable IDs follow the same pattern as ``theme.ThemeEntry``.
-Users configure via ``--markdown-theme`` or ``ui.markdown_theme`` in the
-**CLI client** preferences file ``~/SOOTHE_HOME/config/cli.yml`` (TUI only —
-not the daemon ``nano.yml`` / ``soothe.yml``).
-"""
+"""Named markdown appearance presets for TUI Rich rendering."""
 
 from __future__ import annotations
 
@@ -180,7 +174,7 @@ def resolve_markdown_theme_name(name: str | None = None) -> str:
 
 
 def resolve_markdown_theme(name: str | None = None) -> MarkdownThemeEntry:
-    """Return the resolved ``MarkdownThemeEntry`` for ``name`` or runtime config."""
+    """Return the resolved `MarkdownThemeEntry` for `name` or runtime config."""
     return REGISTRY[resolve_markdown_theme_name(name)]
 
 
@@ -352,7 +346,7 @@ _SootheMarkdownCls: type[Any] | None = None
 
 
 def _soothe_markdown_class() -> type[Any]:
-    """Return the cached Rich ``Markdown`` subclass with Mermaid fence support."""
+    """Return the cached Rich `Markdown` subclass with Mermaid fence support."""
     global _SootheMarkdownCls
     if _SootheMarkdownCls is not None:
         return _SootheMarkdownCls
@@ -392,7 +386,7 @@ def _soothe_markdown_class() -> type[Any]:
 
 
 class ThemedMarkdownRenderer:
-    """Rich ``Markdown`` wrapper that applies a ``MarkdownThemeEntry`` at render time."""
+    """Rich `Markdown` wrapper that applies a `MarkdownThemeEntry` at render time."""
 
     def __init__(
         self,
@@ -425,10 +419,10 @@ class ThemedMarkdownRenderer:
 def resolve_markdown_theme_parts(
     widget_or_app: object | None = None,
 ) -> tuple[MarkdownThemeEntry, theme.ThemeColors, str]:
-    """Resolve and return the ``(entry, colors, code_theme)`` tuple for caching.
+    """Resolve and return the `(entry, colors, code_theme)` tuple for caching.
 
     Callers that render markdown repeatedly (e.g. streaming assistant cards)
-    can cache this tuple once and then construct ``ThemedMarkdownRenderer``
+    can cache this tuple once and then construct `ThemedMarkdownRenderer`
     directly, avoiding repeated theme resolution on every flush.
     """
     entry = resolve_markdown_theme()

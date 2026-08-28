@@ -1,14 +1,4 @@
-"""Daemon RPC command handlers.
-
-Structured command request/response handlers for slash commands.
-Each handler executes a specific command and returns structured data.
-
-naming:
-    - Wire / clients: ``loop_id`` (StrangeLoop subscription scope).
-    - First positional argument to each ``_cmd_*`` handler: ``checkpoint_thread_id`` —
-      the LangGraph / durability checkpoint key (``configurable.thread_id``) after
-      ``bind_execution_thread_for_loop``; not a client routing id.
-"""
+"""Daemon RPC command handlers."""
 
 from __future__ import annotations
 
@@ -22,9 +12,9 @@ async def _handle_command_request(self, msg: dict[str, Any]) -> None:
     """Handle structured RPC command requests.
 
     Args:
-        msg: Command request with ``command``, optional ``params``, and ``loop_id``
-            (required; set by the loop input worker after bind, or supplied by tests with
-            a runner that already has ``current_thread_id``).
+    msg: Command request with `command`, optional `params`, and `loop_id`
+    (required; set by the loop input worker after bind, or supplied by tests with
+    a runner that already has `current_thread_id`).
     """
     request_id = msg.get("request_id")
     command = msg.get("command")
@@ -119,10 +109,10 @@ async def _send_command_response(
     """Send structured command response.
 
     Args:
-        command: Command name
-        data: Response data (if successful)
-        error: Error message (if failed)
-        request_id: Echo client correlation id when present (WebSocket ``request_response``).
+    command: Command name
+    data: Response data (if successful)
+    error: Error message (if failed)
+    request_id: Echo client correlation id when present (WebSocket `request_response`).
     """
     response: dict[str, Any] = {
         "type": "command_response",
@@ -156,12 +146,12 @@ async def _cmd_clear(
     4. Broadcast clear event with archival metadata
 
     Args:
-        checkpoint_thread_id: LangGraph checkpoint thread_id.
-        params: Command parameters (unused for clear).
-        loop_id: Current StrangeLoop subscription scope.
+    checkpoint_thread_id: LangGraph checkpoint thread_id.
+    params: Command parameters (unused for clear).
+    loop_id: Current StrangeLoop subscription scope.
 
     Returns:
-        Dict with cleared status, new loop_id, and archival metadata.
+    Dict with cleared status, new loop_id, and archival metadata.
     """
     if not checkpoint_thread_id:
         raise ValueError("Active loop required")
@@ -244,14 +234,14 @@ async def _cmd_exit(
 async def _cmd_quit(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Same as ``_cmd_exit``."""
+    """Same as `_cmd_exit`."""
     return await self._cmd_exit(checkpoint_thread_id, params, loop_id=loop_id)
 
 
 async def _cmd_detach(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Mark the client session detached (loop-scoped status when ``loop_id`` is known)."""
+    """Mark the client session detached (loop-scoped status when `loop_id` is known)."""
     if not checkpoint_thread_id:
         raise ValueError("Active loop required")
 
@@ -290,15 +280,15 @@ async def _cmd_memory(
     """Query memory stats (supports daemon-level tracemalloc profiling).
 
     Args:
-        params: Optional dict with "mode" key:
-            - "runner": Runner memory stats (default, requires active loop)
-            - "daemon": Daemon-level tracemalloc stats from MemoryProfiler
-            - "gc": Force garbage collection and report reclaimed memory
-            - "snapshot": Take a tracemalloc snapshot and return comparison
-            - "objects": Get Python object counts by type
+    params: Optional dict with "mode" key:
+    - "runner": Runner memory stats (default, requires active loop)
+    - "daemon": Daemon-level tracemalloc stats from MemoryProfiler
+    - "gc": Force garbage collection and report reclaimed memory
+    - "snapshot": Take a tracemalloc snapshot and return comparison
+    - "objects": Get Python object counts by type
 
     Returns:
-        Dict with memory stats for the requested mode.
+    Dict with memory stats for the requested mode.
     """
     mode = params.get("mode", "runner") if isinstance(params, dict) else "runner"
 
@@ -455,7 +445,7 @@ async def _cmd_plan(
 async def _cmd_thread(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Durability / checkpoint operations (params use checkpoint ids, not ``loop_id``)."""
+    """Durability / checkpoint operations (params use checkpoint ids, not `loop_id`)."""
     action = params.get("action")
     target_checkpoint_id = params.get("id")
 
@@ -474,7 +464,7 @@ async def _cmd_thread(
 async def _cmd_resume(
     self, checkpoint_thread_id: str | None, params: dict, *, loop_id: str | None = None
 ) -> dict[str, Any]:
-    """Resume target loop (``params.loop_id``)."""
+    """Resume target loop (`params.loop_id`)."""
     target_loop = params.get("loop_id")
     if not target_loop:
         raise ValueError("loop_id required for resume")
@@ -513,12 +503,12 @@ async def _cmd_cron_add(
     """Add a scheduled cron job via natural language.
 
     Args:
-        checkpoint_thread_id: LangGraph checkpoint thread_id (unused for cron).
-        params: Command parameters with 'text' (natural language) and optional 'priority'.
-        loop_id: Current StrangeLoop subscription scope (unused for cron).
+    checkpoint_thread_id: LangGraph checkpoint thread_id (unused for cron).
+    params: Command parameters with 'text' (natural language) and optional 'priority'.
+    loop_id: Current StrangeLoop subscription scope (unused for cron).
 
     Returns:
-        Dict with created job details: id, description, next_run, status.
+    Dict with created job details: id, description, next_run, status.
     """
     from soothe_daemon.cron import CronService, ExtractionError
     from soothe_daemon.cron.extraction import AutopilotDisabledError

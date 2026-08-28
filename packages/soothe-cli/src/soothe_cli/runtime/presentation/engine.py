@@ -1,8 +1,4 @@
-"""Unified presentation decisions for CLI/TUI surfaces.
-
-This module centralizes display-time deduplication and summarization rules so
-renderers stay focused on output transport (stdout/stderr or widgets).
-"""
+"""Unified presentation decisions for CLI/TUI surfaces."""
 
 from __future__ import annotations
 
@@ -132,16 +128,16 @@ class PresentationEngine:
         """One-line tool result for TUI/CLI parity (brief + summarize + icon + duration).
 
         Assembles the same one-line text as TUI tool cards and trace views
-        after ``extract_tool_brief`` / ``summarize_tool_result``.
+        after `extract_tool_brief` / `summarize_tool_result`.
 
         Args:
-            tool_name: Tool that produced the content.
-            raw_content: Raw or formatted tool message body (string).
-            is_error: When True, prefix with the error icon if missing.
-            duration_ms: Elapsed time in ms; omitted when zero.
+        tool_name: Tool that produced the content.
+        raw_content: Raw or formatted tool message body (string).
+        is_error: When True, prefix with the error icon if missing.
+        duration_ms: Elapsed time in ms; omitted when zero.
 
         Returns:
-            Plain-text status line (may already start with a status icon from brief).
+        Plain-text status line (may already start with a status icon from brief).
         """
         from soothe_sdk.display.message_processing import extract_tool_brief
 
@@ -172,11 +168,11 @@ class PresentationEngine:
         """Deduplicate repeated action summaries within 5s window.
 
         Args:
-            action_text: Action summary text (may include confidence).
-            now_s: Optional timestamp (defaults to monotonic time).
+        action_text: Action summary text (may include confidence).
+        now_s: Optional timestamp (defaults to monotonic time).
 
         Returns:
-            True if action should be emitted, False if duplicate.
+        True if action should be emitted, False if duplicate.
         """
         normalized = self._normalize_action(action_text)
         now = now_s if now_s is not None else time.monotonic()
@@ -198,10 +194,10 @@ class PresentationEngine:
         """Strip confidence and whitespace for action comparison.
 
         Args:
-            text: Action text to normalize.
+        text: Action text to normalize.
 
         Returns:
-            Normalized text for deduplication comparison.
+        Normalized text for deduplication comparison.
         """
         lowered = text.lower().strip()
         # Remove "(XX% sure)" or "(XX% confident)" suffix

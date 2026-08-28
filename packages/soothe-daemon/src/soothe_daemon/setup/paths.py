@@ -11,7 +11,7 @@ TEMPLATE_NAMES = ("nano.yml", "soothe.yml", "daemon.yml")
 
 
 def default_config_dir() -> Path:
-    """Return ``$SOOTHE_HOME/config`` (does not create it)."""
+    """Return `$SOOTHE_HOME/config` (does not create it)."""
     return Path(SOOTHE_HOME).expanduser() / "config"
 
 
@@ -32,7 +32,7 @@ def config_paths(config_dir: Path) -> dict[str, Path]:
 
 
 def monorepo_template_path(name: str) -> Path | None:
-    """Return monorepo ``config/<stem>.template.yml`` if present."""
+    """Return monorepo `config/<stem>.template.yml` if present."""
     if name not in TEMPLATE_NAMES:
         return None
     stem = name.removesuffix(".yml")
@@ -52,12 +52,12 @@ def read_template_text(name: str) -> str:
     """Read template contents as UTF-8 text.
 
     Lookup order:
-    1. Package resources (``soothe_daemon.setup.templates``)
-    2. On-disk package ``templates/`` directory
-    3. Monorepo ``config/<stem>.template.yml``
+    1. Package resources (`soothe_daemon.setup.templates`)
+    2. On-disk package `templates/` directory
+    3. Monorepo `config/<stem>.template.yml`
 
     Raises:
-        FileNotFoundError: If no template can be found.
+    FileNotFoundError: If no template can be found.
     """
     if name not in TEMPLATE_NAMES:
         raise FileNotFoundError(f"unknown template name: {name}")
@@ -82,7 +82,7 @@ def read_template_text(name: str) -> str:
 
 
 def _monorepo_config_dir() -> Path:
-    """Best-effort path to the repo ``config/`` directory."""
+    """Best-effort path to the repo `config/` directory."""
     here = Path(__file__).resolve()
     for parent in here.parents:
         candidate = parent / "config"

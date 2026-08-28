@@ -1,4 +1,4 @@
-"""Keep API secrets out of YAML by preferring ``$SOOTHE_HOME/.env``."""
+"""Keep API secrets out of YAML by preferring `$SOOTHE_HOME/.env`."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _ENV_ASSIGN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 
 
 def is_env_placeholder(value: str) -> bool:
-    """Return True when *value* is a bare ``${VAR}`` placeholder."""
+    """Return True when *value* is a bare `${VAR}` placeholder."""
     return bool(re.fullmatch(r"\$\{\w+\}", value.strip()))
 
 
@@ -48,19 +48,19 @@ def normalize_api_key_for_yaml(
     soothe_home: Path,
     env_var: str,
 ) -> str:
-    """Return YAML-safe key reference; persist raw secrets to ``.env``.
+    """Return YAML-safe key reference; persist raw secrets to `.env`.
 
-    If *api_key* is already ``${VAR}``, return it unchanged.
-    If it looks like a raw secret, write/update ``$SOOTHE_HOME/.env`` and
-    return ``${env_var}``. Dummy local keys (``ollama``) stay literal.
+    If *api_key* is already `${VAR}`, return it unchanged.
+    If it looks like a raw secret, write/update `$SOOTHE_HOME/.env` and
+    return `${env_var}`. Dummy local keys (`ollama`) stay literal.
 
     Args:
-        api_key: User-entered key or placeholder.
-        soothe_home: Soothe home directory.
-        env_var: Environment variable name to use for raw secrets.
+    api_key: User-entered key or placeholder.
+    soothe_home: Soothe home directory.
+    env_var: Environment variable name to use for raw secrets.
 
     Returns:
-        Value to store in ``nano.yml`` ``api_key``.
+    Value to store in `nano.yml` `api_key`.
     """
     stripped = api_key.strip()
     if is_env_placeholder(stripped) or not looks_like_secret(stripped):
@@ -73,7 +73,7 @@ def normalize_api_key_for_yaml(
 
 
 def upsert_dotenv_value(env_path: Path, key: str, value: str) -> None:
-    """Create or update ``KEY=value`` in a dotenv file (no export keyword)."""
+    """Create or update `KEY=value` in a dotenv file (no export keyword)."""
     env_path = env_path.expanduser()
     env_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []

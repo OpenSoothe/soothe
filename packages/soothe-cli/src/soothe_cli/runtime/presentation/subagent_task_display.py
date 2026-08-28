@@ -1,8 +1,4 @@
-"""Format subagent Task-scope assistant blobs for CLI/TUI.
-
-Deep Research emits structured JSON in subgraph assistant streams. Clients show
-user-facing summaries only; internal planning JSON is suppressed.
-"""
+"""Format subagent Task-scope assistant blobs for CLI/TUI."""
 
 from __future__ import annotations
 
@@ -12,7 +8,7 @@ from typing import Any
 
 
 def _is_deep_research_internal_json_object(obj: dict[str, Any]) -> bool:
-    """True when ``obj`` is Deep Research engine scratch (not a user-facing report)."""
+    """True when `obj` is Deep Research engine scratch (not a user-facing report)."""
     keys = set(obj.keys())
     if "sub_questions" in keys:
         return True
@@ -24,7 +20,7 @@ def _is_deep_research_internal_json_object(obj: dict[str, Any]) -> bool:
 
 
 def _iter_embedded_json_objects(raw: str) -> Iterator[dict[str, Any]]:
-    """Yield dict objects embedded anywhere in ``raw`` (prose + concatenated JSON)."""
+    """Yield dict objects embedded anywhere in `raw` (prose + concatenated JSON)."""
     dec = json.JSONDecoder()
     i = 0
     s = raw
@@ -44,7 +40,7 @@ def _iter_embedded_json_objects(raw: str) -> Iterator[dict[str, Any]]:
 
 
 def _strip_concatenated_json_objects(raw: str, *, predicate) -> str:
-    """Remove JSON objects matching ``predicate``; keep surrounding prose."""
+    """Remove JSON objects matching `predicate`; keep surrounding prose."""
     stripped = raw.strip()
     if not stripped:
         return raw
@@ -88,11 +84,11 @@ def format_subagent_task_assistant_for_display(
     """Return display-safe assistant text for a delegated task namespace.
 
     Args:
-        raw: Full assistant text from a subgraph namespace.
-        subagent_type: Built-in subagent id when known (``deep_research``, …).
+    raw: Full assistant text from a subgraph namespace.
+    subagent_type: Built-in subagent id when known (`deep_research`, …).
 
     Returns:
-        Scrubbed one-line text, or ``""`` when only internal payloads remain.
+    Scrubbed one-line text, or `""` when only internal payloads remain.
     """
     agent = (subagent_type or "").strip().lower()
     text = raw

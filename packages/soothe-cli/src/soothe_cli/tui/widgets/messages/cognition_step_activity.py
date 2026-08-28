@@ -1,9 +1,4 @@
-"""Pure step-card activity rendering and row classification (RFC-628).
-
-Row model, single-pass index, activity tree, status lines, and step-end
-phase transitions. No Textual widget imports — callers pass resolved theme
-colors and glyphs; builders return ``Content``.
-"""
+"""Pure step-card activity rendering and row classification."""
 
 from __future__ import annotations
 
@@ -52,10 +47,10 @@ _TODO_STATUS_TO_PHASE: dict[str, str] = {
 
 @dataclass
 class StepToolRow:
-    """One tool invocation row on the step card (RFC-628).
+    """One tool invocation row on the step card.
 
-    Task delegation rows use ``is_task_row=True`` as flat markers. Subgraph tools
-    (type ``t``) stay on the step card for per-task counts; they are not rendered
+    Task delegation rows use `is_task_row=True` as flat markers. Subgraph tools
+    (type `t`) stay on the step card for per-task counts; they are not rendered
     as nested activity lines (task call line shows the running tool total).
     """
 
@@ -75,8 +70,8 @@ class StepRowIndex:
     """Single-pass classification of tool rows for one step card.
 
     Step cards show flat tool rows and task delegation markers. Subgraph tools
-    are counted under ``children_by_task`` for the running task-line suffix and
-    included in ``total_tool_count``; they are not shown as nested preview lines.
+    are counted under `children_by_task` for the running task-line suffix and
+    included in `total_tool_count`; they are not shown as nested preview lines.
     """
 
     task_delegations: list[StepToolRow] = field(default_factory=list)
@@ -93,7 +88,7 @@ class StepRowIndex:
 
 
 def format_tool_count_label(count: int, *, singular: str, plural: str) -> str:
-    """Human-readable count label, e.g. ``3 tools``."""
+    """Human-readable count label, e.g. `3 tools`."""
     if count <= 0:
         return ""
     word = singular if count == 1 else plural
@@ -101,7 +96,7 @@ def format_tool_count_label(count: int, *, singular: str, plural: str) -> str:
 
 
 def count_distinct_tool_call_ids(rows: list[StepToolRow]) -> int:
-    """Distinct non-empty tool_call_id values in ``rows``."""
+    """Distinct non-empty tool_call_id values in `rows`."""
     ids: set[str] = set()
     for row in rows:
         tcid = str(row.tool_call_id).strip()
@@ -114,7 +109,7 @@ def latest_preview_rows(
     rows: list[StepToolRow],
     limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
 ) -> list[StepToolRow]:
-    """Return the most recently appended rows, capped at ``limit``."""
+    """Return the most recently appended rows, capped at `limit`."""
     if not rows:
         return []
     if len(rows) <= limit:
@@ -151,7 +146,7 @@ def compact_step_title_meta(
 ) -> str:
     """Compact middot meta for the step title.
 
-    Forms: `` · 45s · 12/1 · ↑8.1K ↓2.0K · ↻1/3``. Description is not truncated;
+    Forms: ` · 45s · 12/1 · ↑8.1K ↓2.0K · ↻1/3`. Description is not truncated;
     callers append this string after the full step brief.
     """
     parts: list[str] = []
@@ -170,7 +165,7 @@ def compact_step_title_meta(
 
 
 def normalize_todo_items(todos: list[Any] | None) -> list[dict[str, str]]:
-    """Normalize CoreAgent ``write_todos`` / updates payloads to ``{content, status}``."""
+    """Normalize CoreAgent `write_todos` / updates payloads to `{content, status}`."""
     out: list[dict[str, str]] = []
     if not todos:
         return out
@@ -188,7 +183,7 @@ def normalize_todo_items(todos: list[Any] | None) -> list[dict[str, str]]:
 
 
 def coerce_todos_list(raw: object) -> list[Any] | None:
-    """Coerce a ``todos`` field to a list (handles JSON strings from streaming)."""
+    """Coerce a `todos` field to a list (handles JSON strings from streaming)."""
     if isinstance(raw, list):
         return raw
     if isinstance(raw, str) and raw.strip():
@@ -202,7 +197,7 @@ def coerce_todos_list(raw: object) -> list[Any] | None:
 
 
 def is_write_todos_tool_name(tool_name: object) -> bool:
-    """True for ``write_todos`` / ``WriteTodos`` style names."""
+    """True for `write_todos` / `WriteTodos` style names."""
     name = str(tool_name or "").strip()
     if not name:
         return False
@@ -214,7 +209,7 @@ def is_write_todos_tool_name(tool_name: object) -> bool:
 
 
 def todo_status_phase(status: str) -> str:
-    """Map a todo status string to a ``phase_icon`` phase."""
+    """Map a todo status string to a `phase_icon` phase."""
     return _TODO_STATUS_TO_PHASE.get((status or "pending").strip().lower(), "pending")
 
 
@@ -263,7 +258,7 @@ def finalize_tool_rows_on_step_end(
     """Finalize open tool rows when the step card completes.
 
     On successful steps, pending/running/skipped subgraph tools are marked
-    ``success`` so task branches show Done instead of Skipped/Pending when
+    `success` so task branches show Done instead of Skipped/Pending when
     the subagent finished without per-tool ToolMessage events.
     """
     terminal = "success" if success else "skipped"
@@ -289,7 +284,7 @@ def finalize_tool_rows_on_step_end(
 
 
 def row_belongs_to_step(row: StepToolRow, step_id: str) -> bool:
-    """True when ``row`` belongs to this step card (unified id encodes step)."""
+    """True when `row` belongs to this step card (unified id encodes step)."""
     parsed_sid, _, _, _ = parse_unified_tool_call_id(row.tool_call_id)
     if parsed_sid:
         canonical_step_id = _step_id_from_unified_fragment(step_id)
@@ -323,7 +318,7 @@ def task_delegation_dedupe_key(row: StepToolRow, step_id: str) -> str:
 
 
 def prefer_task_delegation_row(candidate: StepToolRow, incumbent: StepToolRow) -> bool:
-    """True when ``candidate`` should replace ``incumbent`` for the same task key."""
+    """True when `candidate` should replace `incumbent` for the same task key."""
     if candidate.is_task_row and not incumbent.is_task_row:
         return True
     if incumbent.is_task_row and not candidate.is_task_row:
@@ -351,9 +346,9 @@ def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
 
 
 def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
-    """True for rows that belong in the step-card footer tool total (RFC-628).
+    """True for rows that belong in the step-card footer tool total.
 
-    Includes main-graph tools (type ``s``) and subgraph tools (type ``t``).
+    Includes main-graph tools (type `s`) and subgraph tools (type `t`).
     Task delegation rows and task-metadata-only rows are excluded. Legacy opaque
     ids parented under a task are also excluded.
     """
@@ -373,7 +368,7 @@ def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
 
 
 def _task_idx_from_task_row(row: StepToolRow) -> int | None:
-    """Parse task index from a step-level ``…:s:task:N`` row id."""
+    """Parse task index from a step-level `…:s:task:N` row id."""
     tcid = str(row.tool_call_id).strip()
     if not tcid:
         return None
@@ -454,8 +449,8 @@ class StepRowClassifier:
     def build_orphan(rows: list[StepToolRow], *, task_idx: int = 0) -> StepRowIndex:
         """Classify rows for an intake-only orphan SubAgent card.
 
-        Host stamps wired-subagent tools as ``{step}:s:{id}`` (type ``s``).
-        Nested task subgraphs use type ``t`` filtered by ``task_idx``. Both
+        Host stamps wired-subagent tools as `{step}:s:{id}` (type `s`).
+        Nested task subgraphs use type `t` filtered by `task_idx`. Both
         belong on the orphan card as primary activity (no task-delegation branch).
         """
         filtered_rows: list[StepToolRow] = []
@@ -484,7 +479,7 @@ class StepRowClassifier:
 
     @staticmethod
     def _iter_task_delegation_rows(step_id: str, rows: list[StepToolRow]) -> list[StepToolRow]:
-        """Task delegation rows on this step (unified ``{step}:s:task:…`` ids)."""
+        """Task delegation rows on this step (unified `{step}:s:task:…` ids)."""
         by_key: dict[str, StepToolRow] = {}
         canonical_step_id = _step_id_from_unified_fragment(step_id)
         for row in rows:
@@ -555,7 +550,7 @@ def preview_task_description(
 
 
 def subagent_task_label(subagent_type: object, description: object = "") -> str:
-    """Display label ``DisplayName(preview)`` for a subagent task description."""
+    """Display label `DisplayName(preview)` for a subagent task description."""
     if isinstance(subagent_type, str):
         st = subagent_type.strip()
     else:
@@ -568,7 +563,7 @@ def subagent_task_label(subagent_type: object, description: object = "") -> str:
 
 
 def task_delegation_label(task_row: StepToolRow) -> str:
-    """Display label ``SubAgentName(description)`` for a task delegation row."""
+    """Display label `SubAgentName(description)` for a task delegation row."""
     args = dict(task_row.args or {})
     return subagent_task_label(
         args.get("subagent_type", ""),
@@ -589,8 +584,8 @@ def append_tool_activity_lines(
 ) -> None:
     """Append capped per-tool activity lines under a task or step branch.
 
-    ``max_cols`` is the available terminal width for one tool line. When set,
-    the prefix (``gutter + icon + " "``) is subtracted and the remainder is
+    `max_cols` is the available terminal width for one tool line. When set,
+    the prefix (`gutter + icon + " "`) is subtracted and the remainder is
     passed to :func:`format_step_tool_activity_line` so each row fits on one
     line without wrapping.
     """
@@ -693,14 +688,14 @@ class StepActivityTree:
     ) -> Content:
         """To-do section then Tool-use section (task markers + main tool preview).
 
-        ``max_cols`` bounds each rendered line to the terminal width so tool
-        rows never wrap; ``None`` preserves the prior fixed-cap behavior.
-        ``glyph_override`` is the card header glyph (subagent glyph for orphan
+        `max_cols` bounds each rendered line to the terminal width so tool
+        rows never wrap; `None` preserves the prior fixed-cap behavior.
+        `glyph_override` is the card header glyph (subagent glyph for orphan
         SubAgent cards) so the activity gutters align to the right of that dot.
 
-        Layout: the section header (``To-do`` / ``Tool-use``) sits on a ``⎿``
-        body-gutter line; its items (tool rows, todo markers, notes, ``+N
-        more``) are indented one column beyond the section label so they nest
+        Layout: the section header (`To-do` / `Tool-use`) sits on a `⎿`
+        body-gutter line; its items (tool rows, todo markers, notes, `+N
+        more`) are indented one column beyond the section label so they nest
         under the header without a tree glyph.
         """
         section_gutter = _card_body_gutter(glyph_override)

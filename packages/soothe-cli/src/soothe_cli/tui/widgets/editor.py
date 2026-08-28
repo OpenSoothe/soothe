@@ -33,8 +33,8 @@ def resolve_editor() -> list[str] | None:
     Checks $VISUAL, then $EDITOR, then falls back to platform default.
 
     Returns:
-        Tokenized command list, or `None` if the env var was set but empty after
-            tokenization.
+    Tokenized command list, or `None` if the env var was set but empty after
+    tokenization.
     """
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
     if not editor:
@@ -51,7 +51,7 @@ def _prepare_command(cmd: list[str], filepath: str) -> list[str]:
     Adds --wait/-w for GUI editors and `-i NONE` for vim-family editors.
 
     Returns:
-        The complete command list with flags and filepath appended.
+    The complete command list with flags and filepath appended.
     """
     cmd = list(cmd)  # copy
     exe = Path(cmd[0]).stem.lower()
@@ -76,12 +76,12 @@ def open_in_editor(current_text: str) -> str | None:
     Creates a temp .md file, launches the editor, and reads back the result.
 
     Args:
-        current_text: The text to pre-populate in the editor.
+    current_text: The text to pre-populate in the editor.
 
     Returns:
-        The edited text with normalized line endings, or `None` if the editor
-            exited with a non-zero status, was not found, or the result was
-            empty/whitespace-only.
+    The edited text with normalized line endings, or `None` if the editor
+    exited with a non-zero status, was not found, or the result was
+    empty/whitespace-only.
     """
     cmd = resolve_editor()
     if cmd is None:

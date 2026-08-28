@@ -1,4 +1,4 @@
-"""Interactive ``soothed setup`` — scaffold configs and configure LLM provider.
+"""Interactive `soothed setup` — scaffold configs and configure LLM provider.
 
 See docs/impl/-soothed-setup.md.
 """

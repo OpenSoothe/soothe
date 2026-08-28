@@ -28,7 +28,7 @@ def load_config() -> CLIConfig:
     """Return active CLI config from parsed global flags, or defaults.
 
     Returns:
-        A ``CLIConfig`` instance.
+    A `CLIConfig` instance.
     """
     cfg = _runtime_config.get()
     if cfg is not None:

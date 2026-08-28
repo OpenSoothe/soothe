@@ -46,18 +46,18 @@ def load_skill_content(
     """Read `SKILL.md` for a skill directory with optional path containment checks.
 
     Args:
-        skill_path: Path to the skill directory **or** to a `SKILL.md` file.
-        allowed_roots: Resolved directories that may contain the target file.
-            When empty or ``None``, any resolved path is accepted (tests only —
-            production callers should pass roots from daemon RPC).
+    skill_path: Path to the skill directory **or** to a `SKILL.md` file.
+    allowed_roots: Resolved directories that may contain the target file.
+    When empty or `None`, any resolved path is accepted (tests only —
+    production callers should pass roots from daemon RPC).
 
     Returns:
-        File contents as a string, or ``None`` only when the file is missing.
+    File contents as a string, or `None` only when the file is missing.
 
     Raises:
-        PermissionError: When ``allowed_roots`` is non-empty and the resolved
-            `SKILL.md` path lies outside every allowed root.
-        OSError: Propagated from the filesystem when the file cannot be read.
+    PermissionError: When `allowed_roots` is non-empty and the resolved
+    `SKILL.md` path lies outside every allowed root.
+    OSError: Propagated from the filesystem when the file cannot be read.
     """
     raw = Path(skill_path)
     skill_md = raw / "SKILL.md" if raw.is_dir() else raw

@@ -1,4 +1,4 @@
-"""Interactive loop selector screen for the /resume command (RFC-503)."""
+"""Interactive loop selector screen for the /resume command."""
 
 from __future__ import annotations
 
@@ -111,9 +111,9 @@ def _apply_column_width(cell: Static, key: str, column_widths: Mapping[str, int 
     """Apply an explicit width to a table cell when one is configured.
 
     Args:
-        cell: The cell widget to size.
-        key: Column key for the cell.
-        column_widths: Effective column widths for the current table state.
+    cell: The cell widget to size.
+    key: Column key for the cell.
+    column_widths: Effective column widths for the current table state.
     """
     width = column_widths.get(key)
     if width is not None:
@@ -171,10 +171,10 @@ def _visible_column_keys(columns: dict[str, bool]) -> list[str]:
     """Return visible columns in the on-screen order.
 
     Args:
-        columns: Column visibility settings keyed by column name.
+    columns: Column visibility settings keyed by column name.
 
     Returns:
-        Visible column keys in display order.
+    Visible column keys in display order.
     """
     return [key for key in _COLUMN_ORDER if columns.get(key)]
 
@@ -183,10 +183,10 @@ def _collapse_whitespace(value: str) -> str:
     """Normalize a text value onto a single display line.
 
     Args:
-        value: Raw text to display in a single cell.
+    value: Raw text to display in a single cell.
 
     Returns:
-        The input text collapsed to a single line.
+    The input text collapsed to a single line.
     """
     return " ".join(value.split())
 
@@ -195,11 +195,11 @@ def _truncate_value(value: str, width: int | None) -> str:
     """Trim text to fit a fixed-width column.
 
     Args:
-        value: Raw cell text.
-        width: Maximum column width, or `None` for no truncation.
+    value: Raw cell text.
+    width: Maximum column width, or `None` for no truncation.
 
     Returns:
-        The possibly truncated display string.
+    The possibly truncated display string.
     """
     if width is None:
         return value
@@ -216,7 +216,7 @@ def _truncate_value(value: str, width: int | None) -> str:
 
 
 def _abbreviate_loop_id(value: str) -> str:
-    """Render loop IDs as ``10-char prefix + ... + 4-char suffix``."""
+    """Render loop IDs as `10-char prefix + ... + 4-char suffix`."""
     text = _collapse_whitespace(value)
     if len(text) <= _COL_LID:
         return text
@@ -227,12 +227,12 @@ def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool 
     """Return the display text for one loop column.
 
     Args:
-        loop: Loop metadata dict for the row.
-        key: Column key to format.
-        relative_time: Use relative timestamps instead of absolute.
+    loop: Loop metadata dict for the row.
+    key: Column key to format.
+    relative_time: Use relative timestamps instead of absolute.
 
     Returns:
-        Formatted display text for the column cell.
+    Formatted display text for the column cell.
     """
     format_relative_ts, format_ts = _get_format_fns()
     fmt = format_relative_ts if relative_time else format_ts
@@ -269,11 +269,11 @@ def _header_cell_classes(key: str, *, sort_key: str) -> str:
     """Return CSS classes for a header cell.
 
     Args:
-        key: Column key for the header cell.
-        sort_key: Currently active sort column.
+    key: Column key for the header cell.
+    sort_key: Currently active sort column.
 
     Returns:
-        Space-delimited classes for the header cell widget.
+    Space-delimited classes for the header cell widget.
     """
     classes = f"loop-cell loop-cell-{key}"
     if key == sort_key:
@@ -300,15 +300,15 @@ class LoopOption(Horizontal):
         """Initialize a loop option row.
 
         Args:
-            loop: Loop metadata dict for the row.
-            index: The index of this option in the filtered list.
-            columns: Column visibility settings.
-            column_widths: Effective widths for the visible columns.
-            selected: Whether the row is highlighted.
-            current: Whether the row is the active loop.
-            relative_time: Use relative timestamps.
-            cell_text: Pre-formatted cell values keyed by `(loop_id, key)`.
-            classes: CSS classes for styling.
+        loop: Loop metadata dict for the row.
+        index: The index of this option in the filtered list.
+        columns: Column visibility settings.
+        column_widths: Effective widths for the visible columns.
+        selected: Whether the row is highlighted.
+        current: Whether the row is the active loop.
+        relative_time: Use relative timestamps.
+        cell_text: Pre-formatted cell values keyed by `(loop_id, key)`.
+        classes: CSS classes for styling.
         """
         super().__init__(classes=classes)
         self.loop = loop
@@ -328,8 +328,8 @@ class LoopOption(Horizontal):
             """Initialize the Clicked message.
 
             Args:
-                loop_id: The loop identifier.
-                index: The index of the clicked option.
+            loop_id: The loop identifier.
+            index: The index of the clicked option.
             """
             super().__init__()
             self.loop_id = loop_id
@@ -339,7 +339,7 @@ class LoopOption(Horizontal):
         """Compose the row cells.
 
         Yields:
-            Static cells for each visible column.
+        Static cells for each visible column.
         """
         yield Static(
             self._cursor_text(),
@@ -369,7 +369,7 @@ class LoopOption(Horizontal):
         """Update row selection styling without rebuilding the row.
 
         Args:
-            selected: Whether the row should be highlighted.
+        selected: Whether the row should be highlighted.
         """
         self._selected = selected
         if selected:
@@ -387,7 +387,7 @@ class LoopOption(Horizontal):
         """Handle click on this option.
 
         Args:
-            event: The click event.
+        event: The click event.
         """
         event.stop()
         self.post_message(self.Clicked(self.loop_id, self.index))
@@ -575,13 +575,13 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Initialize the `LoopSelectorScreen`.
 
         Args:
-            current_loop: The currently active loop ID (to highlight).
-            loop_limit: Maximum number of rows to fetch when querying DB.
-            initial_loops: Optional preloaded rows to render immediately.
-            daemon_session: TuiDaemonSession instance for WebSocket RPC loop listing.
-            workspace: Current TUI workspace path used to scope the list.
-            filter_current_workspace: When True (default), show only loops
-                recorded for ``workspace``.
+        current_loop: The currently active loop ID (to highlight).
+        loop_limit: Maximum number of rows to fetch when querying DB.
+        initial_loops: Optional preloaded rows to render immediately.
+        daemon_session: TuiDaemonSession instance for WebSocket RPC loop listing.
+        workspace: Current TUI workspace path used to scope the list.
+        filter_current_workspace: When True (default), show only loops
+        recorded for `workspace`.
         """
         super().__init__()
         self._current_loop = current_loop
@@ -620,11 +620,11 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Return loops visible under the current workspace filter.
 
         Args:
-            loops: Unscoped loop rows.
+        loops: Unscoped loop rows.
 
         Returns:
-            Rows for the current workspace when filtering is on, otherwise
-            the input list.
+        Rows for the current workspace when filtering is on, otherwise
+        the input list.
         """
         if not self._filter_current_workspace or not self._workspace:
             return list(loops)
@@ -642,7 +642,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Build the title with workspace scope and current loop ID.
 
         Returns:
-            Plain string describing the selector scope.
+        Plain string describing the selector scope.
         """
         if self._filter_current_workspace and self._workspace:
             scope = f"workspace: {Path(self._workspace).name}"
@@ -668,7 +668,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Build the footer help text for the selector.
 
         Returns:
-            Footer guidance for the active selector bindings.
+        Footer guidance for the active selector bindings.
         """
         glyphs = get_glyphs()
         lines = (
@@ -710,7 +710,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Compose the screen layout.
 
         Yields:
-            Widgets for the loop selector UI.
+        Widgets for the loop selector UI.
         """
         with Vertical(id="loop-selector-shell"):
             yield Static(self._build_title(), classes="loop-selector-title", id="loop-title")
@@ -795,7 +795,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Filter loops as user types.
 
         Args:
-            event: The input changed event.
+        event: The input changed event.
         """
         self._filter_text = event.value
         self._schedule_filter_and_rebuild()
@@ -804,7 +804,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Handle Enter key when filter input is focused.
 
         Args:
-            event: The input submitted event.
+        event: The input submitted event.
         """
         event.stop()
         self.action_select()
@@ -813,7 +813,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Return focus to search when letters are typed from other controls.
 
         Args:
-            event: The key event.
+        event: The key event.
         """
         filter_input = self._get_filter_input()
         if filter_input.has_focus:
@@ -890,8 +890,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         reuse the formatted strings.
 
         Returns:
-            Dict mapping column keys to their effective cell widths, with
-                `None` for flex columns.
+        Dict mapping column keys to their effective cell widths, with
+        `None` for flex columns.
         """
         global _column_widths_cache  # noqa: PLW0603  # Module-level cache requires global statement
 
@@ -951,10 +951,10 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         repeated characters.
 
         Args:
-            loop: Loop metadata dict.
+        loop: Loop metadata dict.
 
         Returns:
-            Concatenated searchable string, truncated to a safe length.
+        Concatenated searchable string, truncated to a safe length.
         """
         parts = [
             loop["loop_id"],
@@ -996,12 +996,12 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Compute filtered loop list off the main loop.
 
         Args:
-            query: Current search query text.
-            loops: Full loop list snapshot.
-            sort_by_updated: Whether to sort by `updated_at`.
+        query: Current search query text.
+        loops: Full loop list snapshot.
+        sort_by_updated: Whether to sort by `updated_at`.
 
         Returns:
-            Filtered and sorted loop list.
+        Filtered and sorted loop list.
         """
         sort_key = _active_sort_key(sort_by_updated)
 
@@ -1056,11 +1056,11 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Check whether two loop lists have the same IDs in order.
 
         Args:
-            old: Previous loop list.
-            new: Fresh loop list.
+        old: Previous loop list.
+        new: Fresh loop list.
 
         Returns:
-            True if both lists have identical loop IDs.
+        True if both lists have identical loop IDs.
         """
         if len(old) != len(new):
             return False
@@ -1152,7 +1152,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Display an error message inside the loop list and refocus.
 
         Args:
-            detail: Human-readable error detail to show.
+        detail: Human-readable error detail to show.
         """
         try:
             async with self._render_lock:
@@ -1178,7 +1178,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Build the loop option widgets.
 
         Args:
-            recompute_widths: Whether to recalculate shared column widths first.
+        recompute_widths: Whether to recalculate shared column widths first.
         """
         async with self._render_lock:
             try:
@@ -1212,7 +1212,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Build option widgets from filtered loops without mounting.
 
         Returns:
-            Tuple of all option widgets and the currently selected widget.
+        Tuple of all option widgets and the currently selected widget.
         """
         widgets: list[LoopOption] = []
         selected_widget: LoopOption | None = None
@@ -1313,7 +1313,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Move selection by delta, updating only the affected rows.
 
         Args:
-            delta: Positions to move (negative for up, positive for down).
+        delta: Positions to move (negative for up, positive for down).
         """
         if not self._filtered_loops or not self._option_widgets:
             return
@@ -1344,7 +1344,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Return the number of loop options that fit in one visual page.
 
         Returns:
-            Number of loop options per page, at least 1.
+        Number of loop options per page, at least 1.
         """
         default_page_size = 10
         try:
@@ -1467,7 +1467,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         """Handle click on a loop option.
 
         Args:
-            event: The clicked message with loop ID and index.
+        event: The clicked message with loop ID and index.
         """
         if 0 <= event.index < len(self._filtered_loops):
             self._selected_index = event.index

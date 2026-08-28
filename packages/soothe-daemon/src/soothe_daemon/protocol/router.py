@@ -1,8 +1,4 @@
-"""Transport message dispatch for the daemon.
-
-Maps JSON message types to handlers using ``SootheRunner`` public APIs instead
-of reaching into ``runner._durability``.
-"""
+"""Transport message dispatch for the daemon."""
 
 from __future__ import annotations
 
@@ -36,7 +32,7 @@ _LOOP_AI_RESPONSE_PREVIEW_MAX = 160
 
 
 def _peek_loop_prompt(loop_id: str) -> str | None:
-    """Return the loop's initial user prompt from ``display.db``, if available."""
+    """Return the loop's initial user prompt from `display.db`, if available."""
     try:
         from soothe_daemon.display.display_store import get_display_card_store
 
@@ -49,7 +45,7 @@ def _peek_loop_prompt(loop_id: str) -> str | None:
 
 
 def _peek_latest_assistant_response(loop_id: str) -> str | None:
-    """Return latest assistant response preview from ``display.db``."""
+    """Return latest assistant response preview from `display.db`."""
     try:
         from soothe_daemon.display.display_store import get_display_card_store
 
@@ -116,17 +112,17 @@ _METHOD_TO_HANDLER: dict[str, str] = {
 
 
 def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
-    """Normalize optional runner fields for ``loop_input`` messages.
+    """Normalize optional runner fields for `loop_input` messages.
 
-        Args:
-            msg: Raw client message dict.
+    Args:
+    msg: Raw client message dict.
 
-        Returns:
-            Keys to merge into the internal queue payload: ``preferred_subagent``,
-            ``intake_scope``, ``model``, ``model_params``, ``router_profile``,
-            ``intent_hint`` (normalized to lowercase when set), ``clarification_mode``
+    Returns:
+    Keys to merge into the internal queue payload: `preferred_subagent`,
+    `intake_scope`, `model`, `model_params`, `router_profile`,
+    `intent_hint` (normalized to lowercase when set), `clarification_mode`
     ,
-            ``interaction_mode`` (normalized to ``"agent"``/``"ask"``/``"plan"`` or ``None``).
+    `interaction_mode` (normalized to `"agent"`/`"ask"`/`"plan"` or `None`).
     """
     preferred_subagent = msg.get("preferred_subagent")
     preferred_norm = (
@@ -210,16 +206,16 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
 
 
 def _coerce_loop_input_text(content: Any) -> str | None:
-    """Normalize ``loop_input`` content to a non-empty user text string.
+    """Normalize `loop_input` content to a non-empty user text string.
 
     Preferred wire shape is a bare string. Some clients send a small JSON
-    object (e.g. ``{"text": "..."}``); extract the first known string field.
+    object (e.g. `{"text": "..."}`); extract the first known string field.
 
     Args:
-        content: Raw ``content`` field from a ``loop_input`` message.
+    content: Raw `content` field from a `loop_input` message.
 
     Returns:
-        Stripped non-empty text, or ``None`` if no usable string was found.
+    Stripped non-empty text, or `None` if no usable string was found.
     """
     if isinstance(content, str):
         stripped = content.strip()
@@ -236,12 +232,12 @@ def _coerce_loop_input_text(content: Any) -> str | None:
 
 
 class MessageRouter:
-    """Dispatches client messages by ``type`` field using a registry table.
+    """Dispatches client messages by `type` field using a registry table.
 
-    The ``HANDLER_REGISTRY`` maps each supported ``type`` value to the name of
-    the async ``_handle_*`` method that processes it.  ``dispatch()`` performs
-    a dict lookup instead of a linear ``if msg_type == ...`` chain, validates
-    params via ``PARAMS_REGISTRY``, and sends standardized ``ErrorCode``
+    The `HANDLER_REGISTRY` maps each supported `type` value to the name of
+    the async `_handle_*` method that processes it. `dispatch()` performs
+    a dict lookup instead of a linear `if msg_type == ...` chain, validates
+    params via `PARAMS_REGISTRY`, and sends standardized `ErrorCode`
     responses for unknown types (-32601) and param validation failures
     (-32602).
     """
@@ -260,15 +256,15 @@ class MessageRouter:
     def _resolve_handler(cls, flat_type: str) -> str | None:
         """Return the handler method name for a flattened envelope method.
 
-        ``flat_type`` is the envelope ``method`` (or the unsubscribe-inferred
+        `flat_type` is the envelope `method` (or the unsubscribe-inferred
         key). The five method-name overrides in :data:`_METHOD_TO_HANDLER` map
-        to their handlers; every other method maps to ``_handle_<method>``.
+        to their handlers; every other method maps to `_handle_<method>`.
 
         Args:
-            flat_type: Flattened method/handler key.
+        flat_type: Flattened method/handler key.
 
         Returns:
-            Handler method name, or ``None`` if no handler exists.
+        Handler method name, or `None` if no handler exists.
         """
         if flat_type in _METHOD_TO_HANDLER:
             return _METHOD_TO_HANDLER[flat_type]
@@ -292,16 +288,16 @@ class MessageRouter:
     ) -> None:
         """Send a protocol-1 response envelope to a client.
 
-        Wraps ``result`` in the standard ``{proto, type:'response', result, id}``
-        envelope and dispatches via ``d._send_client_message``. When
-        ``request_id`` is ``None`` the ``id`` field is omitted (notification-
+        Wraps `result` in the standard `{proto, type:'response', result, id}`
+        envelope and dispatches via `d._send_client_message`. When
+        `request_id` is `None` the `id` field is omitted (notification-
         style responses, though this is unusual).
 
         Args:
-            client_id: Client connection identifier.
-            request_id: The originating request's correlation id, or ``None``.
-            result: The result payload dict (method-specific return value).
-            proto: Protocol version string (default ``"1"``).
+        client_id: Client connection identifier.
+        request_id: The originating request's correlation id, or `None`.
+        result: The result payload dict (method-specific return value).
+        proto: Protocol version string (default `"1"`).
         """
         d = self._daemon
         envelope: dict[str, Any] = {
@@ -321,18 +317,18 @@ class MessageRouter:
         *,
         proto: str = "1",
     ) -> None:
-        """Send a protocol-1 ``next`` event for an active subscription.
+        """Send a protocol-1 `next` event for an active subscription.
 
-        Streaming/subscription events use ``{proto, type:'next', payload, id}``
-        where ``id`` matches the original subscription request's id. The stream
-        terminates with a separate ``complete`` message (not sent here).
+        Streaming/subscription events use `{proto, type:'next', payload, id}`
+        where `id` matches the original subscription request's id. The stream
+        terminates with a separate `complete` message (not sent here).
 
         Args:
-            client_id: Client connection identifier.
-            subscription_id: The subscription correlation id from the original
-                ``subscribe`` request.
-            payload: The event payload dict.
-            proto: Protocol version string (default ``"1"``).
+        client_id: Client connection identifier.
+        subscription_id: The subscription correlation id from the original
+        `subscribe` request.
+        payload: The event payload dict.
+        proto: Protocol version string (default `"1"`).
         """
         d = self._daemon
         envelope: dict[str, Any] = {
@@ -345,14 +341,14 @@ class MessageRouter:
         await d._send_client_message(client_id, envelope)
 
     async def _client_subscribed_loop_id(self, client_id: Any) -> str | None:
-        """Return the ``loop_id`` this client receives loop-scoped events for.
+        """Return the `loop_id` this client receives loop-scoped events for.
 
         The session manager enforces **at most one** loop subscription per client
-        (``subscribe_loop`` replaces any prior loop). **Many clients** may subscribe
+        (`subscribe_loop` replaces any prior loop). **Many clients** may subscribe
         to the **same** loop; this method only answers "which loop is *this* client
         watching?", not ownership of the loop.
 
-        If ``subscriptions`` ever contains more than one id (unexpected), pick a
+        If `subscriptions` ever contains more than one id (unexpected), pick a
         deterministic value and log a warning so behavior stays stable until
         multi-loop-per-client is explicitly designed.
         """
@@ -373,30 +369,30 @@ class MessageRouter:
         """Flatten a protocol-1 envelope into the handler-facing message dict.
 
         Handlers consume a flat dict with operation fields at the top level
-        (e.g. ``{"type": "loop_list", "verbose": True, "request_id": "..."}``).
+        (e.g. `{"type": "loop_list", "verbose": True, "request_id": "..."}`).
         The protocol-1 envelope wraps these as
-        ``{"type": "request", "method": "loop_list", "params": {"verbose": True},
-        "id": "..."}``. This internal adapter extracts ``method``/``params`` and
+        `{"type": "request", "method": "loop_list", "params": {"verbose": True},
+        "id": "..."}`. This internal adapter extracts `method`/`params` and
         builds that flat dict so handlers stay agnostic to the envelope shape.
 
-        The flat ``type`` is the envelope ``method`` (the handler-name key in
-        :data:`_METHOD_TO_HANDLER`). ``unsubscribe`` carries no ``method``;
-        its target is inferred from ``params`` (``loop_id`` → loop detach,
+        The flat `type` is the envelope `method` (the handler-name key in
+        :data:`_METHOD_TO_HANDLER`). `unsubscribe` carries no `method`;
+        its target is inferred from `params` (`loop_id` → loop detach,
         otherwise autopilot unsubscribe).
 
-        The envelope ``id`` is carried as both ``request_id`` and ``id`` so
-        handlers and error responses can correlate it. ``params is None`` is
-        treated as ``{}`` because the SDK drops empty params dicts.
+        The envelope `id` is carried as both `request_id` and `id` so
+        handlers and error responses can correlate it. `params is None` is
+        treated as `{}` because the SDK drops empty params dicts.
 
         Args:
-            msg_type: The envelope ``type`` (request/notification/subscribe/
-                unsubscribe).
-            msg: The full envelope message dict.
+        msg_type: The envelope `type` (request/notification/subscribe/
+        unsubscribe).
+        msg: The full envelope message dict.
 
         Returns:
-            A flat message dict ready for handler dispatch, or ``None`` if the
-            envelope is malformed (missing ``method`` on a non-unsubscribe
-            envelope).
+        A flat message dict ready for handler dispatch, or `None` if the
+        envelope is malformed (missing `method` on a non-unsubscribe
+        envelope).
         """
         method = msg.get("method")
         # unsubscribe carries no method — the target is inferred from params.
@@ -431,12 +427,12 @@ class MessageRouter:
         """Process a batch request array.
 
         Each item is dispatched independently. Responses are collected for items
-        with an ``id`` field (notifications produce no response). Empty or invalid
-        arrays return a single ``-32600 INVALID_REQUEST`` error.
+        with an `id` field (notifications produce no response). Empty or invalid
+        arrays return a single `-32600 INVALID_REQUEST` error.
 
         Args:
-            client_id: Client connection identifier.
-            batch: JSON array of protocol-1 messages.
+        client_id: Client connection identifier.
+        batch: JSON array of protocol-1 messages.
         """
         d = self._daemon
 
@@ -564,20 +560,20 @@ class MessageRouter:
             await d._send_client_message(client_id, responses)
 
     async def dispatch(self, client_id: Any, msg: dict[str, Any] | list[Any]) -> None:
-        """Handle a single client message or batch via the ``HANDLER_REGISTRY`` dispatch table.
+        """Handle a single client message or batch via the `HANDLER_REGISTRY` dispatch table.
 
-                Performs a dict lookup by ``msg.get("type")`` instead of a linear
-                if-chain.  Unknown types receive ``-32601 METHOD_NOT_FOUND``; param
-                validation failures receive ``-32602 INVALID_PARAMS``; handler-raised
-                ``RpcProtocolError`` exceptions are serialized to the standard error
-                envelope.
+        Performs a dict lookup by `msg.get("type")` instead of a linear
+        if-chain. Unknown types receive `-32601 METHOD_NOT_FOUND`; param
+        validation failures receive `-32602 INVALID_PARAMS`; handler-raised
+        `RpcProtocolError` exceptions are serialized to the standard error
+        envelope.
 
         6: Batch requests (JSON arrays) are processed by dispatching
-                each item independently and collecting responses into an array.
+        each item independently and collecting responses into an array.
 
-                Args:
-                    client_id: Client connection identifier.
-                    msg: Decoded message dict or batch array.
+        Args:
+        client_id: Client connection identifier.
+        msg: Decoded message dict or batch array.
         """
         # Set client_id in logging context for full ID in daemon.log
         if isinstance(client_id, str):
@@ -702,14 +698,14 @@ class MessageRouter:
 
     @staticmethod
     def _handshake_key(client_id: Any) -> Any:
-        """Return a hashable key for ``client_id``.
+        """Return a hashable key for `client_id`.
 
         Args:
-            client_id: Client identifier (string or other hashable value).
+        client_id: Client identifier (string or other hashable value).
 
         Returns:
-            A hashable key: ``id(client_id)`` for unhashable objects, otherwise
-            the original ``client_id``.
+        A hashable key: `id(client_id)` for unhashable objects, otherwise
+        the original `client_id`.
         """
         try:
             hash(client_id)
@@ -727,9 +723,9 @@ class MessageRouter:
         """Mark the handshake as complete and store negotiated parameters.
 
         Args:
-            client_id: Client identifier or connection object.
-            proto_version: Negotiated protocol version.
-            capabilities: Negotiated capabilities (intersection).
+        client_id: Client identifier or connection object.
+        proto_version: Negotiated protocol version.
+        capabilities: Negotiated capabilities (intersection).
         """
         key = self._handshake_key(client_id)
         self._handshake_state[key] = (proto_version, capabilities)
@@ -753,10 +749,10 @@ class MessageRouter:
         """Return the negotiated protocol version for a client, if any.
 
         Args:
-            client_id: Client identifier.
+        client_id: Client identifier.
 
         Returns:
-            Protocol version string (e.g. ``"1"``) or ``None``.
+        Protocol version string (e.g. `"1"`) or `None`.
         """
         key = self._handshake_key(client_id)
         entry = self._handshake_state.get(key)
@@ -778,10 +774,10 @@ class MessageRouter:
         """Return the negotiated capabilities for a client, if any.
 
         Args:
-            client_id: Client identifier.
+        client_id: Client identifier.
 
         Returns:
-            List of capability strings (may be empty).
+        List of capability strings (may be empty).
         """
         key = self._handshake_key(client_id)
         entry = self._handshake_state.get(key)
@@ -803,7 +799,7 @@ class MessageRouter:
         """Record that a pong was received (heartbeat liveness tracking).
 
         Args:
-            client_id: Client identifier.
+        client_id: Client identifier.
         """
         d = self._daemon
         chan = getattr(d, "_channel_manager", None)
@@ -813,14 +809,14 @@ class MessageRouter:
                 ws_chan._mark_pong_received(client_id)
 
     async def _handle_connection_init(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``connection_init`` handshake message.
+        """Handle `connection_init` handshake message.
 
         Parses client-declared protocol versions and capabilities, negotiates
-        with the daemon's supported set, and responds with ``connection_ack``.
+        with the daemon's supported set, and responds with `connection_ack`.
 
         Args:
-            client_id: Client identifier.
-            msg: Decoded ``connection_init`` message dict.
+        client_id: Client identifier.
+        msg: Decoded `connection_init` message dict.
         """
         d = self._daemon
         params = msg.get("params") or {}
@@ -861,27 +857,27 @@ class MessageRouter:
         )
 
     async def _handle_ping(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``ping`` heartbeat message.
+        """Handle `ping` heartbeat message.
 
-        Responds with a ``pong`` message.
+        Responds with a `pong` message.
 
         Args:
-            client_id: Client identifier.
-            msg: Decoded ``ping`` message dict.
+        client_id: Client identifier.
+        msg: Decoded `ping` message dict.
         """
         d = self._daemon
         pong = {"proto": "1", "type": "pong"}
         await d._send_client_message(client_id, pong)
 
     async def _handle_pong(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``pong`` heartbeat acknowledgment.
+        """Handle `pong` heartbeat acknowledgment.
 
-        Pong is an acknowledgment of our ping; no response is sent.  This method
-        records liveness via ``_mark_pong_received``.
+        Pong is an acknowledgment of our ping; no response is sent. This method
+        records liveness via `_mark_pong_received`.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Decoded ``pong`` message dict.
+        client_id: Client connection identifier.
+        msg: Decoded `pong` message dict.
         """
         self._mark_pong_received(client_id)
 
@@ -901,14 +897,14 @@ class MessageRouter:
         d._session_manager.record_delivery_ack(str(client_id), loop_id, seq)
 
     async def _handle_command(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``slash_command`` notifications.
+        """Handle `slash_command` notifications.
 
-        Routes ``/exit`` and ``/quit`` to detach, ``/cancel`` to loop
+        Routes `/exit` and `/quit` to detach, `/cancel` to loop
         cancellation, and everything else to the loop input dispatcher.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Message dict with ``cmd`` field.
+        client_id: Client connection identifier.
+        msg: Message dict with `cmd` field.
         """
         d = self._daemon
         cmd = msg.get("cmd", "")
@@ -940,11 +936,11 @@ class MessageRouter:
         )
 
     async def _handle_detach(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``detach`` message — mark session as detached.
+        """Handle `detach` message — mark session as detached.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Message dict.
+        client_id: Client connection identifier.
+        msg: Message dict.
         """
         d = self._daemon
         session = await d._session_manager.get_session(client_id)
@@ -954,11 +950,11 @@ class MessageRouter:
         logger.info("Client %s requested detach - query will continue after disconnect", client_id)
 
     async def _handle_command_request(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``command_request`` RPC — enqueue structured command to loop.
+        """Handle `command_request` RPC — enqueue structured command to loop.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Message dict with ``request_id``.
+        client_id: Client connection identifier.
+        msg: Message dict with `request_id`.
         """
         d = self._daemon
         active_loop = await self._client_subscribed_loop_id(client_id)
@@ -975,11 +971,11 @@ class MessageRouter:
         await d._loop_input_dispatcher.enqueue(active_loop, req)
 
     async def _handle_auth(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``auth`` WebSocket message.
+        """Handle `auth` WebSocket message.
 
         Args:
-            client_id: Client identifier.
-            msg: Message dict with ``access_key`` and ``secret_key``.
+        client_id: Client identifier.
+        msg: Message dict with `access_key` and `secret_key`.
         """
         d = self._daemon
         from soothe_daemon.server.auth_handler import build_auth_response_error
@@ -1008,11 +1004,11 @@ class MessageRouter:
         await self._send_response(client_id, request_id, result)
 
     async def _handle_auth_refresh(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``auth_refresh`` WebSocket message.
+        """Handle `auth_refresh` WebSocket message.
 
         Args:
-            client_id: Client identifier.
-            msg: Message dict with ``refresh_token``.
+        client_id: Client identifier.
+        msg: Message dict with `refresh_token`.
         """
         d = self._daemon
         from soothe_daemon.server.auth_handler import build_refresh_response_error
@@ -1079,7 +1075,7 @@ class MessageRouter:
         )
 
     async def _handle_models_list(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Return model rows from the daemon host ``SootheConfig`` (for TUI ``/model``)."""
+        """Return model rows from the daemon host `SootheConfig` (for TUI `/model`)."""
         d = self._daemon
         from soothe.config.models_catalog import build_models_list_payload
 
@@ -1256,8 +1252,8 @@ class MessageRouter:
         """Handle daemon_status RPC request (Phase 0).
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with optional request_id.
+        client_id: Client connection identifier.
+        msg: Request message with optional request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1296,8 +1292,8 @@ class MessageRouter:
         """Handle daemon_shutdown RPC request (Phase 0).
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with optional request_id.
+        client_id: Client connection identifier.
+        msg: Request message with optional request_id.
         """
         import asyncio
 
@@ -1322,8 +1318,8 @@ class MessageRouter:
         """Handle config_get RPC request (Phase 0).
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with section and optional request_id.
+        client_id: Client connection identifier.
+        msg: Request message with section and optional request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1346,8 +1342,8 @@ class MessageRouter:
         Triggers immediate reload of watched config files.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with optional request_id.
+        client_id: Client connection identifier.
+        msg: Request message with optional request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1389,10 +1385,10 @@ class MessageRouter:
         """Check the loop exists in the database.
 
         Args:
-            loop_id: Loop identifier
+        loop_id: Loop identifier
 
         Returns:
-            True if loop exists in DB, False otherwise.
+        True if loop exists in DB, False otherwise.
         """
         metadata = await self._daemon._persistence_manager.get_loop_metadata(loop_id)
         return metadata is not None
@@ -1405,12 +1401,12 @@ class MessageRouter:
         """Handle loop_list RPC request.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with optional ``filter`` and ``limit``.
-                ``filter.status`` — narrows to one persisted status value.
-                ``filter.exclude_empty`` — when True (default), hides loops
-                with zero human + zero AI messages.
-                ``filter.workspace`` — narrows to loops with matching client_workspace.
+        client_id: Client connection identifier.
+        msg: Request message with optional `filter` and `limit`.
+        `filter.status` — narrows to one persisted status value.
+        `filter.exclude_empty` — when True (default), hides loops
+        with zero human + zero AI messages.
+        `filter.workspace` — narrows to loops with matching client_workspace.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1478,8 +1474,8 @@ class MessageRouter:
         """Handle loop_get RPC request.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id and optional verbose flag.
+        client_id: Client connection identifier.
+        msg: Request message with loop_id and optional verbose flag.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -1537,8 +1533,8 @@ class MessageRouter:
         """Handle loop_delete RPC request.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id.
+        client_id: Client connection identifier.
+        msg: Request message with loop_id.
         """
         from soothe_daemon.runtime.loop_gc import purge_loop_fully
 
@@ -1596,8 +1592,8 @@ class MessageRouter:
         Reconstruct event history and replay to client for loop reattachment.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id.
+        client_id: Client connection identifier.
+        msg: Request message with loop_id.
         """
         from soothe_daemon.event import handle_loop_reattach
 
@@ -1646,8 +1642,8 @@ class MessageRouter:
         Used by loop continue and loop attach commands.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id.
+        client_id: Client connection identifier.
+        msg: Request message with loop_id.
         """
         from soothe_daemon.event.reattachment import schedule_loop_reattach
 
@@ -1715,8 +1711,8 @@ class MessageRouter:
         Saves detachment checkpoint for later reattachment.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message with loop_id.
+        client_id: Client connection identifier.
+        msg: Request message with loop_id.
         """
         from datetime import UTC, datetime
 
@@ -1770,13 +1766,13 @@ class MessageRouter:
         """Handle loop_new RPC request.
 
         Create fresh loop with new loop_id for new query/conversation. If the client
-        provides a ``workspace`` field (e.g., user's CWD), validate it and record it
-        as the loop's filesystem workspace. If client provides ``user`` field, store
-        for workspace isolation (per-user workspace under ``$SOOTHE_HOME/data/workspaces/``).
+        provides a `workspace` field (e.g., user's CWD), validate it and record it
+        as the loop's filesystem workspace. If client provides `user` field, store
+        for workspace isolation (per-user workspace under `$SOOTHE_HOME/data/workspaces/`).
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request message; may contain optional ``workspace`` and ``user`` fields.
+        client_id: Client connection identifier.
+        msg: Request message; may contain optional `workspace` and `user` fields.
         """
         from soothe.workspace import resolve_loop_workspace, validate_client_workspace
         from uuid_utils import uuid7
@@ -2099,7 +2095,7 @@ class MessageRouter:
         """Return persisted conversation / activity rows for a loop.
 
         Resolves the loop's bound LangGraph checkpoint id from metadata, then reads
-        ThreadLogger rows via the runner (same storage as ``get_persisted_thread_messages``).
+        ThreadLogger rows via the runner (same storage as `get_persisted_thread_messages`).
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2292,9 +2288,9 @@ class MessageRouter:
     ) -> None:
         """Hot-swap the clarification mode on a running goal.
 
-        Forwards ``mode`` to the active loop runner's ``set_clarification_mode``
-        so the next ``await_clarification`` node entry uses the new policy
-        without waiting for a new turn. Returns ``{"applied": False}`` when no
+        Forwards `mode` to the active loop runner's `set_clarification_mode`
+        so the next `await_clarification` node entry uses the new policy
+        without waiting for a new turn. Returns `{"applied": False}` when no
         goal is running or the runner backend doesn't support hot-swap yet
         (worker_pool / distributed); the caller may retry on the next turn.
         """
@@ -2401,7 +2397,7 @@ class MessageRouter:
     async def _read_loop_token_total(self, loop_id: str) -> int:
         """Best-effort loop token total for TUI resume.
 
-        Reads the authoritative ``total_tokens_used`` persisted by StrangeLoop
+        Reads the authoritative `total_tokens_used` persisted by StrangeLoop
         into loop metadata during checkpoint saves.
         """
         d = self._daemon
@@ -2422,18 +2418,18 @@ class MessageRouter:
     async def _handle_loop_execution_state_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Return focused execution-progress snapshot: plan, step_index, iteration, status.
 
-        Lighter than ``loop_state_get`` (which returns the full channel-value
+        Lighter than `loop_state_get` (which returns the full channel-value
         dict). This RPC extracts the four fields a client needs to render a
         progress indicator from two sources:
 
-        * ``iteration`` / ``status`` — from the loop metadata
-          ``execution_checkpoint`` blob (the authoritative persisted values).
-        * ``plan`` / ``step_index`` — best-effort from the bound checkpoint
-          thread's graph channel values (``current_decision`` /
-          ``previous_plan`` / ``completed_step_ids``).
-        * ``found`` — whether a loop metadata row exists, so callers can tell an
-          unknown ``loop_id`` apart from a real loop whose status defaults to
-          ``idle``.
+        * `iteration` / `status` — from the loop metadata
+        `execution_checkpoint` blob (the authoritative persisted values).
+        * `plan` / `step_index` — best-effort from the bound checkpoint
+        thread's graph channel values (`current_decision` /
+        `previous_plan` / `completed_step_ids`).
+        * `found` — whether a loop metadata row exists, so callers can tell an
+        unknown `loop_id` apart from a real loop whose status defaults to
+        `idle`.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2559,9 +2555,9 @@ class MessageRouter:
         Submit a root goal to AutopilotService, creating a new autopilot job.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with goal (required), verification_rules (optional),
-                workspace (optional), request_id.
+        client_id: Client connection identifier.
+        msg: Request with goal (required), verification_rules (optional),
+        workspace (optional), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2634,8 +2630,8 @@ class MessageRouter:
         Query job state: goal status, counts, assigned workers.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2728,8 +2724,8 @@ class MessageRouter:
         Pause goal execution by suspending the root goal.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2817,8 +2813,8 @@ class MessageRouter:
         Resume paused goal execution by reactivating the root goal.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2904,8 +2900,8 @@ class MessageRouter:
         Cancel job by cancelling the root goal via AutopilotService.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2965,8 +2961,8 @@ class MessageRouter:
         Get ContextEngine DAG snapshot for visualization.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -3015,8 +3011,8 @@ class MessageRouter:
         Send user guidance to ContextEngine for absorption.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id, goal_id (optional), content, request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id, goal_id (optional), content, request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -3119,7 +3115,7 @@ class MessageRouter:
         msg: dict[str, Any],
         action: str,
     ) -> None:
-        """Shared protocol-1 response path for ``autopilot_*`` request methods."""
+        """Shared protocol-1 response path for `autopilot_*` request methods."""
         from soothe_daemon.protocol.autopilot_commands import run_autopilot_action
 
         d = self._daemon
@@ -3213,8 +3209,8 @@ class MessageRouter:
         Subscribe client to autopilot worker events (bypasses autopilot__* filter).
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with request_id.
+        client_id: Client connection identifier.
+        msg: Request with request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -3253,8 +3249,8 @@ class MessageRouter:
         Release autopilot worker event subscription.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with request_id.
+        client_id: Client connection identifier.
+        msg: Request with request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -3293,11 +3289,11 @@ class MessageRouter:
         """Return CronService if available, else send error response and return None.
 
         Args:
-            client_id: Client connection identifier.
-            request_id: Request correlation id.
+        client_id: Client connection identifier.
+        request_id: Request correlation id.
 
         Returns:
-            CronService instance or None if unavailable.
+        CronService instance or None if unavailable.
         """
         d = self._daemon
         service = getattr(d, "_cron_service", None)
@@ -3319,8 +3315,8 @@ class MessageRouter:
         Create a scheduled job from natural language input.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with text (required), priority (optional), request_id.
+        client_id: Client connection identifier.
+        msg: Request with text (required), priority (optional), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -3413,8 +3409,8 @@ class MessageRouter:
         List scheduled jobs for the user.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with status (optional filter), request_id.
+        client_id: Client connection identifier.
+        msg: Request with status (optional filter), request_id.
         """
         request_id = msg.get("request_id")
         status_filter = msg.get("status")
@@ -3450,8 +3446,8 @@ class MessageRouter:
         Get details for a specific scheduled job.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -3511,8 +3507,8 @@ class MessageRouter:
         Cancel a scheduled job.
 
         Args:
-            client_id: Client connection identifier.
-            msg: Request with job_id (required), request_id.
+        client_id: Client connection identifier.
+        msg: Request with job_id (required), request_id.
         """
         d = self._daemon
         request_id = msg.get("request_id")

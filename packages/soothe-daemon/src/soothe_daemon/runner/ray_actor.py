@@ -1,9 +1,4 @@
-"""Ray actor hosting SootheRunner in an isolated worker process.
-
-WARNING: This file imports Ray at module level. It must NEVER be imported
-by local-mode code paths. Only ``RayLoopRunner`` (ray_runner.py) imports it,
-and only when ``SootheDaemonConfig.distributed.enabled=True``.
-"""
+"""Ray actor hosting SootheRunner in an isolated worker process."""
 
 from __future__ import annotations
 
@@ -18,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 @ray.remote
 class LoopRunnerActor:
-    """Ray actor that hosts one ``SootheRunner`` in a Ray worker process.
+    """Ray actor that hosts one `SootheRunner` in a Ray worker process.
 
-    Constructed once per loop via ``LoopRunnerActor.remote(config)``.
-    Streams chunks into a caller-supplied ``ray.util.queue.Queue``.
+    Constructed once per loop via `LoopRunnerActor.remote(config)`.
+    Streams chunks into a caller-supplied `ray.util.queue.Queue`.
     """
 
     def __init__(self, config: object) -> None:
@@ -32,7 +27,7 @@ class LoopRunnerActor:
         self._cancelled = False
 
     async def run(self, request: LoopRunRequest, queue: Queue) -> None:
-        """Stream chunks from ``SootheRunner.astream()`` into ``queue``."""
+        """Stream chunks from `SootheRunner.astream()` into `queue`."""
         from soothe.runner.worker_logging import (
             configure_loop_runner_worker_logging,
             release_loop_runner_logging,
@@ -83,7 +78,7 @@ class LoopRunnerActor:
         await queue.put_async(("done", None))
 
     async def cancel(self) -> None:
-        """Signal cooperative cancellation; checked between chunks in ``run()``."""
+        """Signal cooperative cancellation; checked between chunks in `run()`."""
         self._cancelled = True
 
 

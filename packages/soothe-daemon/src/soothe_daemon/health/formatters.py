@@ -169,11 +169,11 @@ def format_text(report: HealthReport, use_color: bool = True) -> str:  # noqa: F
     """Format health report for terminal output.
 
     Args:
-        report: Health report to format
-        use_color: Whether to use ANSI color codes
+    report: Health report to format
+    use_color: Whether to use ANSI color codes
 
     Returns:
-        Formatted string for terminal output
+    Formatted string for terminal output
     """
     lines = ["Soothe Health Check", "━" * 60, ""]
     for category in report.categories:

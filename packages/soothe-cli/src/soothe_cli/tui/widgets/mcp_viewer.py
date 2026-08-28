@@ -49,10 +49,10 @@ class MCPToolItem(Static):
         """Initialize a tool item.
 
         Args:
-            name: Tool name.
-            description: Full tool description.
-            index: Flat index of this tool in the list.
-            classes: CSS classes.
+        name: Tool name.
+        description: Full tool description.
+        index: Flat index of this tool in the list.
+        classes: CSS classes.
         """
         if description:
             label = Content.from_markup("  $name [dim]$desc[/dim]", name=name, desc=description)
@@ -71,11 +71,11 @@ class MCPToolItem(Static):
         the widget width.
 
         Args:
-            name: Tool name.
-            description: Tool description.
+        name: Tool name.
+        description: Tool description.
 
         Returns:
-            Styled Content label.
+        Styled Content label.
         """
         if not description:
             return Content.from_markup("  $name", name=name)
@@ -94,11 +94,11 @@ class MCPToolItem(Static):
         """Build the expanded (multi-line) label.
 
         Args:
-            name: Tool name.
-            description: Tool description.
+        name: Tool name.
+        description: Tool description.
 
         Returns:
-            Styled Content label with full description on next line.
+        Styled Content label with full description on next line.
         """
         if description:
             return Content.from_markup(
@@ -133,7 +133,7 @@ class MCPToolItem(Static):
         """Handle click — select and toggle expand via parent screen.
 
         Args:
-            event: The click event.
+        event: The click event.
         """
         event.stop()
         screen = self.screen
@@ -236,7 +236,7 @@ class MCPViewerScreen(ModalScreen[None]):
         """Initialize the MCP viewer screen.
 
         Args:
-            server_info: List of MCP server metadata to display.
+        server_info: List of MCP server metadata to display.
         """
         super().__init__()
         self._server_info = server_info
@@ -247,7 +247,7 @@ class MCPViewerScreen(ModalScreen[None]):
         """Compose the screen layout.
 
         Yields:
-            Widgets for the MCP viewer UI.
+        Widgets for the MCP viewer UI.
         """
         glyphs = get_glyphs()
         total_servers = len(self._server_info)
@@ -313,7 +313,7 @@ class MCPViewerScreen(ModalScreen[None]):
         """Move selection to the given index.
 
         Args:
-            index: Target tool index.
+        index: Target tool index.
         """
         if not self._tool_widgets:
             return
@@ -329,7 +329,7 @@ class MCPViewerScreen(ModalScreen[None]):
         """Move selection by delta positions.
 
         Args:
-            delta: Number of positions to move.
+        delta: Number of positions to move.
         """
         if not self._tool_widgets:
             return

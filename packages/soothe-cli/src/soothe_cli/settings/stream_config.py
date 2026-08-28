@@ -71,23 +71,22 @@ def build_stream_config(
 ) -> RunnableConfig:
     """Build the LangGraph stream config dict.
 
-    Injects the resolved Soothe version into ``metadata["versions"]`` so runs
+    Injects the resolved Soothe version into `metadata["versions"]` so runs
     can be correlated with specific releases. The runtime config replaces the
-    graph config's ``versions`` key at stream time, so this must carry the
+    graph config's `versions` key at stream time, so this must carry the
     canonical release string.
 
     Args:
-        loop_id: Active StrangeLoop id (stored under LangGraph ``configurable.thread_id``).
-        assistant_id: The agent/assistant identifier, if any.
-        sandbox_type: Sandbox provider name for trace metadata, or `None` if no
-            sandbox is active.
-        workspace: Workspace directory for in-process TUI runs. When
-            omitted, uses `Path.cwd()` (resolved). Mirrored to
-            `configurable["workspace"]` for middleware and task-tool propagation
-            (RFC-103).
+    loop_id: Active StrangeLoop id (stored under LangGraph `configurable.thread_id`).
+    assistant_id: The agent/assistant identifier, if any.
+    sandbox_type: Sandbox provider name for trace metadata, or `None` if no
+    sandbox is active.
+    workspace: Workspace directory for in-process TUI runs. When
+    omitted, uses `Path.cwd()` (resolved). Mirrored to
+    `configurable["workspace"]` for middleware and task-tool propagation.
 
     Returns:
-        Config dict with `configurable` and `metadata` keys.
+    Config dict with `configurable` and `metadata` keys.
     """
     from datetime import UTC, datetime
 

@@ -1,8 +1,4 @@
-"""Daemon status CLI command for client-side validation.
-
-Provides lightweight status checks for the soothe daemon from the client side,
-useful for validating daemon connectivity before running commands.
-"""
+"""Daemon status CLI command for client-side validation."""
 
 from __future__ import annotations
 
@@ -34,11 +30,11 @@ async def _fetch_status(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
     """Fetch daemon status via WebSocket RPC.
 
     Args:
-        ws_url: WebSocket URL to connect to.
-        timeout: Request timeout in seconds.
+    ws_url: WebSocket URL to connect to.
+    timeout: Request timeout in seconds.
 
     Returns:
-        Status dict from daemon, or error dict on failure.
+    Status dict from daemon, or error dict on failure.
     """
     try:
         async with connected_websocket(ws_url, timeout=timeout) as client:
@@ -121,8 +117,8 @@ def daemon_status(
     Validates that the soothe daemon is running and responsive.
 
     Examples:
-        soothe status daemon
-        soothe status daemon --json
+    soothe status daemon
+    soothe status daemon --json
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -235,8 +231,8 @@ def connection_status(
     Shows the WebSocket URL and connection parameters the CLI will use.
 
     Examples:
-        soothe status connection
-        soothe status connection --json
+    soothe status connection
+    soothe status connection --json
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)

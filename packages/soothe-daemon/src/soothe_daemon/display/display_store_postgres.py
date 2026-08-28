@@ -1,13 +1,4 @@
-"""PostgreSQL persistence for per-loop display card mutations.
-
-Used when ``persistence.default_backend`` is ``postgresql``. Tables live in the
- ``metadata`` database (``soothe_metadata``) beside durability KV rows.
-
-Moved from ``soothe_nano`` to the daemon (PR-2). The store applies its
-own ``_SCHEMA`` on pool open — same pattern as ``PostgresCronJobStore`` and
-``IdentityDbConnection`` — so the display-card DDL no longer needs to live in
-nano's ``soothe_metadata/init.sql`` bootstrap.
-"""
+"""PostgreSQL persistence for per-loop display card mutations."""
 
 from __future__ import annotations
 
@@ -49,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_goal_snapshots_loop
 
 
 class PostgresDisplayCardStore:
-    """Append-only PostgreSQL store for ``CardMutation`` rows."""
+    """Append-only PostgreSQL store for `CardMutation` rows."""
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
@@ -63,7 +54,7 @@ class PostgresDisplayCardStore:
 
     @property
     def db_path(self) -> None:
-        """SQLite path compatibility; always ``None`` for PostgreSQL."""
+        """SQLite path compatibility; always `None` for PostgreSQL."""
         return None
 
     def _ensure_pool(self) -> Any:
@@ -98,7 +89,7 @@ class PostgresDisplayCardStore:
         self._schema_ready = True
 
     def list_mutations(self, loop_id: str) -> list[CardMutation]:
-        """Load all mutations for a loop ordered by ``seq``."""
+        """Load all mutations for a loop ordered by `seq`."""
         pool = self._ensure_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
@@ -130,7 +121,7 @@ class PostgresDisplayCardStore:
         return mutations
 
     def append_mutations(self, loop_id: str, mutations: list[CardMutation]) -> None:
-        """Insert mutations; ignores duplicates on ``(loop_id, seq)``."""
+        """Insert mutations; ignores duplicates on `(loop_id, seq)`."""
         if not mutations:
             return
         pool = self._ensure_pool()
@@ -208,7 +199,7 @@ class PostgresDisplayCardStore:
                 conn.commit()
 
     def list_goal_snapshots(self, loop_id: str) -> list[dict[str, Any]]:
-        """Load goal display snapshots ordered by ``goal_index``."""
+        """Load goal display snapshots ordered by `goal_index`."""
         pool = self._ensure_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
@@ -253,7 +244,7 @@ class PostgresDisplayCardStore:
         goal_id: str | None,
         snapshot: dict[str, Any],
     ) -> tuple[int, str]:
-        """Reserve ``goal_index`` and insert the snapshot in one critical section."""
+        """Reserve `goal_index` and insert the snapshot in one critical section."""
         pool = self._ensure_pool()
         with self._lock:
             with pool.connection() as conn:
@@ -338,7 +329,7 @@ class PostgresDisplayCardStore:
         *,
         max_chars: int = 120,
     ) -> str | None:
-        """Return the first user card content for ``loop_id``, if present."""
+        """Return the first user card content for `loop_id`, if present."""
         pool = self._ensure_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
@@ -361,7 +352,7 @@ class PostgresDisplayCardStore:
         *,
         max_chars: int = 120,
     ) -> str | None:
-        """Return the latest assistant card content for ``loop_id``, if present."""
+        """Return the latest assistant card content for `loop_id`, if present."""
         pool = self._ensure_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:

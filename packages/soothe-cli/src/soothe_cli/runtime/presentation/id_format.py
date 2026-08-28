@@ -11,20 +11,20 @@ def abbreviate_compact_id(
     max_len: int = 14,
     empty: str = "",
 ) -> str:
-    """Render a UUID-like id as ``prefix...suffix`` for compact UI surfaces.
+    """Render a UUID-like id as `prefix...suffix` for compact UI surfaces.
 
     Strips surrounding brackets and hyphens before measuring length. Values that
-    already contain ``...`` are returned unchanged (after hyphen stripping).
+    already contain `...` are returned unchanged (after hyphen stripping).
 
     Args:
-        value: Raw id (loop id, etc.).
-        head: Prefix length when abbreviating.
-        tail: Suffix length when abbreviating.
-        max_len: Keep the compact form intact when at most this many characters.
-        empty: Returned when ``value`` is blank after stripping.
+    value: Raw id (loop id, etc.).
+    head: Prefix length when abbreviating.
+    tail: Suffix length when abbreviating.
+    max_len: Keep the compact form intact when at most this many characters.
+    empty: Returned when `value` is blank after stripping.
 
     Returns:
-        Compact display string such as ``019f17e6...6543``.
+    Compact display string such as `019f17e6...6543`.
     """
     raw = str(value or "").strip().strip("[]")
     if not raw:
@@ -41,11 +41,11 @@ def compact_id_suffix(value: str, *, length: int = 4) -> str:
     """Render the trailing characters of a UUID-like id for tight UI surfaces.
 
     Args:
-        value: Raw id (loop id, etc.).
-        length: Number of trailing characters to keep.
+    value: Raw id (loop id, etc.).
+    length: Number of trailing characters to keep.
 
     Returns:
-        Short display string such as ``8d26``, or empty when ``value`` is blank.
+    Short display string such as `8d26`, or empty when `value` is blank.
     """
     raw = str(value or "").strip().strip("[]").replace("-", "")
     if not raw:

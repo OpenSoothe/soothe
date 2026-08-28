@@ -1,4 +1,4 @@
-"""Intent-hint invocations for ``loop_input`` turns (no Soothe agent graph)."""
+"""Intent-hint invocations for `loop_input` turns (no Soothe agent graph)."""
 
 from __future__ import annotations
 
@@ -140,7 +140,7 @@ async def run_text_completion_turn(
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
 ) -> str:
-    """Run the configured ``default`` role model on text (no attachments)."""
+    """Run the configured `default` role model on text (no attachments)."""
     stripped = (user_text or "").strip()
     if not stripped:
         msg = "text_completion requires non-empty user_text"
@@ -171,7 +171,7 @@ async def run_image_to_text_turn(
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
 ) -> str:
-    """Run the configured ``image`` role model on image attachments."""
+    """Run the configured `image` role model on image attachments."""
     if not attachments:
         msg = "image_to_text requires at least one attachment"
         raise ValueError(msg)
@@ -213,7 +213,7 @@ async def run_ocr_turn(
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
 ) -> str:
-    """Run the configured ``ocr`` role model on image attachments."""
+    """Run the configured `ocr` role model on image attachments."""
     if not attachments:
         msg = "ocr requires at least one attachment"
         raise ValueError(msg)
@@ -242,7 +242,7 @@ async def run_embed_turn(
     user_text: str,
     session_id: str | None = None,
 ) -> str:
-    """Embed user text with the configured ``embedding`` role model."""
+    """Embed user text with the configured `embedding` role model."""
     stripped = (user_text or "").strip()
     if not stripped:
         msg = "embed requires non-empty user_text"
@@ -282,7 +282,7 @@ async def run_intent_hint_turn(
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
 ) -> str:
-    """Dispatch a daemon intent-hint turn by normalized ``intent_hint``."""
+    """Dispatch a daemon intent-hint turn by normalized `intent_hint`."""
     att = list(attachments or [])
     if intent_hint == TEXT_COMPLETION:
         return await run_text_completion_turn(

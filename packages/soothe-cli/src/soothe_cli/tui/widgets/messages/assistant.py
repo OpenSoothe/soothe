@@ -25,11 +25,11 @@ def _rich_style_with_textual_selection(
     segment_style: Any,
     selection_background: Any,
 ) -> Any:
-    """Blend ``screen--selection`` over a Rich segment like Content visuals do.
+    """Blend `screen--selection` over a Rich segment like Content visuals do.
 
-    Rich ``Style.__add__`` replaces ``bgcolor`` outright, which makes markdown
+    Rich `Style.__add__` replaces `bgcolor` outright, which makes markdown
     selections look like an opaque block over code blocks. Use the component
-    background Color (with alpha from ``$primary 50%``), not ``get_component_rich_style``,
+    background Color (with alpha from `$primary 50%`), not `get_component_rich_style`,
     which pre-multiplies alpha away.
     """
     from rich.style import Style as RichStyle
@@ -52,18 +52,18 @@ class _SelectableMarkdownBody(Static):
     each one in `render_line`:
 
     1. **Selection capture.** `Compositor.get_widget_and_offset_at` walks
-       segments looking for an `offset` style meta. `Content.to_strip` adds it
-       via `rich_style_with_offset(x, y)`; `RichVisual` emits none, so click +
-       drag never resolves to a content offset and the screen silently drops
-       the selection. We re-apply offsets with `Strip.apply_offsets(0, y)`.
+    segments looking for an `offset` style meta. `Content.to_strip` adds it
+    via `rich_style_with_offset(x, y)`; `RichVisual` emits none, so click +
+    drag never resolves to a content offset and the screen silently drops
+    the selection. We re-apply offsets with `Strip.apply_offsets(0, y)`.
     2. **Visual highlight.** `RichVisual.render_strips` ignores
-       `options.selection` / `options.selection_style`, so even an active
-       selection is invisible on the card. For ``RichVisual`` we overlay
-       ``screen--selection`` with Textual alpha blending. Plain ``Content``
-       visuals already receive selection styling from ``Visual.to_strips``.
+    `options.selection` / `options.selection_style`, so even an active
+    selection is invisible on the card. For `RichVisual` we overlay
+    `screen--selection` with Textual alpha blending. Plain `Content`
+    visuals already receive selection styling from `Visual.to_strips`.
     3. **Copy extraction.** `Widget.get_selection` returns `None` for
-       non-`Text`/`Content` visuals. We reconstruct visible text from the
-       cached strips.
+    non-`Text`/`Content` visuals. We reconstruct visible text from the
+    cached strips.
     """
 
     def render_line(self, y: int) -> Strip:  # type: ignore[override]
@@ -115,11 +115,11 @@ class _SelectableMarkdownBody(Static):
 class AssistantMessage(Vertical):
     """Assistant reply card: markdown or plain text body with inline status dot.
 
-    When ``render_markdown`` is enabled (default), model output is rendered as
+    When `render_markdown` is enabled (default), model output is rendered as
     Markdown via the configured markdown theme preset inside a single
-    ``Static`` widget.
+    `Static` widget.
     When disabled, output is shown verbatim. This avoids the heavy widget tree
-    that ``textual.widgets.Markdown`` creates (one child widget per block).
+    that `textual.widgets.Markdown` creates (one child widget per block).
     """
 
     ALLOW_SELECT = True
@@ -170,12 +170,12 @@ class AssistantMessage(Vertical):
         """Initialize an assistant message.
 
         Args:
-            content: Initial assistant text (rendered as Markdown if enabled).
-            render_markdown: When set, overrides CLI ``render_markdown`` config for
-                this card (e.g. simple-bypass ``plan_direct`` next-action lines).
-            render_ansi: When True and markdown is disabled, parse ANSI escape
-                sequences in ``content`` via Rich (e.g. TUI shell command output).
-            **kwargs: Additional arguments passed to parent.
+        content: Initial assistant text (rendered as Markdown if enabled).
+        render_markdown: When set, overrides CLI `render_markdown` config for
+        this card (e.g. simple-bypass `plan_direct` next-action lines).
+        render_ansi: When True and markdown is disabled, parse ANSI escape
+        sequences in `content` via Rich (e.g. TUI shell command output).
+        **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
         self._content = content
@@ -360,7 +360,7 @@ class AssistantMessage(Vertical):
         """End streaming batched updates.
 
         Clears the pending buffer without an intermediate render, then does
-        a single full markdown render now that ``_streaming_active`` is False.
+        a single full markdown render now that `_streaming_active` is False.
         """
         if self._flush_timer is not None:
             self._flush_timer.stop()
@@ -375,8 +375,8 @@ class AssistantMessage(Vertical):
     async def set_content(self, content: str) -> None:
         """Set the full message content (stops any active stream).
 
-        Sets content before ``stop_stream`` so the single ``_render_to_body``
-        call inside ``stop_stream`` renders the new content — no redundant
+        Sets content before `stop_stream` so the single `_render_to_body`
+        call inside `stop_stream` renders the new content — no redundant
         double render.
         """
         self._content = content

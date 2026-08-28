@@ -1,9 +1,4 @@
-"""Loop-scoped isolation for the daemon client plane.
-
-Minimal API for other modules:
-    - ``bind_execution_thread_for_loop``: align runner + registry with loop metadata
-    - ``LoopInputDispatcher``: per-loop asyncio queues and workers
-"""
+"""Loop-scoped isolation for the daemon client plane."""
 
 from __future__ import annotations
 
@@ -26,22 +21,22 @@ logger = logging.getLogger(__name__)
 async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     """Bind the loop's checkpoint thread and return its id.
 
-    , the main StrangeLoop checkpoint thread id is the ``loop_id``
-        itself — the runtime in ``soothe.sloop.strange_loop`` normalizes
-        any caller-supplied id back to ``loop_id`` before saving. Returning a
-        distinct UUID here causes read RPCs (``loop_state_get``, ``loop_messages``)
-        to query the wrong LangGraph checkpoint and surface an empty conversation
-        on resume.
+    , the main StrangeLoop checkpoint thread id is the `loop_id`
+    itself — the runtime in `soothe.sloop.strange_loop` normalizes
+    any caller-supplied id back to `loop_id` before saving. Returning a
+    distinct UUID here causes read RPCs (`loop_state_get`, `loop_messages`)
+    to query the wrong LangGraph checkpoint and surface an empty conversation
+    on resume.
 
-        Args:
-            daemon: ``SootheDaemon`` instance.
-            loop_id: StrangeLoop identifier.
+    Args:
+    daemon: `SootheDaemon` instance.
+    loop_id: StrangeLoop identifier.
 
-        Returns:
-            Checkpoint thread id for this loop (always equals ``loop_id``).
+    Returns:
+    Checkpoint thread id for this loop (always equals `loop_id`).
 
-        Raises:
-            RuntimeError: If loop metadata is missing or invalid.
+    Raises:
+    RuntimeError: If loop metadata is missing or invalid.
     """
     # Set loop_id in logging context for full ID in daemon.log
     set_loop_id(loop_id)
@@ -113,7 +108,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
 
 
 class LoopInputDispatcher:
-    """Isolated input/command processing: one queue and worker task per ``loop_id``."""
+    """Isolated input/command processing: one queue and worker task per `loop_id`."""
 
     def __init__(self, daemon: Any, *, max_queue_size: int) -> None:
         self._daemon = daemon
@@ -132,7 +127,7 @@ class LoopInputDispatcher:
 
         Silently drops the message if shutdown has already been initiated so that
         concurrent callers cannot create new orphan workers after the snapshot in
-        ``shutdown()`` has been taken.
+        `shutdown()` has been taken.
         """
         async with self._lock:
             if self._shutting_down:

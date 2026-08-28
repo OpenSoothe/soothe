@@ -144,10 +144,10 @@ class EventSizeDistributionCollector:
     ) -> bool:
         """Log the current window if there was traffic and the bus is not idle.
 
-        If idle for ``idle_pause_seconds``, discards the window without logging.
+        If idle for `idle_pause_seconds`, discards the window without logging.
 
         Returns:
-            True if a log line was emitted.
+        True if a log line was emitted.
         """
         now = time.monotonic()
         with self._lock:

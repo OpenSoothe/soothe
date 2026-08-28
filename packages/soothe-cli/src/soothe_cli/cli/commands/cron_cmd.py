@@ -1,14 +1,4 @@
-"""Cron CLI subcommands for RFC-229.
-
-Daemon-backed control surface: manage scheduled jobs via WebSocket.
-Requires ``soothed start``.
-
-Commands:
-    soothe cron add <text>        # Add scheduled job (natural language)
-    soothe cron list              # List scheduled jobs
-    soothe cron show <job_id>     # Show job details
-    soothe cron cancel <job_id>   # Cancel a job
-"""
+"""Cron CLI subcommands."""
 
 from __future__ import annotations
 
@@ -81,8 +71,8 @@ def add_job(
     The daemon extracts schedule semantics via LLM and persists the job.
 
     Example:
-        soothe cron add "in 1 hour remind me to check the deploy"
-        soothe cron add "every weekday at 9am send status report" --priority 70
+    soothe cron add "in 1 hour remind me to check the deploy"
+    soothe cron add "every weekday at 9am send status report" --priority 70
     """
     client = _require_cron_client()
     try:
@@ -135,8 +125,8 @@ def list_jobs(
     Shows jobs with their ID, description, status, next run time, and run count.
 
     Example:
-        soothe cron list
-        soothe cron list --status pending
+    soothe cron list
+    soothe cron list --status pending
     """
     client = _require_cron_client()
     try:
@@ -182,7 +172,7 @@ def show_job(
     end condition, timestamps, and execution history.
 
     Example:
-        soothe cron show abc123def456
+    soothe cron show abc123def456
     """
     client = _require_cron_client()
     try:
@@ -228,7 +218,7 @@ def cancel_job(
     Marks the job as cancelled. Only pending jobs can be cancelled.
 
     Example:
-        soothe cron cancel abc123def456
+    soothe cron cancel abc123def456
     """
     client = _require_cron_client()
     try:

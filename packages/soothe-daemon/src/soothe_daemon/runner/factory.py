@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class LoopRunnerFactory:
-    """Creates a ``LoopRunnerProtocol`` instance for each new ``loop_id``.
+    """Creates a `LoopRunnerProtocol` instance for each new `loop_id`.
 
     Selects runner implementation based on config (exactly one must be enabled):
 
-    - ``worker_pool.enabled=true`` → ``PoolLoopRunner`` (persistent subprocess pool)
-    - ``thread_pool.enabled=true`` → ``ThreadLoopRunner`` (persistent thread pool)
-    - ``distributed.enabled=true`` → ``RayLoopRunner`` (Ray actor per loop)
+    - `worker_pool.enabled=true` → `PoolLoopRunner` (persistent subprocess pool)
+    - `thread_pool.enabled=true` → `ThreadLoopRunner` (persistent thread pool)
+    - `distributed.enabled=true` → `RayLoopRunner` (Ray actor per loop)
 
     Validation ensures exactly one mode is enabled at startup.
     """
@@ -141,7 +141,7 @@ class LoopRunnerFactory:
         await close_shared_postgres_pools()
 
     def create_runner(self, loop_id: str) -> LoopRunnerProtocol:
-        """Return a runner instance for ``loop_id``."""
+        """Return a runner instance for `loop_id`."""
         if self._mode == "worker_pool":
             from soothe_daemon.runner.pool_runner import PoolLoopRunner
 

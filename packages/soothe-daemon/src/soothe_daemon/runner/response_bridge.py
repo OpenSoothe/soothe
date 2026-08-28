@@ -1,13 +1,4 @@
-"""Thread-to-asyncio stream response bridge.
-
-Eliminates poll-delayed delivery from worker threads into the daemon event loop.
-Added backpressure handling to prevent unbounded queue growth.
-
-NOTE: The semaphore backpressure here is a defensive optimization, not the root
-fix for OOM. The root cause was LangGraph checkpointer channel history
-loaded on every astream tick (see for details). Backpressure helps bound
-in-flight chunks but alone did not resolve the memory leak.
-"""
+"""Thread-to-asyncio stream response bridge."""
 
 from __future__ import annotations
 
@@ -89,14 +80,14 @@ def _chunk_is_execute_phase(payload: Any) -> bool:
 class ResponsePusher:
     """Push stream responses from a worker thread into the main asyncio.Queue.
 
-    Uses ``call_soon_threadsafe`` so chunks are delivered without polling the
+    Uses `call_soon_threadsafe` so chunks are delivered without polling the
     worker response queue on a fixed interval.
 
     Semaphore backpressure blocks the worker thread when too many chunks
     are in flight, preventing LangGraph state from growing without bound when
     downstream delivery is slow.
 
-    Per-worker semaphores  prevent one loop from exhausting the global
+    Per-worker semaphores prevent one loop from exhausting the global
     in-flight budget shared across unrelated workers.
     """
 
@@ -111,12 +102,12 @@ class ResponsePusher:
         """Schedule delivery of one worker message onto the main event loop.
 
         Args:
-            msg_type: Worker message kind (``chunk``, ``done``, ``error``, etc.).
-            payload: Chunk tuple or exception; ignored for ``done`` / ``cancelled``.
+        msg_type: Worker message kind (`chunk`, `done`, `error`, etc.).
+        payload: Chunk tuple or exception; ignored for `done` / `cancelled`.
 
         For CHUNK messages, blocks the worker thread until a delivery slot is
         available (semaphore acquire). This applies backpressure to LangGraph
-        ``astream`` so memory cannot grow unbounded when the consumer is slow.
+        `astream` so memory cannot grow unbounded when the consumer is slow.
 
         Uses longer timeout for execute-phase and goal_completion chunks
         since these can run for minutes during long tool execution (browser_use,
@@ -184,8 +175,8 @@ class ResponsePusher:
     def _deliver(self, msg_type: str, payload: Any, release_slot: bool = False) -> None:
         """Run on the main loop thread; map worker types to asyncio.Queue tuples.
 
-        All deliveries use blocking ``queue.put`` so terminal frames (especially
-        ``done``) are never dropped when the asyncio queue is momentarily full.
+        All deliveries use blocking `queue.put` so terminal frames (especially
+        `done`) are never dropped when the asyncio queue is momentarily full.
         """
         if msg_type == WORKER_MSG_TIMEOUT:
             self._schedule_queue_put((WORKER_MSG_ERROR, payload))

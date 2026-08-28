@@ -62,10 +62,10 @@ def _looks_like_soothe_spawn(cmdline: str, soothe_root: Path | None) -> bool:
 def _looks_like_orphaned_worktree_spawn(cmdline: str) -> bool:
     """True when a process references a leaked worktree/background path.
 
-    These are agent ``run_background`` grandchildren (jest/pytest/npm/…)
+    These are agent `run_background` grandchildren (jest/pytest/npm/…)
     whose parent worker died, leaving them reparented to PID 1 with a
-    command line still pointing at a ``.soothe/worktrees/`` workspace or a
-    ``.soothe/background/bg-`` log path. Bounded to soothe-workspace paths,
+    command line still pointing at a `.soothe/worktrees/` workspace or a
+    `.soothe/background/bg-` log path. Bounded to soothe-workspace paths,
     not a global match.
     """
     return any(marker in cmdline for marker in _WORKTREE_PATH_MARKERS)
@@ -78,19 +78,19 @@ def reap_stale_soothe_worker_processes(
     daemon_pid: int | None = None,
     protect_pids: frozenset[int] | None = None,
 ) -> int:
-    """Terminate orphaned ``multiprocessing.spawn`` workers from old daemon runs.
+    """Terminate orphaned `multiprocessing.spawn` workers from old daemon runs.
 
-    Targets child processes whose command line includes ``multiprocessing.spawn``
+    Targets child processes whose command line includes `multiprocessing.spawn`
     and a soothe path, when the parent PID is not alive or is not the current daemon.
 
     Args:
-        dry_run: Log candidates without sending SIGTERM.
-        soothe_project_root: Optional repo/venv root to narrow matches.
-        daemon_pid: Skip spawn workers whose parent is this PID (defaults to current process).
-        protect_pids: Optional PIDs to never terminate (e.g. live pool workers).
+    dry_run: Log candidates without sending SIGTERM.
+    soothe_project_root: Optional repo/venv root to narrow matches.
+    daemon_pid: Skip spawn workers whose parent is this PID (defaults to current process).
+    protect_pids: Optional PIDs to never terminate (e.g. live pool workers).
 
     Returns:
-        Number of processes sent SIGTERM (0 in dry_run).
+    Number of processes sent SIGTERM (0 in dry_run).
     """
     root = soothe_project_root
     if root is None:
@@ -202,6 +202,6 @@ async def periodic_stale_worker_reap(
 
 
 def reap_from_cli() -> None:
-    """CLI entry: ``python -m soothe_daemon.persistence``."""
+    """CLI entry: `python -m soothe_daemon.persistence`."""
     count = reap_stale_soothe_worker_processes(dry_run="--dry-run" in sys.argv)
     print(f"reaped={count}")

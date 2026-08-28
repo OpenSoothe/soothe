@@ -1,9 +1,4 @@
-"""Ray-based loop runner — one actor per loop_id.
-
-WARNING: This file imports Ray at module level. It must NEVER be imported
-by local-mode code paths. ``LoopRunnerFactory`` guards the import behind
-``SootheDaemonConfig.distributed.enabled=True``.
-"""
+"""Ray-based loop runner — one actor per loop_id."""
 
 from __future__ import annotations
 
@@ -24,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class RayLoopRunner:
-    """Manages one ``LoopRunnerActor`` (Ray remote actor) per ``loop_id``.
+    """Manages one `LoopRunnerActor` (Ray remote actor) per `loop_id`.
 
-    One instance per loop. Created by ``LoopRunnerFactory`` when
-    ``SootheDaemonConfig.distributed.enabled=True``.
+    One instance per loop. Created by `LoopRunnerFactory` when
+    `SootheDaemonConfig.distributed.enabled=True`.
     """
 
     def __init__(self, loop_id: str, config: SootheConfig) -> None:
@@ -88,17 +83,17 @@ class RayLoopRunner:
     async def is_idle(self) -> bool:
         """True when this loop's actor is gone (no longer busy).
 
-        Ray actors are killed outright on cancel (``cancel`` already calls
-        ``ray.kill``), so "idle" = "no live actor". A live actor is busy.
+        Ray actors are killed outright on cancel (`cancel` already calls
+        `ray.kill`), so "idle" = "no live actor". A live actor is busy.
         """
         return self._actor is None
 
     async def force_kill(self, *, timeout: float = 10.0) -> None:
         """Hard-kill the actor backing this loop (cancel backstop).
 
-        ``cancel`` already hard-kills the Ray actor; this is the explicit
+        `cancel` already hard-kills the Ray actor; this is the explicit
         escalation hook so callers can bypass the cooperative grace period
-        when they have already waited on ``is_idle``.
+        when they have already waited on `is_idle`.
         """
         if self._actor is None:
             return
@@ -112,8 +107,8 @@ class RayLoopRunner:
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap clarification mode — not yet supported for distributed mode.
 
-        Ray actors don't expose their ``SootheRunner`` to the driver process.
-        Returns ``False`` so the caller falls back to the next-turn path.
+        Ray actors don't expose their `SootheRunner` to the driver process.
+        Returns `False` so the caller falls back to the next-turn path.
         """
         return False
 

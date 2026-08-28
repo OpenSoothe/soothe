@@ -36,11 +36,11 @@ app = typer.Typer(
 
 
 def _echo_help_for(base_ctx: click.Context, commands: list[str] | None) -> None:
-    """Print help for ``base_ctx`` or a nested command path under it.
+    """Print help for `base_ctx` or a nested command path under it.
 
     Args:
-        base_ctx: Context whose help is shown when ``commands`` is empty.
-        commands: Optional path of subcommand names relative to ``base_ctx``.
+    base_ctx: Context whose help is shown when `commands` is empty.
+    commands: Optional path of subcommand names relative to `base_ctx`.
     """
     if not commands:
         typer.echo(base_ctx.get_help())
@@ -68,7 +68,7 @@ def _echo_help_for(base_ctx: click.Context, commands: list[str] | None) -> None:
 
 
 def _register_help_command(typer_app: typer.Typer) -> None:
-    """Register a ``help`` subcommand equivalent to ``-h`` / ``--help``."""
+    """Register a `help` subcommand equivalent to `-h` / `--help`."""
 
     @typer_app.command("help")
     def help_cmd(
@@ -87,17 +87,17 @@ def configure_command_group(
     *,
     show_help_on_no_args: bool = True,
 ) -> None:
-    """Make ``-h``, ``--help``, and ``help`` equivalent for a nested group.
+    """Make `-h`, `--help`, and `help` equivalent for a nested group.
 
-    ``-h`` / ``--help`` come from the root app's ``help_option_names`` (inherited
-    by Click contexts). This registers a matching ``help`` subcommand and,
+    `-h` / `--help` come from the root app's `help_option_names` (inherited
+    by Click contexts). This registers a matching `help` subcommand and,
     optionally, prints help when the group is invoked with no subcommand.
 
     Args:
-        nested_app: Nested Typer app to configure.
-        show_help_on_no_args: When True, bare group invocation prints help
-            (same as ``-h``). Set False when the group has its own default
-            action or already sets ``no_args_is_help``.
+    nested_app: Nested Typer app to configure.
+    show_help_on_no_args: When True, bare group invocation prints help
+    (same as `-h`). Set False when the group has its own default
+    action or already sets `no_args_is_help`.
     """
     if show_help_on_no_args:
 
@@ -231,12 +231,12 @@ def main(
     Note: This is the CLI client. Use 'soothed' to manage the daemon server.
 
     Examples:
-        soothe                           # Interactive TUI mode
-        soothe -p "Research AI advances" # One-shot headless (non-TUI) query
-        soothe -p "Hello" --tui         # TUI with an auto-submitted prompt
-        soothe --daemon-port 9000 loop list  # Subcommands inherit global flags
-        soothe loop list                 # List StrangeLoop instances
-        soothe help loop                 # Same as: soothe loop --help
+    soothe # Interactive TUI mode
+    soothe -p "Research AI advances" # One-shot headless (non-TUI) query
+    soothe -p "Hello" --tui # TUI with an auto-submitted prompt
+    soothe --daemon-port 9000 loop list # Subcommands inherit global flags
+    soothe loop list # List StrangeLoop instances
+    soothe help loop # Same as: soothe loop --help
     """
     if show_version:
         typer.echo(f"soothe {__version__}")

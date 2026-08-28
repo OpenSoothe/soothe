@@ -49,10 +49,10 @@ class DiffMessage(Static):
         """Initialize a diff message.
 
         Args:
-            diff_content: The unified diff content
-            file_path: Path to the file being modified
-            action_label: Short verb for the change (e.g. ``Edited``, ``Deleted``)
-            **kwargs: Additional arguments passed to parent
+        diff_content: The unified diff content
+        file_path: Path to the file being modified
+        action_label: Short verb for the change (e.g. `Edited`, `Deleted`)
+        **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
         self._diff_content = diff_content
@@ -63,7 +63,7 @@ class DiffMessage(Static):
         """Compose the diff message layout.
 
         Yields:
-            Widgets displaying the diff header and formatted content.
+        Widgets displaying the diff header and formatted content.
         """
         if self._file_path:
             if self._action_label:

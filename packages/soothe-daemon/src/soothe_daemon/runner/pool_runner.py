@@ -1,17 +1,4 @@
-"""Persistent worker pool for loop execution.
-
-Pre-warms N worker processes at daemon startup to eliminate ~8s per-query
-overhead. Workers create fresh SootheRunner instances per request (Option A)
-ensuring no user data leakage across requests.
-
-ARCHITECTURE: Each worker has TWO queues created at spawn time (inherited):
-    - request_queue: main process → worker (dispatch requests)
-    - response_queue: worker → main process (stream responses)
-
-This avoids the multiprocessing limitation that Queue objects cannot be
-pickled and sent through other Queue objects - they must be inherited at
-process spawn time.
-"""
+"""Persistent worker pool for loop execution."""
 
 from __future__ import annotations
 
@@ -61,8 +48,8 @@ def _start_thread_heartbeat(
 ) -> threading.Thread:
     """Emit pool heartbeats from a daemon thread (survives event-loop blocking).
 
-    ``asyncio`` heartbeats stop when sync code blocks the worker loop (e.g. embedding
-    model download via ``Future.result()``). A thread timer keeps the parent from
+    `asyncio` heartbeats stop when sync code blocks the worker loop (e.g. embedding
+    model download via `Future.result()`). A thread timer keeps the parent from
     marking the worker stuck during long CPU/IO work.
     """
 
@@ -348,9 +335,9 @@ def _spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
 
 
 def _log_pool_worker_fatal(worker_id: str, exc: BaseException) -> None:
-    """Append uncaught subprocess errors to a file under ``SOOTHE_HOME/logs``.
+    """Append uncaught subprocess errors to a file under `SOOTHE_HOME/logs`.
 
-    Worker file logging (``runner.log``) is only attached when a loop request
+    Worker file logging (`runner.log`) is only attached when a loop request
     starts, so import/bootstrap failures in an otherwise-idle pool worker would
     otherwise disappear unless stderr is captured.
     """
@@ -430,27 +417,27 @@ def _pool_worker_body(
 ) -> None:
     """Worker subprocess body: wait for requests and execute loop runs.
 
-    The multiprocessing entrypoint is ``_pool_worker`` (wraps this function).
+    The multiprocessing entrypoint is `_pool_worker` (wraps this function).
 
     Behavior:
-        - Wait for requests on request_queue (with idle timeout)
-        - Reuse one SootheRunner per worker when ``reuse_runner``
-        - Execute request, stream results to response_queue
-        - Check cancel_event between chunks for cooperative cancellation
-        - Send heartbeat messages on a background thread (independent of chunk cadence
-          and event-loop blocking during sync work such as model downloads)
-        - Exit on shutdown sentinel, idle timeout, or max requests
+    - Wait for requests on request_queue (with idle timeout)
+    - Reuse one SootheRunner per worker when `reuse_runner`
+    - Execute request, stream results to response_queue
+    - Check cancel_event between chunks for cooperative cancellation
+    - Send heartbeat messages on a background thread (independent of chunk cadence
+    and event-loop blocking during sync work such as model downloads)
+    - Exit on shutdown sentinel, idle timeout, or max requests
 
     Args:
-        config: Spawn-safe SootheConfig.
-        worker_id: Unique worker identifier for logging.
-        request_queue: Queue for receiving requests from main process.
-        response_queue: Queue for sending responses to main process.
-        cancel_event: multiprocessing.Event for cooperative cancellation signaling.
-        idle_timeout_seconds: Exit after this many seconds idle.
-        max_requests: Exit after this many requests completed.
-        default_timeout_seconds: Default per-request timeout if not specified.
-        heartbeat_interval_seconds: Interval for sending heartbeat messages.
+    config: Spawn-safe SootheConfig.
+    worker_id: Unique worker identifier for logging.
+    request_queue: Queue for receiving requests from main process.
+    response_queue: Queue for sending responses to main process.
+    cancel_event: multiprocessing.Event for cooperative cancellation signaling.
+    idle_timeout_seconds: Exit after this many seconds idle.
+    max_requests: Exit after this many requests completed.
+    default_timeout_seconds: Default per-request timeout if not specified.
+    heartbeat_interval_seconds: Interval for sending heartbeat messages.
     """
     import asyncio as _asyncio
 
@@ -729,30 +716,30 @@ class WorkerPool:
     """Singleton pool of persistent worker processes for loop execution.
 
     Pre-warms N worker processes at daemon startup. Each worker has two queues:
-        - request_queue: main process sends requests
-        - response_queue: worker sends responses back
+    - request_queue: main process sends requests
+    - response_queue: worker sends responses back
 
     Workers execute requests with fresh SootheRunner instances and stream
     results tagged with request_id for routing to the correct pending request.
 
     Dynamic Scaling (min/max pool size):
-        - Starts with min_pool_size workers at daemon startup
-        - Grows up to max_pool_size when all min workers are busy
-        - Workers beyond min_pool_size idle out after idle_timeout_seconds
-        - Shrinks back to min_pool_size when load decreases
+    - Starts with min_pool_size workers at daemon startup
+    - Grows up to max_pool_size when all min workers are busy
+    - Workers beyond min_pool_size idle out after idle_timeout_seconds
+    - Shrinks back to min_pool_size when load decreases
 
     Architecture:
-        Daemon → LoopRunnerFactory → WorkerPool (singleton)
-                                         ↓
-        WorkerProcess[0..N]
-            ← request_queue (dispatch requests)
-            → response_queue (stream responses)
+    Daemon → LoopRunnerFactory → WorkerPool (singleton)
+    ↓
+    WorkerProcess[0..N]
+    ← request_queue (dispatch requests)
+    → response_queue (stream responses)
 
     Lifecycle:
-        - Startup: pre-warm min_pool_size workers
-        - Runtime: workers pull requests, execute, return to pool
-        - Scaling: spawn extra workers when needed, idle out when not
-        - Shutdown: signal all workers to exit, wait, then force-kill
+    - Startup: pre-warm min_pool_size workers
+    - Runtime: workers pull requests, execute, return to pool
+    - Scaling: spawn extra workers when needed, idle out when not
+    - Shutdown: signal all workers to exit, wait, then force-kill
     """
 
     _shared_pool: WorkerPool | None = None
@@ -1171,8 +1158,8 @@ class WorkerPool:
     async def _route_failure_for_dead_busy_worker(self, worker: WorkerProcess) -> None:
         """If a worker process died while handling a request, unblock the waiter with an error.
 
-        Without this, ``submit()`` blocks forever on ``response_queue.get()`` because the
-        poll loop previously skipped dead workers and never forwarded ``done``/``error``.
+        Without this, `submit()` blocks forever on `response_queue.get()` because the
+        poll loop previously skipped dead workers and never forwarded `done`/`error`.
         """
         req_id = worker.current_request_id
         if req_id is None or worker.dead_failure_routed:
@@ -1412,7 +1399,7 @@ class WorkerPool:
         start_time: datetime,
         ready_already_received: bool = False,
     ) -> None:
-        """Release worker only after cleanup completes (``ready`` signal)."""
+        """Release worker only after cleanup completes (`ready` signal)."""
         worker.status = WorkerStatus.CLEANING_UP
         if not ready_already_received:
             await self._await_worker_ready(response_queue)
@@ -1616,8 +1603,8 @@ class WorkerPool:
         Guarantees the worker is terminated by SIGTERM then SIGKILL if needed.
 
         Args:
-            worker_id: Worker to terminate.
-            timeout: Seconds to wait for process death after terminate.
+        worker_id: Worker to terminate.
+        timeout: Seconds to wait for process death after terminate.
         """
         worker = self._workers.get(worker_id)
         if worker is None:
@@ -1699,14 +1686,14 @@ class WorkerPool:
         logger.info("Worker %s force terminated", worker_id)
 
     async def force_kill_worker_by_loop_id(self, loop_id: str, timeout: float = 10.0) -> None:
-        """Force-terminate the worker mapped to ``loop_id`` (cancel backstop).
+        """Force-terminate the worker mapped to `loop_id` (cancel backstop).
 
-        Resolves ``loop_id`` → ``worker_id`` the same way ``cancel_request``
-        does, then delegates to ``force_kill_worker``. Idempotent: a no-op when
-        no worker is mapped to ``loop_id`` (e.g. the request already drained).
-        Used by ``LoopRunnerProtocol.force_kill`` so the autopilot cancel /
+        Resolves `loop_id` → `worker_id` the same way `cancel_request`
+        does, then delegates to `force_kill_worker`. Idempotent: a no-op when
+        no worker is mapped to `loop_id` (e.g. the request already drained).
+        Used by `LoopRunnerProtocol.force_kill` so the autopilot cancel /
         deadline paths can escalate cooperative cancel to a guaranteed kill
-        without resolving ``worker_id`` themselves.
+        without resolving `worker_id` themselves.
         """
         worker_id = self._workers_by_loop_id.get(loop_id)
         if worker_id is None:
@@ -1722,14 +1709,14 @@ class WorkerPool:
         return self._workers_by_loop_id.get(loop_id)
 
     def is_loop_busy(self, loop_id: str) -> bool:
-        """Return True when a non-idle worker is mapped to ``loop_id``."""
+        """Return True when a non-idle worker is mapped to `loop_id`."""
         worker_id = self._workers_by_loop_id.get(loop_id)
         if worker_id is None:
             return False
         return not self.is_worker_idle(worker_id)
 
     async def await_loop_dispatchable(self, loop_id: str) -> None:
-        """Block until no in-flight worker request is mapped to ``loop_id``."""
+        """Block until no in-flight worker request is mapped to `loop_id`."""
         cond = self._worker_available
         if cond is None:
             return
@@ -1878,10 +1865,10 @@ class PoolLoopRunner:
             yield chunk
 
     async def _resolve_pool(self) -> WorkerPool:
-        """Return the shared pool, fetching it if ``run`` hasn't yet bound it.
+        """Return the shared pool, fetching it if `run` hasn't yet bound it.
 
-        ``cancel`` / ``is_idle`` / ``force_kill`` may be called before ``run``
-        has bound ``self._pool`` (e.g. cancel racing dispatch). Resolving the
+        `cancel` / `is_idle` / `force_kill` may be called before `run`
+        has bound `self._pool` (e.g. cancel racing dispatch). Resolving the
         shared instance here keeps those paths safe to call pre-dispatch.
         """
         if self._pool is None:
@@ -1906,9 +1893,9 @@ class PoolLoopRunner:
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap clarification mode — not yet supported for worker_pool mode.
 
-        Subprocess workers don't expose their ``SootheRunner`` to the main
-        process. Returns ``False`` so the caller falls back to the next-turn
-        path. (Future: add a ``set_clarification_mode`` message to the worker
+        Subprocess workers don't expose their `SootheRunner` to the main
+        process. Returns `False` so the caller falls back to the next-turn
+        path. (Future: add a `set_clarification_mode` message to the worker
         request queue.)
         """
         return False

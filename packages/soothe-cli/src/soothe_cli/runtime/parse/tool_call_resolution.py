@@ -1,14 +1,4 @@
-"""Canonical merge of tool-call identity and arguments for UX display.
-
-LangChain streams the same logical tool call through several channels on one chunk:
-
-* ``AIMessage.tool_calls`` — often the most complete structured args.
-* ``content_blocks`` / list ``content`` — parallel copies that may have empty ``args``.
-* Accumulated ``tool_call_chunks`` — JSON built incrementally; passed in as an overlay.
-
-This module merges those sources once per chunk so the TUI (and future callers) do not
-duplicate precedence rules across merge/backfill helpers.
-"""
+"""Canonical merge of tool-call identity and arguments for UX display."""
 
 from __future__ import annotations
 
@@ -36,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def tool_args_meaningful(raw: Any) -> bool:
-    """True if ``raw`` yields a non-empty normalized argument dict."""
+    """True if `raw` yields a non-empty normalized argument dict."""
     if raw is None:
         return False
     if isinstance(raw, dict):
@@ -47,7 +37,7 @@ def tool_args_meaningful(raw: Any) -> bool:
 
 
 def is_execute_step_namespace(ns_key: tuple[str, ...]) -> bool:
-    """True for CoreAgent execute root namespace (``execute:{run_id}``), not nested ``/N`` or ``tools:`` subgraphs."""
+    """True for CoreAgent execute root namespace (`execute:{run_id}`), not nested `/N` or `tools:` subgraphs."""
     return is_root_execute_namespace_key(ns_key)
 
 
@@ -62,10 +52,10 @@ def resolve_tool_result_row_key(
     tool_call_id: str,
     task_scope: TaskScope | None = None,
 ) -> str:
-    """Row key for completing a tool row from a streamed ``ToolMessage``.
+    """Row key for completing a tool row from a streamed `ToolMessage`.
 
-    Execute-graph namespaces (``()`` or ``execute:…``) keep the unified ``s:`` id.
-    Subagent ``tools:…`` namespaces remap via :func:`row_key_for_subgraph_tool`.
+    Execute-graph namespaces (`()` or `execute:…`) keep the unified `s:` id.
+    Subagent `tools:…` namespaces remap via :func:`row_key_for_subgraph_tool`.
     """
     sid = str(tool_call_id or "").strip()
     if not sid:
@@ -76,7 +66,7 @@ def resolve_tool_result_row_key(
 
 
 def is_main_step_level_tool_call_id(tool_call_id: str) -> bool:
-    """True for unified main-graph step tools (``{step}:s:{tool}:{n}``), not ``task`` rows."""
+    """True for unified main-graph step tools (`{step}:s:{tool}:{n}`), not `task` rows."""
     from soothe_sdk.ux.task_namespace import is_step_level_task_tool_id, parse_unified_tool_call_id
 
     tcid = str(tool_call_id or "").strip()
@@ -128,7 +118,7 @@ def predict_main_execute_tool_call_id(
 
 
 def is_task_level_subgraph_tool_call_id(tool_call_id: str) -> bool:
-    """True for unified subgraph tools (``{step}:t{n}:{tool}:{seq}``), not nested ``task`` rows."""
+    """True for unified subgraph tools (`{step}:t{n}:{tool}:{seq}`), not nested `task` rows."""
     from soothe_sdk.ux.task_namespace import (
         is_inner_subgraph_task_tool_id,
         parse_unified_tool_call_id,
@@ -150,7 +140,7 @@ def should_ingest_tool_for_step_stats(
 ) -> bool:
     """Whether the TUI should register a tool row for step-card stats.
 
-    Main execute-graph tools are tracked as soon as ``tool_call_id`` and ``tool_name``
+    Main execute-graph tools are tracked as soon as `tool_call_id` and `tool_name`
     are known; display does not wait for streamed args. Subgraph tools often
     arrive with placeholder kwargs before real args.
     """
@@ -169,7 +159,7 @@ def should_ingest_tool_for_step_stats(
 
 
 def _args_from_toolish_block(block: dict[str, Any]) -> dict[str, Any]:
-    """Normalize args from a ``tool_call`` / ``tool_use`` / ``tool_call_chunk`` block."""
+    """Normalize args from a `tool_call` / `tool_use` / `tool_call_chunk` block."""
     btype = block.get("type")
     payload: dict[str, Any] = dict(block)
     if btype == "tool_use" and "args" not in block and block.get("input") is not None:
@@ -206,7 +196,7 @@ def _pick_args_from_sources(
     """Merge kwargs from all sources; later sources override earlier partial values.
 
     Order (lowest → highest priority): block buffer, streaming overlay, pending
-    buffer, ``message.tool_calls``. This keeps early partial stream args visible until
+    buffer, `message.tool_calls`. This keeps early partial stream args visible until
     complete JSON arrives on pending or the wire message.
     """
     merged: dict[str, Any] = {}
@@ -233,7 +223,7 @@ def merge_tool_display_args(
     message: Any = None,
     tool_name: str | None = None,
 ) -> dict[str, Any]:
-    """Merge kwargs from block buffer, ``tool_call_chunks`` overlay, and pending JSON.
+    """Merge kwargs from block buffer, `tool_call_chunks` overlay, and pending JSON.
 
     CoreAgent executes with complete args; the stream often splits them across channels.
     The TUI must prefer the richest source on every chunk so task descriptions and tool
@@ -339,7 +329,7 @@ def resolve_stream_tool_name(
     chunk_name: str | None,
     pending_tool_calls_lc: Mapping[str, dict[str, Any]] | None = None,
 ) -> str:
-    """Resolve display tool name when the chunk uses a placeholder ``tool`` label."""
+    """Resolve display tool name when the chunk uses a placeholder `tool` label."""
     name = (chunk_name or "").strip()
     if name and name != "tool":
         return name
@@ -369,15 +359,15 @@ def resolve_tool_invocations_for_display(
     """Merge tool identity and kwargs from all chunk sources.
 
     Args:
-        message: ``AIMessage`` / ``AIMessageChunk`` (after non-standard expansion).
-        expanded_tool_blocks: Tool-ish blocks only, in stream order (first id occurrence
-            defines ordering for duplicates).
-        streaming_overlay: Optional ``tool_call_id -> args dict`` from accumulated
-            ``tool_call_chunks`` (already parsed JSON objects).
+    message: `AIMessage` / `AIMessageChunk` (after non-standard expansion).
+    expanded_tool_blocks: Tool-ish blocks only, in stream order (first id occurrence
+    defines ordering for duplicates).
+    streaming_overlay: Optional `tool_call_id -> args dict` from accumulated
+    `tool_call_chunks` (already parsed JSON objects).
 
     Returns:
-        Ordered list of resolved invocations, including ids only present on
-        ``message.tool_calls`` or in the streaming overlay.
+    Ordered list of resolved invocations, including ids only present on
+    `message.tool_calls` or in the streaming overlay.
     """
     streaming_overlay = streaming_overlay or {}
 
@@ -450,8 +440,8 @@ def materialize_ai_blocks_with_resolved_tools(
 ) -> list[dict[str, Any]]:
     """Return display blocks with tool arguments merged from all chunk sources.
 
-    Preserves order of ``expanded_blocks``; appends tool calls that exist only on
-    ``message.tool_calls`` or the streaming overlay (same behavior as the former
+    Preserves order of `expanded_blocks`; appends tool calls that exist only on
+    `message.tool_calls` or the streaming overlay (same behavior as the former
     append + backfill + merge passes).
     """
     tool_only = [b for b in expanded_blocks if isinstance(b, dict) and is_toolish_display_block(b)]
@@ -517,9 +507,9 @@ def build_streaming_args_overlay(
     *,
     only_ids: set[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Map ``tool_call_id`` → parsed args dict from ``tool_call_chunks`` accumulation.
+    """Map `tool_call_id` → parsed args dict from `tool_call_chunks` accumulation.
 
-    When ``only_ids`` is set, only those pending entries are parsed (incremental path).
+    When `only_ids` is set, only those pending entries are parsed (incremental path).
     Otherwise every pending entry is considered (legacy / final flush).
     """
     from langchain_core.messages import AIMessageChunk

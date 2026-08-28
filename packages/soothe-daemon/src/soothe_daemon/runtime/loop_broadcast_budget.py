@@ -1,8 +1,4 @@
-"""Per-loop in-flight broadcast budget (Phase 2.2).
-
-Limits how many stream frames one loop may push toward the EventBus concurrently.
-Excess producers block only that loop's stream consumer, not other loops.
-"""
+"""Per-loop in-flight broadcast budget (Phase 2.2)."""
 
 from __future__ import annotations
 
@@ -12,11 +8,11 @@ from contextlib import asynccontextmanager
 
 
 class LoopBroadcastBudget:
-    """Semaphore-backed budget keyed by ``loop_id``.
+    """Semaphore-backed budget keyed by `loop_id`.
 
     Args:
-        max_in_flight_per_loop: Max concurrent in-flight broadcasts per loop.
-            ``0`` disables limiting.
+    max_in_flight_per_loop: Max concurrent in-flight broadcasts per loop.
+    `0` disables limiting.
     """
 
     def __init__(self, max_in_flight_per_loop: int) -> None:
@@ -26,7 +22,7 @@ class LoopBroadcastBudget:
 
     @property
     def limit(self) -> int:
-        """Configured per-loop in-flight cap (``0`` = unlimited)."""
+        """Configured per-loop in-flight cap (`0` = unlimited)."""
         return self._limit
 
     async def _semaphore_for(self, loop_id: str) -> asyncio.Semaphore | None:
@@ -44,7 +40,7 @@ class LoopBroadcastBudget:
 
     @asynccontextmanager
     async def slot(self, loop_id: str) -> AsyncIterator[None]:
-        """Acquire one in-flight slot for ``loop_id`` until the broadcast completes."""
+        """Acquire one in-flight slot for `loop_id` until the broadcast completes."""
         sem = await self._semaphore_for(loop_id)
         if sem is None:
             yield

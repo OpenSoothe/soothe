@@ -88,11 +88,10 @@ def _goal_viewer_dict(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 async def load_ce_goals(loop_id: str, daemon_session: Any = None) -> list[dict[str, Any]]:
-    """Load goals for ``loop_id`` via the daemon session (loop history RPC).
+    """Load goals for `loop_id` via the daemon session (loop history RPC).
 
-    Prefers Context Engine-shaped fields when present; otherwise maps RFC-631
-    display snapshots (``goal_id`` / ``goal_text``). Dependency edges are only
-    shown when the daemon includes ``depends_on``.
+    Prefers Context Engine-shaped fields when present; otherwise maps snapshots (`goal_id` / `goal_text`). Dependency edges are only
+    shown when the daemon includes `depends_on`.
     """
     raw_loop_id = str(loop_id or "").strip()
     if not raw_loop_id or raw_loop_id == "unknown" or daemon_session is None:

@@ -13,15 +13,15 @@ async def run_autopilot_action(
     """Execute one autopilot command against an AutopilotService-like object.
 
     Args:
-        service: Daemon autopilot service instance.
-        action: Action name without the ``autopilot_`` prefix (e.g. ``status``).
-        payload: Optional command fields (goal_id, description, ...).
+    service: Daemon autopilot service instance.
+    action: Action name without the `autopilot_` prefix (e.g. `status`).
+    payload: Optional command fields (goal_id, description, ...).
 
     Returns:
-        Result dict for the wire response ``result`` field.
+    Result dict for the wire response `result` field.
 
     Raises:
-        RuntimeError: Domain errors (missing service inputs, not found, etc.).
+    RuntimeError: Domain errors (missing service inputs, not found, etc.).
     """
     payload = payload or {}
 

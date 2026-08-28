@@ -26,14 +26,14 @@ def acquire_worker_runner(
     """Return a runner for this request and updated cache.
 
     Args:
-        config: Agent configuration.
-        cached_runner: Runner retained from prior requests on this worker.
-        reuse_runner: When True, reuse ``cached_runner`` between requests.
-        warmup_runner: When True and no cache exists, create runner eagerly.
-        identity_runtime: Optional identity bundle for CoreAgent middleware.
+    config: Agent configuration.
+    cached_runner: Runner retained from prior requests on this worker.
+    reuse_runner: When True, reuse `cached_runner` between requests.
+    warmup_runner: When True and no cache exists, create runner eagerly.
+    identity_runtime: Optional identity bundle for CoreAgent middleware.
 
     Returns:
-        Tuple of (runner_for_request, updated_cached_runner).
+    Tuple of (runner_for_request, updated_cached_runner).
     """
     from soothe_autopilot.runner import AutopilotSootheRunner
 
@@ -95,16 +95,16 @@ def warmup_worker_runner_on_loop(
     startup so interactive clients avoid a multi-second TUI freeze.
 
     Args:
-        loop: Dedicated asyncio loop for the worker thread/process.
-        config: Agent configuration.
-        reuse_runner: When True, retain the runner for later requests.
-        warmup_runner: When True, create the runner eagerly.
-        warmup_core_agent: When True, compile CoreAgent during warmup.
-        identity_runtime: Optional identity bundle for CoreAgent middleware.
-        worker_id: Worker identifier for logging.
+    loop: Dedicated asyncio loop for the worker thread/process.
+    config: Agent configuration.
+    reuse_runner: When True, retain the runner for later requests.
+    warmup_runner: When True, create the runner eagerly.
+    warmup_core_agent: When True, compile CoreAgent during warmup.
+    identity_runtime: Optional identity bundle for CoreAgent middleware.
+    worker_id: Worker identifier for logging.
 
     Returns:
-        Cached runner when reuse is enabled, otherwise ``None``.
+    Cached runner when reuse is enabled, otherwise `None`.
     """
     if not (reuse_runner and warmup_runner):
         return None

@@ -29,18 +29,18 @@ async def discover_skills_async(
 ) -> list[ExtendedSkillMetadata]:
     """Discover skills from daemon RPC.
 
-    Prefers an already-connected ``client`` (e.g. ``DaemonSession.client``) so the
+    Prefers an already-connected `client` (e.g. `DaemonSession.client`) so the
     TUI does not open a second WebSocket. Falls back to a one-shot connection
-    when only ``daemon_config`` is provided.
+    when only `daemon_config` is provided.
 
     Args:
-        daemon_config: Daemon config for WebSocket URL construction (oneshot path).
-        client: Optional live WebSocket client to reuse.
+    daemon_config: Daemon config for WebSocket URL construction (oneshot path).
+    client: Optional live WebSocket client to reuse.
 
     Returns:
-        List of skill metadata dicts sorted by ascending precedence
-        (built-in first, winning entry last). Empty list if daemon
-        unavailable.
+    List of skill metadata dicts sorted by ascending precedence
+    (built-in first, winning entry last). Empty list if daemon
+    unavailable.
     """
     by_name: OrderedDict[str, ExtendedSkillMetadata] = OrderedDict()
 

@@ -1,9 +1,4 @@
-"""SootheDaemonConfig -- top-level configuration for the Soothe daemon server.
-
-Parsed from ``~/.soothe/config/daemon.yml`` (or an explicit ``--config``
-path). Distinct from ``soothe.config.SootheConfig`` (the in-proc agent config),
-which the daemon loads separately via ``load_soothe_config()``.
-"""
+"""SootheDaemonConfig -- top-level configuration for the Soothe daemon server."""
 
 from __future__ import annotations
 
@@ -32,10 +27,10 @@ if TYPE_CHECKING:
 
 
 def _ensure_default_config_dir() -> Path:
-    """Ensure the default ``SOOTHE_HOME/config`` directory exists.
+    """Ensure the default `SOOTHE_HOME/config` directory exists.
 
     Returns:
-        Absolute path to the default config directory.
+    Absolute path to the default config directory.
     """
     config_dir = Path(SOOTHE_HOME).expanduser() / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -45,25 +40,25 @@ def _ensure_default_config_dir() -> Path:
 def default_soothe_config_path() -> Path:
     """Default path of the nano-owned agent config YAML the daemon loads.
 
-    Split layout: ``~/.soothe/config/nano.yml``. Host overlay lives in
-    ``soothe.yml`` beside it and is composed when present.
+    Split layout: `~/.soothe/config/nano.yml`. Host overlay lives in
+    `soothe.yml` beside it and is composed when present.
     """
     return _ensure_default_config_dir() / "nano.yml"
 
 
 def default_daemon_config_path() -> Path:
-    """Default path of ``daemon.yml``."""
+    """Default path of `daemon.yml`."""
     return _ensure_default_config_dir() / "daemon.yml"
 
 
 class SootheDaemonConfig(BaseSettings):
     """Top-level configuration for the Soothe daemon server.
 
-    Environment overrides use the ``SOOTHE_DAEMON_`` prefix (e.g.
-    ``SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT=9000``).
+    Environment overrides use the `SOOTHE_DAEMON_` prefix (e.g.
+    `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__PORT=9000`).
 
-    The agent config (``SootheConfig``) loaded for in-proc execution is
-    addressed by ``soothe_config_path`` and resolved via ``load_soothe_config()``.
+    The agent config (`SootheConfig`) loaded for in-proc execution is
+    addressed by `soothe_config_path` and resolved via `load_soothe_config()`.
     """
 
     model_config = {"env_prefix": "SOOTHE_DAEMON_", "env_nested_delimiter": "__"}
@@ -240,7 +235,7 @@ class SootheDaemonConfig(BaseSettings):
 
     @classmethod
     def from_default_yaml(cls) -> SootheDaemonConfig:
-        """Load daemon configuration from ``~/.soothe/config/daemon.yml``.
+        """Load daemon configuration from `~/.soothe/config/daemon.yml`.
 
         Falls back to defaults if the file is absent.
         """
@@ -250,10 +245,10 @@ class SootheDaemonConfig(BaseSettings):
         return cls()
 
     def load_soothe_config(self) -> SootheConfig:
-        """Load the agent config from ``soothe_config_path`` (or defaults).
+        """Load the agent config from `soothe_config_path` (or defaults).
 
-        When the path is ``nano.yml`` and a sibling ``soothe.yml`` exists,
-        compose via ``SootheConfig.from_split_yaml_files``.
+        When the path is `nano.yml` and a sibling `soothe.yml` exists,
+        compose via `SootheConfig.from_split_yaml_files`.
         """
         from soothe.config import SootheConfig
 
@@ -274,7 +269,7 @@ class SootheDaemonConfig(BaseSettings):
         Returns the enabled mode name: "worker_pool", "thread_pool", or "distributed".
 
         Raises:
-            ValueError: If no mode is enabled, or multiple modes are enabled.
+        ValueError: If no mode is enabled, or multiple modes are enabled.
         """
         enabled_modes = []
         if self.worker_pool.enabled:
