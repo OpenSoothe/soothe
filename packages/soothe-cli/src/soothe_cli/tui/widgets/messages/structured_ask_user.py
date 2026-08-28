@@ -222,6 +222,19 @@ class StructuredAskUserWidget(Vertical):
         color: $text-muted;
     }
 
+    /* Keyboard hint shown next to the count once every question is answered. */
+    StructuredAskUserWidget .saq-enter-hint {
+        display: none;
+        height: 1;
+        padding: 0;
+        margin: 0 1 0 0;
+        color: $success;
+    }
+
+    StructuredAskUserWidget .saq-enter-hint.is-visible {
+        display: block;
+    }
+
     StructuredAskUserWidget .saq-footer Button {
         margin: 0;
         min-width: 0;
@@ -555,6 +568,8 @@ class StructuredAskUserWidget(Vertical):
             title = "Review this plan"
         elif self._is_tool_approval:
             title = self._tool_approval_title()
+        elif self._submitted and self._answers:
+            title = "Answered (from human)"
         else:
             title = "Awaiting your answer"
         if self._submitted:
@@ -767,6 +782,12 @@ class StructuredAskUserWidget(Vertical):
                 f"{len(self._selected)}/{self._num_questions} answered",
                 classes="saq-count",
                 id="saq-count",
+                markup=False,
+            )
+            yield Static(
+                "Enter to submit",
+                classes="saq-enter-hint",
+                id="saq-enter-hint",
                 markup=False,
             )
             self._submit_btn = Button(
@@ -1171,6 +1192,15 @@ class StructuredAskUserWidget(Vertical):
         try:
             count = self.query_one("#saq-count", Static)
             count.update(f"{len(self._selected)}/{self._num_questions} answered")
+        except Exception:  # noqa: BLE001
+            pass
+        # Show the "Enter to submit" hint once every question is answered.
+        try:
+            hint = self.query_one("#saq-enter-hint", Static)
+            if self._all_answered:
+                hint.add_class("is-visible")
+            else:
+                hint.remove_class("is-visible")
         except Exception:  # noqa: BLE001
             pass
 

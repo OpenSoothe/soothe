@@ -29,37 +29,14 @@ class _StepCardApp(App[None]):
 
 
 @pytest.mark.asyncio
-async def test_set_clarification_deferred_shows_reason_and_questions() -> None:
-    """Deferred notice stops the spinner, sets pending status, shows status line.
-
-    Questions are NOT rendered on the step card — they appear in the
-    dedicated clarification/QA card.
-    """
+async def test_set_clarification_deferred_shows_status_line() -> None:
+    """Deferred notice stops the spinner, sets pending status, shows status line."""
     card = CognitionStepMessage("DEF-01", "Analyze RFC", id="step-def")
     async with _StepCardApp(card).run_test() as pilot:
         card.set_running()
         await pilot.pause()
 
-        card.set_clarification_deferred(
-            reason="Low confidence: 0.30 < 0.40",
-            questions=["Which output format?", "JSON or YAML?"],
-        )
-        await pilot.pause()
-
-        assert card._status == "pending"
-        assert card._status_widget is not None
-        assert card._status_widget.display is True
-
-
-@pytest.mark.asyncio
-async def test_set_clarification_deferred_empty_questions_skips_detail() -> None:
-    """With no questions, the detail widget is not populated but status line still shows."""
-    card = CognitionStepMessage("DEF-02", "Analyze RFC", id="step-def-empty")
-    async with _StepCardApp(card).run_test() as pilot:
-        card.set_running()
-        await pilot.pause()
-
-        card.set_clarification_deferred(reason="Structured output failed", questions=[])
+        card.set_clarification_deferred(reason="Low confidence: 0.30 < 0.40")
         await pilot.pause()
 
         assert card._status == "pending"
@@ -71,19 +48,12 @@ async def test_set_clarification_deferred_empty_questions_skips_detail() -> None
 
 
 def test_set_clarification_deferred_with_mock_widgets() -> None:
-    """Unmounted card path — widgets are MagicMock, status updated only.
-
-    Questions are NOT rendered on the step card — they appear in the
-    dedicated clarification/QA card.
-    """
+    """Unmounted card path — widgets are MagicMock, status updated only."""
     card = CognitionStepMessage("DEF-03", "Deferred", id="step-def-mock")
     card._status_widget = MagicMock()
     card._detail_widget = MagicMock()
 
-    card.set_clarification_deferred(
-        reason="Low confidence",
-        questions=["Q1?", "Q2?"],
-    )
+    card.set_clarification_deferred(reason="Low confidence")
 
     assert card._status == "pending"
     # Status widget received a Content.styled update and was displayed.
@@ -93,25 +63,6 @@ def test_set_clarification_deferred_with_mock_widgets() -> None:
     card._detail_widget.update.assert_not_called()
 
 
-def test_set_clarification_deferred_whitespace_questions_filtered() -> None:
-    """Whitespace-only questions are filtered; detail widget not updated."""
-    card = CognitionStepMessage("DEF-04", "Deferred", id="step-def-ws")
-    card._status_widget = MagicMock()
-    card._detail_widget = MagicMock()
-
-    card.set_clarification_deferred(
-        reason="Low confidence",
-        questions=["  ", "", "\t"],
-    )
-
-    assert card._status == "pending"
-    assert card._status_widget.display is True
-    card._status_widget.update.assert_called_once()
-    # No real questions → detail widget not touched.
-    card._detail_widget.update.assert_not_called()
-    card._detail_widget.display = False  # never set to True by the method
-
-
 def test_set_clarification_deferred_long_reason_truncated() -> None:
     """Reasons longer than 120 chars are truncated with an ellipsis."""
     card = CognitionStepMessage("DEF-05", "Deferred", id="step-def-long")
@@ -119,7 +70,7 @@ def test_set_clarification_deferred_long_reason_truncated() -> None:
     card._detail_widget = MagicMock()
 
     long_reason = "x" * 200
-    card.set_clarification_deferred(reason=long_reason, questions=["Q?"])
+    card.set_clarification_deferred(reason=long_reason)
 
     assert card._status == "pending"
     # The status update content should contain the truncated reason with "…".

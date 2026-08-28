@@ -191,6 +191,37 @@ async def test_separators_hidden_after_submit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_enter_hint_hidden_until_all_answered() -> None:
+    """The "Enter to submit" hint appears only once every question is answered."""
+    app = _WidgetApp(_make_widget(questions=_questions(2)))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        hint = w.query_one("#saq-enter-hint")
+        assert "is-visible" not in hint.classes
+        w.action_confirm()  # Q1 answered, auto-advance to Q2
+        assert "is-visible" not in hint.classes
+        w.action_confirm()  # Q2 answered -> all answered
+        assert "is-visible" in hint.classes
+
+
+@pytest.mark.asyncio
+async def test_submitted_title_shows_answered_from_human() -> None:
+    """After submit the generic title reads "Answered (from human)"."""
+    app = _WidgetApp(_make_widget(questions=_questions(1)))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        title = w.query_one(".saq-title")
+        assert "Awaiting your answer" in str(title.render())
+        w.action_confirm()  # selects Q1, opens review
+        w.action_confirm()  # finalizes
+        await pilot.pause()
+        assert w._submitted is True
+        assert "Answered (from human)" in str(title.render())
+
+
+@pytest.mark.asyncio
 async def test_focus_guard_runs_while_active() -> None:
     """A recurring focus guard starts on mount to recapture focus from the chat input."""
     app = _WidgetApp(_make_widget())

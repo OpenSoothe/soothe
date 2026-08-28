@@ -1468,9 +1468,7 @@ class CognitionStepMessage(Vertical):
     ) -> None:
         """Show a compact answered-notice on the step card.
 
-        Called after :meth:`set_complete` for steps whose `step_completed`
-        event payload includes a `clarification` block (,).
-        Only a status line is shown — the full Q&A pairs are rendered in the
+        Only a status line is shown — the full Q&A pairs render in the
         dedicated clarification/QA card.
         """
         if not questions and not answers:
@@ -1479,7 +1477,7 @@ class CognitionStepMessage(Vertical):
         if self._status_widget is not None:
             g = get_glyphs()
             gutter = _card_body_gutter(self._step_header_glyph())
-            header_bits = [f"source={source or 'unknown'}"]
+            header_bits = [f"from {source or 'unknown'}"]
             if confidence is not None:
                 header_bits.append(f"confidence={confidence:.2f}")
             summary = "Answered (" + ", ".join(header_bits) + ")"
@@ -1527,14 +1525,11 @@ class CognitionStepMessage(Vertical):
         if not self._card_collapsed:
             self._detail_widget.display = True
 
-    def set_awaiting_clarification(self, questions: list[str]) -> None:
-        """Pause the running animation and show the awaiting-notice on the step card.
+    def set_awaiting_clarification(self) -> None:
+        """Pause the animation and show the awaiting-notice on the step card.
 
-        Called when a `soothe.loop.clarification.requested` event arrives
-        while the loop graph is suspended on `await_clarification`
-        ( /). Stops the spinner and marks the card as awaiting
-        an answer. Only the status line is shown on the step card — the actual
-        questions are rendered in the dedicated clarification/QA card.
+        Stops the spinner and marks the card pending; the questions render in
+        the dedicated clarification/QA card.
         """
         self._stop_animation()
         self._status = "pending"
@@ -1550,14 +1545,11 @@ class CognitionStepMessage(Vertical):
             self._status_widget.update(Content.styled(line, colors.warning))
             self._status_widget.display = True
 
-    def set_clarification_deferred(self, reason: str, questions: list[str]) -> None:
+    def set_clarification_deferred(self, reason: str) -> None:
         """Show the deferred clarification notice on the step card.
 
-        Called when a `soothe.loop.clarification.deferred` event arrives.
-        The loop has terminated (no live `interrupt()`), so this is
-        informational only — the user should provide more detail in their
-        next message. Stops the spinner and shows the status line. The actual
-        questions are rendered in the dedicated clarification/QA card.
+        Stops the spinner and shows an informational status line — the loop
+        has terminated, so the user should provide more detail next message.
         """
         self._stop_animation()
         self._status = "pending"

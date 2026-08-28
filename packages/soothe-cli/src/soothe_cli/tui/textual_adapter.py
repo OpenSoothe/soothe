@@ -2924,21 +2924,17 @@ async def _mount_manual_clarification_input(
     origin_node: str = "",
     plan_path: str = "",
     plan_markdown: str = "",
+    step_id: str = "",
 ) -> str:
     """Mount (or reuse) the inline clarification answer widget.
 
-        Prefers a running execute step card, then an active orphan SubAgent card,
-        then a synthetic key from `origin_node` so intake-only plan review still
-        shows an answer UI after the orphan card has completed.
+    Prefers the paused step id from the wire event, then a running step card,
+    then an active orphan SubAgent card, then a synthetic key from
+    `origin_node`. HITL origins get `allow_custom=False` and an optional plan
+    body; structured dicts render structured mode, plain strings degraded mode.
 
-    All origins now route through ``StructuredAskUserWidget``. HITL origins
-        (``plan_mode_review``, ``tool_approval``) get ``allow_custom=False``,
-        a comment field on the Refine/Edit option, and optional plan body
-        rendering. Structured dicts with ``options`` → structured mode; plain
-        strings → degraded mode.
-
-        Returns:
-            The step/key used for `adapter._clarification_input_by_step`.
+    Returns:
+        The step/key used for `adapter._clarification_input_by_step`.
     """
     # Determine whether questions are structured (dict with "options") or plain.
     is_structured = bool(questions) and isinstance(questions[0], dict) and "options" in questions[0]
@@ -2952,17 +2948,27 @@ async def _mount_manual_clarification_input(
     if not questions_list:
         return ""
 
-    target_step_id = ""
-    for sid, step_widget in adapter._current_step_messages.items():
-        if step_widget._status == "running":  # noqa: SLF001
-            step_widget.set_awaiting_clarification(
-                [
-                    str(q) if not isinstance(q, dict) else q.get("question", "")
-                    for q in questions_list
-                ]
-            )
-            target_step_id = sid
-            break
+    # Reuse an already-mounted, unanswered widget for this origin. A single
+    # clarification can be announced more than once, and the first mount flips
+    # the step card to "pending", so a re-emit would otherwise resolve a
+    # different key and mount a duplicate question card.
+    for _key, _w in adapter._clarification_input_by_step.items():
+        if (
+            not getattr(_w, "_submitted", False)
+            and getattr(_w, "_origin_node", "") == str(origin_node or "").strip()
+        ):
+            return _key
+
+    target_step_id = str(step_id or "").strip()
+    if target_step_id and target_step_id in adapter._current_step_messages:
+        adapter._current_step_messages[target_step_id].set_awaiting_clarification()
+    else:
+        target_step_id = ""
+        for sid, step_widget in adapter._current_step_messages.items():
+            if step_widget._status == "running":  # noqa: SLF001
+                step_widget.set_awaiting_clarification()
+                target_step_id = sid
+                break
     if not target_step_id:
         orphan = _first_active_orphan_card(adapter)
         if orphan is not None:
@@ -4215,18 +4221,15 @@ async def execute_task_textual(
                                             origin_node=origin_node,
                                             plan_path=plan_path,
                                             plan_markdown=plan_markdown,
+                                            step_id=str(data.get("step_id") or ""),
                                         )
                                         if adapter._pause_spinner:
                                             await adapter._pause_spinner(SPINNER_LABEL_INPUT)
                                 elif event_type == LOOP_CLARIFICATION_DEFERRED:
                                     deferred_reason = str(data.get("reason") or "")
-                                    raw_qs = data.get("questions") or []
-                                    deferred_questions = [str(q) for q in raw_qs if str(q).strip()]
                                     for step_widget in adapter._current_step_messages.values():
                                         if step_widget._status == "running":  # noqa: SLF001
-                                            step_widget.set_clarification_deferred(
-                                                deferred_reason, deferred_questions
-                                            )
+                                            step_widget.set_clarification_deferred(deferred_reason)
                                             break
                                     if adapter._pause_spinner:
                                         await adapter._pause_spinner(SPINNER_LABEL_INPUT)
