@@ -51,16 +51,7 @@ MAX_GOAL_DEPTH = 5
 
 
 class EvidenceEntry(BaseModel):
-    """Evidence row for plan validation.
-
-    Reused from loop/state/schemas.py for GoalNode.evidence_ledger field
-    in Step 4 consolidation.
-
-    Attributes:
-        evidence_id: Stable id for the evidence ledger.
-        summary: Compact summary for prompts and validation.
-        kind: Provenance classification.
-    """
+    """Evidence row for plan validation."""
 
     evidence_id: str
     summary: str = ""

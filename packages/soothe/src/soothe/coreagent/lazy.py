@@ -1,7 +1,4 @@
-"""Lazy CoreAgent wrapper.
-
-Host subclass forwards intake-only registry access after materialization.
-"""
+"""Lazy CoreAgent wrapper with host intake-only registry access."""
 
 from __future__ import annotations
 

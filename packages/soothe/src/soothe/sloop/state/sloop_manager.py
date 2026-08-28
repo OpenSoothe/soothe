@@ -40,12 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class StrangeLoopStateManager:
-    """Manages StrangeLoop checkpoint lifecycle.
-
-    Configuration-driven backend selection (PostgreSQL or SQLite).
-    Uses PostgreSQL soothe_checkpoints database when configured, SQLite fallback.
-    Phase 2: Connection pooling for concurrent checkpoint operations.
-    """
+    """Manages StrangeLoop checkpoint lifecycle with PostgreSQL or SQLite backend."""
 
     def __init__(
         self,

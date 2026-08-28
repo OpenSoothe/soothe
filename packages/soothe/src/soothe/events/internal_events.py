@@ -14,11 +14,7 @@ from soothe_sdk.core.events import SootheEvent
 
 
 class InternalGoalCompletedEvent(SootheEvent):
-    """Goal completed by StrangeLoop.
-
-    Emitted by AL when goal execution succeeds. Received by ContextEngine
-    to update goal status and release file locks.
-    """
+    """Goal completed by StrangeLoop."""
 
     type: str = "soothe.internal.goal.completed"
     goal_id: str
@@ -100,17 +96,7 @@ class InternalGoalsReadyEvent(SootheEvent):
 
 
 class InternalGoalUnblockedEvent(SootheEvent):
-    """Goal unblocked and ready for scheduling.
-
-    Emitted by AL when clarification resolves and goal transitions from
-    awaiting_clarification back to pending. Received by AP to immediately
-    trigger scheduling re-evaluation instead of waiting for next poll cycle.
-
-    This is critical for responsive autopilot mode: when a user answers a
-    clarification question, the scheduling loop should immediately wake up
-    and assign the goal to a loop, rather than waiting up to poll_interval
-    seconds.
-    """
+    """Goal unblocked and ready for scheduling."""
 
     type: str = "soothe.internal.goal.unblocked"
     goal_id: str

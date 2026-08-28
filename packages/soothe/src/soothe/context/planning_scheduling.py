@@ -16,25 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class GoalScheduler:
-    """Goal scheduling extracted from GoalEngine for use with ContextEngine.
-
-    Implements the same scheduling algorithm (priority DESC, created_at ASC,
-    dependency satisfaction, conflict avoidance) but operates on GoalStepDAG
-    instead of GoalEngine's internal _goals dict.
-    """
+    """Goal scheduling for ContextEngine, operating on GoalStepDAG."""
 
     def __init__(self, dag: GoalStepDAG) -> None:
         self._dag = dag
 
     def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Compute ready goals (read-only, no status mutation).
-
-        Delegates to GoalStepDAG.peek_ready_goals which implements:
-        - Filter by status == "pending"
-        - Check hard dependencies (all in TERMINAL_STATES)
-        - Check conflicts_with (no active goal)
-        - Sort by (-priority, created_at)
-        """
+        """Compute ready goals without mutating status (read-only)."""
         return self._dag.peek_ready_goals(limit=limit)
 
     def claim_goal(
@@ -43,12 +31,7 @@ class GoalScheduler:
         *,
         loop_id: str | None = None,
     ) -> GoalNode | None:
-        """Atomically transition a goal from pending to active.
-
-        Delegates to GoalStepDAG.claim_goal which re-checks conflict
-        constraints at claim time. Returns the GoalNode if claimed,
-        None if ineligible.
-        """
+        """Atomically transition a goal from pending to active."""
         return self._dag.claim_goal(goal_id, loop_id=loop_id)
 
     def is_complete(self) -> bool:
@@ -58,11 +41,7 @@ class GoalScheduler:
         return all(g.status in TERMINAL_STATES for g in self._dag.goals.values())
 
     def check_reactivatable_goals(self) -> list[GoalNode]:
-        """Find blocked/suspended goals whose deps are now resolved.
-
-        Returns goals that could be transitioned back to pending.
-        Does NOT perform the transition — caller decides.
-        """
+        """Find blocked/suspended goals whose dependencies are now resolved."""
         reactivatable: list[GoalNode] = []
         for goal in self._dag.goals.values():
             if goal.status not in ("blocked", "suspended"):

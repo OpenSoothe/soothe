@@ -8,29 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class VeritasAnswerSchema(BaseModel):
-    """Veritas's answer to a clarification request.
-
-    Args:
-        answers: One answer per question in the originating request, in order.
-        confidence: 0.0-1.0 self-assessed confidence. The auto policy treats
-            values below `agent.clarification.auto_min_confidence` as defer.
-        defer: When `True`, veritas is explicitly signaling "ask a human".
-            The auto policy translates this into a `ClarificationDeferredError`
-            and the loop transitions to `awaiting_clarification`.
-        rationale: Short explanation for the audit trail. attaches a
-            structured prefix (`structured_output_failed: ...`) or marker
-            (`answer_was_question`) when veritas itself coerced the result;
-            `AutoClarificationPolicy` reads these to populate `DeferKind`.
-        reasoning: Chain-of-thought analysis produced before answering. Written
-            to the debug log and audit trail so operators can inspect how
-            veritas arrived at its conclusion. Empty when the model omits it
-            (defer branch or older models).
-        answer_is_question: Per-answer self-classification — `True` when the
-            model acknowledges an answer is itself a question. Length matches
-            `answers`. Empty list when the model omits the field;
-            `implementation._any_answer_is_a_question` falls back to the
-            `?`-suffix check.
-    """
+    """Veritas's answer to a clarification request."""
 
     answers: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
@@ -46,18 +24,7 @@ def coerce_veritas_response(
     *,
     coerced_confidence: float = 0.7,
 ) -> dict[str, Any]:
-    """Fill missing metadata when the model returns answers-only JSON.
-
-    Args:
-        data: Raw structured-output dict from the LLM.
-        question_count: Number of questions in the originating request.
-        coerced_confidence: Confidence value assigned when the model returns
-            answers but omits `confidence`; configurable via
-            `VeritasConfig.coerced_confidence`.
-
-    Returns:
-        Coerced dict suitable for jsonschema / Pydantic validation.
-    """
+    """Fill missing metadata when the model returns answers-only JSON."""
     if not isinstance(data, dict):
         return data
     out = dict(data)
@@ -87,23 +54,7 @@ def coerce_veritas_response(
 
 
 def build_veritas_response_schema(question_count: int) -> dict[str, Any]:
-    """Return the per-request JSON Schema veritas sends to the LLM.
-
-    The schema enforces *exactly N non-empty answers OR defer* via `oneOf`
-    so that empty-but-not-deferred and wrong-count responses are rejected at
-    the structured-output boundary instead of being caught by a post-hoc
-    Python guard.
-
-    Args:
-        question_count: Number of questions in the originating request. Must
-            be a positive integer; the schema is undefined for zero questions.
-
-    Returns:
-        A JSON Schema dict suitable for `invoke_structured_chat`.
-
-    Raises:
-        ValueError: If `question_count` is less than 1.
-    """
+    """Return the per-request JSON Schema veritas sends to the LLM."""
     if question_count < 1:
         msg = f"question_count must be >= 1, got {question_count}"
         raise ValueError(msg)

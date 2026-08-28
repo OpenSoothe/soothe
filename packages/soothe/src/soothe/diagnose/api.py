@@ -19,16 +19,7 @@ async def diagnose(
     deep: bool = False,  # noqa: ARG001 — reserved for future host deep checks
     categories: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run host-owned diagnose categories and return dict-contract results.
-
-    Args:
-        config: Host `SootheConfig` (optional).
-        deep: Reserved for future deep host categories.
-        categories: Explicit category filter (subset of host categories).
-
-    Returns:
-        List of category dicts matching `CategoryResult.to_dict()`.
-    """
+    """Run host-owned diagnose categories and return dict-contract results."""
     from soothe.diagnose.host import check_host
 
     check_methods: dict[str, Callable[[], Awaitable[CategoryResult]]] = {

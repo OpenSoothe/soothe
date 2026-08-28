@@ -26,12 +26,7 @@ _QUESTION_FIELD_RENAMES: dict[str, str] = {
 
 
 class OptionSpec(BaseModel):
-    """A single selectable option for a structured question.
-
-    `label` is the answer display text shown in the recap and sent on
-    resume. `description` is shown in the hover-preview box when the
-    option is highlighted.
-    """
+    """A single selectable option for a structured question."""
 
     label: str = Field(description="Display text (1-5 words). The user selects this.")
     description: str = Field(description="What this option means or what happens if chosen.")
@@ -40,13 +35,7 @@ class OptionSpec(BaseModel):
 
 
 class QuestionSpec(BaseModel):
-    """A structured question with options.
-
-    The LLM emits 2-4 options. Put the recommended option first and add
-    "(Recommended)" to its label. The CLI widget adds an implicit "Other"
-    free-text row. `header` is the tab/chip label (max 12 chars);
-    `question` is the full question text.
-    """
+    """A structured question with 2-4 options."""
 
     question: str = Field(description="The full question text. Clear, specific, ends with '?'.")
     header: str = Field(description="Short chip label (max 12 chars). E.g. 'Auth method'.")

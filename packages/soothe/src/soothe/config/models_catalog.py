@@ -1,7 +1,4 @@
-"""Host aliases for shared model-catalog helpers.
-
-Host-owned: nano 1.1.12 excised this helper back to the host package.
-"""
+"""Host-owned model-catalog helpers for the daemon."""
 
 from __future__ import annotations
 
@@ -43,15 +40,7 @@ def _provider_has_credentials(cfg: SootheConfig, provider_name: str) -> bool | N
 
 
 def build_models_list_payload(cfg: SootheConfig) -> dict[str, Any]:
-    """Return JSON-serializable catalog for `models_list_response`.
-
-    Args:
-        cfg: Loaded daemon `SootheConfig`.
-
-    Returns:
-        Dict with `models` (list of rows) and `default_model`
-        (`provider:model` or `None`).
-    """
+    """Return JSON-serializable model catalog for ``models_list_response``."""
     rows: list[dict[str, Any]] = []
     for p in cfg.providers or []:
         has_creds = _provider_has_credentials(cfg, p.name)

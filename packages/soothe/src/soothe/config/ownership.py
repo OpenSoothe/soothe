@@ -1,7 +1,4 @@
-"""Ownership validation for split config files.
-
-This module enforces which key paths belong in `nano.yml` vs `soothe.yml`.
-"""
+"""Ownership validation for split config files (nano.yml vs soothe.yml)."""
 
 from __future__ import annotations
 

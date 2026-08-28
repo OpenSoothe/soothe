@@ -162,15 +162,7 @@ class SootheConfig(BaseSettings):
 
     @property
     def llm_factory(self) -> Any:
-        """Lazy-initialized LLM factory.
-
-        Decouples model creation logic from config schema.
-        Returns an LLMFactory instance that handles model creation,
-        caching, and provider-specific wrapper application.
-
-        Returns:
-            LLMFactory instance bound to this config.
-        """
+        """Lazy-initialized LLM factory bound to this config."""
         if self._llm_factory is None:
             from soothe_nano.llm import LLMFactory
 
@@ -181,29 +173,9 @@ class SootheConfig(BaseSettings):
     def from_yaml_file(cls, path: str) -> SootheConfig:
         """Load nano-owned agent configuration from a single YAML file.
 
-        Host-owned keys (`agent.loop`, `agent.autopilot`, `cron`,
-        `skillify`, …) are rejected — put them in `soothe.yml` and load
-        via `from_split_yaml_files`.
-
-        Environment variable placeholders (`${ENV_VAR}`) are recursively
-        expanded throughout the entire config tree before Pydantic validation.
-        This allows env vars in any string field, including nested paths:
-
-        - `workspace_mount.host_root: ${SOOTHE_WORKSPACE_HOST_ROOT}/subdir`
-        - `providers[].api_key: ${OPENAI_API_KEY}`
-        - `mcp_servers[].auth.headers.Authorization: Bearer ${TOKEN}`
-
-        Unresolved env vars (not found in environment) are left as-is and
-        typically fail Pydantic validation or produce warnings at runtime.
-
-        Args:
-            path: Path to the nano-owned YAML configuration file.
-
-        Returns:
-            A configured SootheConfig instance.
-
-        Raises:
-            OwnershipViolationError: When the file contains host-owned keys.
+        Host-owned keys are rejected — use ``from_split_yaml_files`` for those.
+        Environment variable placeholders (``${ENV_VAR}``) are expanded
+        throughout the config tree before Pydantic validation.
         """
         config_data = cls._load_yaml_config_data(path)
         validate_nano_file_ownership(config_data, source_file=Path(path).name)
@@ -216,15 +188,7 @@ class SootheConfig(BaseSettings):
         nano_path: str,
         soothe_path: str,
     ) -> SootheConfig:
-        """Load configuration from split `nano.yml` and `soothe.yml` files.
-
-        Args:
-            nano_path: Path to `nano.yml` (required).
-            soothe_path: Path to `soothe.yml` (required).
-
-        Returns:
-            A composed `SootheConfig` instance.
-        """
+        """Load configuration from split ``nano.yml`` and ``soothe.yml`` files."""
         nano_data = cls._load_yaml_config_data(nano_path)
         soothe_data = cls._load_yaml_config_data(soothe_path)
         merged = compose_host_agent_config(

@@ -14,23 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ResumeTicket:
-    """Interrupt-resume identity carried on one graph channel.
-
-    Consolidates the three former separate scalar fields so the serialize →
-    channel → rebuild data flow for `Command(resume=...)` lives on a single
-    channel. No information is lost relative to the prior separate fields.
-
-    Attributes:
-        thread_id: The CoreAgent thread_id active when the interrupt fired.
-            The resume path reuses it (`Command(resume=...)` targets this
-            thread).
-        step_id: The id of the step executing when the interrupt fired, so the
-            resume path re-emits `step_started` with the same step identity
-            the TUI already has a card for (instead of the CE root node).
-        step_description: The description/title of the interrupted step, paired
-            with `step_id` so the resumed card keeps the same title the user
-            saw before the interrupt.
-    """
+    """Interrupt-resume identity carried on one graph channel."""
 
     thread_id: str | None = None
     step_id: str | None = None

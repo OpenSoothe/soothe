@@ -30,11 +30,7 @@ def setup_logging(
     log_file: str | Path | None = None,
     extra_logger_names: Sequence[str] | Iterable[str] | None = None,
 ) -> None:
-    """Configure soothe + nano package loggers with shared file/console handlers.
-
-    Always attaches handlers to `soothe.*` in addition to nano defaults.
-    Further host/plugin trees may be passed via `extra_logger_names`.
-    """
+    """Configure soothe + nano package loggers with shared file/console handlers."""
     extras: list[str] = [HOST_LOGGER_NAME]
     if extra_logger_names is not None:
         extras.extend(extra_logger_names)

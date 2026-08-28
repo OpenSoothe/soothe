@@ -1,7 +1,4 @@
-"""Shared utilities for worker runners (subprocess pool, thread pool, Ray actors).
-
-Functions extracted from local_runner.py for reuse across runner implementations.
-"""
+"""Shared utilities for worker runners (subprocess pool, thread pool, Ray actors)."""
 
 from __future__ import annotations
 

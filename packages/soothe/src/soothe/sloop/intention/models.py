@@ -11,22 +11,7 @@ from soothe_sdk.intention.models import RoutingClassification, TaskComplexity
 
 
 class IntakeLabel(StrEnum):
-    """4-class intake label for branch routing.
-
-    Continuation is NOT a label — it is a structural overlay from the
-    checkpoint. The intake LLM never decides continuation.
-
-    - `chitchat`: small talk (greetings, thanks, casual banter); the intake
-      LLM piggybacks `chitchat_response` and the runner emits it directly.
-    - `minimal`: trivia, single obvious tool call, or direct answer; DISPATCH
-      grounds a one-step root (no multi-step decomposition). Skips the coverage
-      Eval phase and finalizes from the CoreAgent result (no LLM decision).
-    - `simple`: single focused deliverable CoreAgent can finish in one execute.
-      An LLM decision (`decide_eval_required`) dynamically determines whether
-      a coverage Eval is warranted based on execution evidence.
-    - `complex`: multi-phase / parallel workstreams / durable phase gates; runs
-      the full coverage Eval gate before finalization.
-    """
+    """4-class intake label for branch routing."""
 
     CHITCHAT = "chitchat"
     MINIMAL = "minimal"

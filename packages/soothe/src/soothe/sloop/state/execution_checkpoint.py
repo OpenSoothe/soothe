@@ -9,23 +9,7 @@ from pydantic import BaseModel, Field
 
 
 class GoalIndexEntry(BaseModel):
-    """Minimal goal index entry for checkpoint.
-
-       Goal state recovered from CE GoalNode. Checkpoint only stores
-       goal_id and status for loop-level tracking.
-
-    §4: GoalIndexEntry stores loop-level goal index metadata only.
-       CE GoalNode is the authoritative source for goal state.
-
-       Attributes:
-           goal_id: Goal identifier (CE lookup key, 8-char hex).
-           status: Goal execution status.
-           thread_id: Thread that executed this goal.
-           started_at: Goal start timestamp.
-           completed_at: Goal completion timestamp (None if running).
-           duration_ms: Goal execution duration in milliseconds.
-           tokens_used: Tokens used for this goal.
-    """
+    """Minimal goal index entry for checkpoint tracking."""
 
     # Identity (CE lookup key)
     goal_id: str = Field(description="Goal identifier (CE lookup key)")

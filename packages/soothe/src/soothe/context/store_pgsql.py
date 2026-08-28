@@ -20,16 +20,7 @@ _DELETE_LEDGER_SQL = "DELETE FROM ce_ledger WHERE loop_id = %s"
 
 
 class PgsqlContextPersistence:
-    """PostgreSQL-backed persistence for ContextEngine.
-
-    Two tables in a single database:
-    - `ce_dag` — serialized GoalStepDAG (one row per loop_id)
-    - `ce_ledger` — serialized message ledger (one row per loop_id)
-
-    Args:
-        loop_id: Loop identifier used as primary key.
-        config: SootheConfig for shared pool and persistence writer access.
-    """
+    """PostgreSQL-backed persistence for ContextEngine."""
 
     def __init__(
         self,

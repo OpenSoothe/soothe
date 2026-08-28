@@ -50,44 +50,7 @@ async def answer(
     retry_backoff_seconds: float = _DEFAULT_RETRY_BACKOFF_SECONDS,
     coerced_confidence: float = 0.7,
 ) -> VeritasAnswerSchema:
-    """Produce a clarification answer grounded in goal intent and global context.
-
-    Args:
-        request: The pending clarification.
-        model: A langchain chat model. Veritas drives it through the shared
-            `invoke_structured_chat` helper which iterates structured-output
-            methods for thinking-model compatibility.
-        max_context_steps: Cap on recent step outputs included in the user prompt.
-        soothe_config: Optional config; when provided, the structured-output call
-            is wrapped in a Langfuse-traced RunnableConfig so the veritas span
-            shows up under the parent loop graph trace.
-        thread_id: Loop thread id; forwarded as Langfuse `session_id` and
-            recorded in debug logs.
-        loop_id: Loop identifier for Langfuse trace correlation across sub-traces.
-        max_retries: Max retry attempts for transient infrastructure failures
-            (rate limit, timeout, connection error). `StructuredOutputError`
-            (model output malformed) still defers immediately. Set to `0` to
-            disable retries. Default `2`.
-        retry_backoff_seconds: Base backoff for exponential retry
-            (`backoff * 2**attempt`). Default `2.0` seconds.
-        coerced_confidence: Confidence value assigned when the model returns
-            answers but omits `confidence`. Default `0.7`.
-
-    Returns:
-        Validated :class:`VeritasAnswerSchema`. When the LLM call fails or its
-        output cannot satisfy the per-request schema, the result is coerced to
-        `defer=True` with a rationale prefix (`structured_output_failed: ...`
-        or `transient_failure: ...`) so the policy can populate `DeferKind`
-        and route the recovery path.
-
-    Notes:
-        Any answer the model self-classifies as a question (`answer_is_question`
-        field) is collapsed to `defer=True` with
-        `rationale="answer_was_question"` so the policy classifies it as a
-        forced defer (LLM glitch) rather than a genuine "I don't know." As a
-        transitional safety net, the legacy `endswith("?")` regex check is
-        used when the model omits the `answer_is_question` field.
-    """
+    """Produce a clarification answer grounded in goal intent and global context."""
     view = request.loop_state
     n = len(request.questions)
 

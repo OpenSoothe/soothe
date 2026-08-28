@@ -1,7 +1,4 @@
-"""Persistence latency metrics (debug logging).
-
-Host-owned: nano 1.1.12 excised these helpers back to the host package.
-"""
+"""Persistence latency metrics (debug logging)."""
 
 from __future__ import annotations
 

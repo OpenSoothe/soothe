@@ -22,13 +22,7 @@ def _normalize_goal_description(description: str) -> str:
 
 
 class GoalPlanningSubengine:
-    """Manages goal-level planning: decomposition helpers, orchestration, and lifecycle.
-
-    Provides goal creation from LLM decomposition payloads, multi-goal
-    orchestration strategy computation, and reflection-driven follow-up
-    goal creation. LLM decomposition results flow in from the
-    AutopilotMonitor verifier; this subengine materializes them in the DAG.
-    """
+    """Manages goal-level planning: decomposition, orchestration, and lifecycle."""
 
     def __init__(self, dag: GoalStepDAG) -> None:
         self._dag = dag
@@ -40,14 +34,7 @@ class GoalPlanningSubengine:
         parent_id: str,
         result: DecompositionResult,
     ) -> list[GoalNode]:
-        """Create GoalNodes in the DAG from a decomposition result.
-
-        Validates depth limits and creates child goals with proper
-        parent_id, depends_on, workspace inheritance, and priority fields.
-
-        When every subgoal omits `depends_on` and there are 2+ children,
-        applies a deterministic sequential chain (AH-3).
-        """
+        """Create GoalNodes in the DAG from a decomposition result."""
         parent = self._dag.get_goal(parent_id)
         parent_workspace = parent.workspace if parent is not None else None
 

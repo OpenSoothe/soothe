@@ -12,15 +12,7 @@ _DEFAULT_DECISION_GOAL_SNIP_LEN = 350
 
 
 def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
-    """Minimal single-step decision used when parsing fails.
-
-    Args:
-        goal: The goal description
-        iteration: Current iteration number for variation
-
-    Returns:
-        AgentDecision with iteration-specific action to prevent repetitions
-    """
+    """Minimal single-step decision used when parsing fails."""
     from soothe.sloop.state.schemas import AgentDecision, StepAction
 
     lim = _DEFAULT_DECISION_GOAL_SNIP_LEN

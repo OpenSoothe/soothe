@@ -12,13 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def configure_unified_persistence(config: SootheConfig) -> None:
-    """Configure process-wide stores that must track `default_backend`.
-
-    Call after PostgreSQL databases are provisioned (when applicable).
-
-    Note: the display card store is owned by the host process and is no longer
-    configured here; the host calls `configure_display_card_store` directly.
-    """
+    """Configure process-wide stores that must track ``default_backend``."""
     _validate_no_mixed_overrides(config)
     _warn_vector_store_mismatch(config)
     logger.info(

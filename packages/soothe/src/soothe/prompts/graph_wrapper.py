@@ -19,15 +19,7 @@ GraphCallKind = Literal["synthesis", "step_completion"]
 
 @dataclass
 class ProjectionResult:
-    """Result of centralized ledger projection for one LLM call.
-
-    Attributes:
-        messages: Projected ledger messages to inject between system and human.
-        mode: Resolved projection mode when applicable; `None` for synthesis /
-            step_completion.
-        completion_in_ledger: True when the projected ledger contains a
-            `goal_completion` AI turn.
-    """
+    """Result of centralized ledger projection for one LLM call."""
 
     messages: list[BaseMessage] = field(default_factory=list)
     mode: str | None = None

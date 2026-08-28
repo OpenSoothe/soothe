@@ -33,15 +33,7 @@ def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
 
 
 class ThreadLogger:
-    """Append-only JSONL writer for stream and conversation records.
-
-    Captures structured event records for offline replay and audit, plus
-    user/assistant conversation turns for lightweight in-terminal review.
-
-    Args:
-        thread_dir: Directory for thread logs. Defaults to `SOOTHE_HOME/data/threads/{thread_id}/logs/`.
-        thread_id: Thread ID for the log file name.
-    """
+    """Append-only JSONL writer for stream and conversation records."""
 
     def __init__(
         self,
@@ -50,14 +42,7 @@ class ThreadLogger:
         retention_days: int = 30,
         max_size_mb: int = 100,
     ) -> None:
-        """Initialize the thread logger.
-
-        Args:
-            thread_dir: Directory for thread logs. Defaults to `SOOTHE_HOME/data/threads/{thread_id}/logs/`.
-            thread_id: Thread ID for the log file name.
-            retention_days: Days to retain thread logs before cleanup.
-            max_size_mb: Maximum total size for all thread logs under `data/threads/`.
-        """
+        """Initialize the thread logger."""
         tid = str(thread_id or "default")
         default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
         self._thread_dir = Path(thread_dir or default_dir).expanduser()
@@ -80,13 +65,7 @@ class ThreadLogger:
         mode: str,
         data: Any,
     ) -> None:
-        """Log a stream chunk: custom events and tool-related messages.
-
-        Args:
-            namespace: Stream namespace (empty tuple for main agent).
-            mode: Stream mode (`messages`, `updates`, `custom`).
-            data: Stream data payload.
-        """
+        """Log a stream chunk: custom events and tool-related messages."""
         if mode == "custom" and isinstance(data, dict):
             from soothe_sdk.ux import classify_event_to_tier
 
@@ -106,11 +85,7 @@ class ThreadLogger:
             self._log_message_event(namespace, data)
 
     def log_user_input(self, text: str) -> None:
-        """Log a user turn for later thread review.
-
-        Args:
-            text: User-entered prompt text.
-        """
+        """Log a user turn for later thread review."""
         cleaned = text.strip()
         if not cleaned:
             return

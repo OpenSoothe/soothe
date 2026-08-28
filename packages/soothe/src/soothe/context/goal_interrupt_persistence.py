@@ -44,13 +44,7 @@ def _entry_content_text(entry: dict[str, Any]) -> str:
 
 
 def _build_cancelled_digest(ledger: list[dict[str, Any]], *, reason: str) -> str:
-    """Build the `goal_interrupted` AI body from the persisted ledger.
-
-    Walks the ledger backward collecting `execute_step` AI excerpts (the
-    user-facing synthesis of each wave), deduped by a 64-char prefix. Returns
-    empty string when there is no usable execute evidence — callers treat that
-    as "no marker".
-    """
+    """Build the ``goal_interrupted`` AI body from the persisted ledger."""
     excerpts: list[str] = []
     seen_prefixes: set[str] = set()
     for entry in reversed(ledger):

@@ -1,7 +1,4 @@
-"""Phase orchestration mixin for SootheRunner (chitchat and checkpointer helpers).
-
-Extracted from `runner.py` to keep the main module focused on orchestration.
-"""
+"""Phase orchestration mixin for SootheRunner (chitchat and checkpointer helpers)."""
 
 from __future__ import annotations
 

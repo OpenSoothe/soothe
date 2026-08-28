@@ -77,11 +77,7 @@ class InvalidGoalTransitionError(ValueError):
 
 
 def _validate_transition(goal_id: str, from_status: str, to_status: str) -> None:
-    """Validate a goal lifecycle transition against the state machine.
-
-    Raises `InvalidGoalTransitionError` if `to_status` is not reachable
-    from `from_status`.
-    """
+    """Validate a goal lifecycle transition against the state machine."""
     valid = VALID_GOAL_TRANSITIONS.get(from_status, frozenset())
     if to_status not in valid:
         raise InvalidGoalTransitionError(

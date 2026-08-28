@@ -1,7 +1,4 @@
-"""Layer 2 StrangeLoop Runner.
-
-Implements Plan → Execute loop using StrangeLoop.
-"""
+"""Layer 2 StrangeLoop Runner."""
 
 from __future__ import annotations
 

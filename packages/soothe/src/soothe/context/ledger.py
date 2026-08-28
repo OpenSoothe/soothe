@@ -21,12 +21,7 @@ class _LedgerEntry:
 
 @dataclass
 class LedgerManager:
-    """Manages the loop message ledger with phase tagging and compaction.
-
-    Replaces `LoopWorkingMemory` and the `loop_messages` list from
-    StrangeLoop state. Messages are tagged with phase metadata for filtered
-    retrieval (e.g., execute_step-only projection for CoreAgent).
-    """
+    """Manages the loop message ledger with phase tagging and compaction."""
 
     max_entries: int = 200
     compact_fn: Callable[[list[_LedgerEntry]], str | None] | None = None
@@ -53,14 +48,7 @@ class LedgerManager:
         return [e.message for e in self._entries if e.phase in phase_set]
 
     def compact(self) -> None:
-        """Compact old entries when count exceeds max_entries.
-
-        If a compact_fn is provided, it receives the oldest entries and returns
-        a summary string (or None to skip compaction). The summary replaces
-        those entries as a single SystemMessage.
-
-        If no compact_fn is set, entries beyond max_entries are dropped.
-        """
+        """Compact old entries when count exceeds max_entries."""
         if self.max_entries <= 0:
             return
         if len(self._entries) <= self.max_entries:

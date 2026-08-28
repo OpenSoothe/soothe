@@ -58,20 +58,7 @@ def _extract_dag_stats(goal: GoalNode, plan_wave_count: int) -> _DagStats:
 
 
 class StepPlanningSubengine:
-    """Manages step-level DAG planning within ContextEngine.
-
-    Absorbs PlanManager responsibilities: plan ingestion, step outcome
-    recording, DagPlanningContext construction, completion heuristics,
-    and DAG report formatting. Operates on ContextEngine's GoalStepDAG
-    directly, eliminating the ContextEnginePlanAdapter bridge.
-
-    This class does NOT own state — it reads/writes through the
-    GoalStepDAG passed to it, maintaining ContextEngine as the single
-    source of truth.
-
-    All methods take `goal_id` as the first parameter to support
-    multi-goal awareness.
-    """
+    """Manages step-level DAG planning within ContextEngine."""
 
     def __init__(self, dag: GoalStepDAG) -> None:
         self._dag = dag
@@ -90,11 +77,7 @@ class StepPlanningSubengine:
         plan_id: str | None,
         iteration: int,
     ) -> None:
-        """Map PlanResult.steps → GoalStepDAG StepNodes.
-
-        Replaces both PlanManager.ingest_plan and
-        ContextEnginePlanAdapter.ingest_plan.
-        """
+        """Map PlanResult.steps onto GoalStepDAG StepNodes."""
         self._plan_waves.append(
             PlanWave(
                 plan_id=plan_id,

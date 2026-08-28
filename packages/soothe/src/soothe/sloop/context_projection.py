@@ -17,12 +17,7 @@ ProjectionPhase = Literal["intake", "execute", "synthesis"]
 
 @dataclass
 class ProjectionSpec:
-    """Inputs describing one LLM call's projection.
-
-    `loop_messages` is passed separately to :meth:`LoopContextProjector.project`
-    so callers can materialize the CE-backed ledger async (`await
-    state.get_loop_messages()`) before projecting.
-    """
+    """Inputs describing one LLM call's projection."""
 
     phase: ProjectionPhase
     state: LoopState | None = None  # execute only (mode resolution)

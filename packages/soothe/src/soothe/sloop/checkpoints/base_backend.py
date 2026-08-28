@@ -1,7 +1,4 @@
-"""Abstract backend interface for StrangeLoop persistence.
-
-Backend-agnostic persistence layer supporting PostgreSQL and SQLite.
-"""
+"""Abstract backend interface for StrangeLoop persistence."""
 
 from __future__ import annotations
 
@@ -13,11 +10,7 @@ if TYPE_CHECKING:
 
 
 class StrangeLoopPersistenceBackend(ABC):
-    """Abstract backend for StrangeLoop persistence operations.
-
-    Defines contract for backend-agnostic operations supporting both PostgreSQL and SQLite.
-    Mirrors `StrangeLoopCheckpointPersistenceManager` persistence operations.
-    """
+    """Abstract backend for StrangeLoop persistence operations."""
 
     # Core loop operations
 

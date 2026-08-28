@@ -1,6 +1,13 @@
 # Soothe Development Guide
 
-> Goal-driven orchestration framework for 24/7 autonomous agents. Extends deepagents with planning, durability, and remote agent interop.
+> **Binding conduct for all agents and human contributors working in this repository.**
+> Compliance is mandatory; deviations require explicit operator approval and a recorded IG.
+
+**What Soothe is** — a goal-driven orchestration framework for 24/7 autonomous agents. It extends `deepagents` with durable planning, reentrant loop state, and remote agent interop across a one-way monorepo dependency DAG.
+
+**What this guide governs** — code placement and package boundaries (§7b), persistence backend selection (§10), verification and release gates (§5, §14), documentation and docstring standards (§12, §17), and commit/release attribution hygiene (§11, §13).
+
+**How to use it** — read §1–§17 before any non-trivial change. Substantial work requires an IG in `docs/impl/`; minor changes follow commit/PR context. Run `./scripts/verify_finally.sh` before every commit. When in doubt, stop and ask.
 
 ---
 
@@ -190,7 +197,7 @@ Loop state is **independent of runtime workers** — pauseable and resumable acr
 
 ### 17. Docstrings (MUST)
 - Keep docstrings brief and sharp; no verbose prose.
-- Module docstring: one or two lines stating what the module provides. Do not repeat what function signatures or function docstrings already say.
+- Module docstring: a small number of lines stating what the module provides. Do not repeat what function signatures or function docstrings already say.
 - Never reference external design docs, reports, or category taxonomies (e.g. "report 5.3", "category I", IG-XXX/RFC-XXX) in docstrings; docstrings must stand alone.
 - Class docstrings describe semantics, coordinate/unit conventions once, args, and a minimal usage example. Do not restate parameter defaults that are obvious from the signature.
 - Docstrings must match the implementation; if behavior changes, update the docstring.

@@ -47,13 +47,7 @@ GoalProgress = Annotated[GoalProgressLiteral, BeforeValidator(_coerce_goal_progr
 
 
 class EvidenceEntry(BaseModel):
-    """Evidence row for plan validation.
-
-    Attributes:
-        evidence_id: Stable id for the evidence ledger.
-        summary: Compact summary for prompts and validation.
-        kind: Provenance classification.
-    """
+    """Evidence row for plan validation."""
 
     evidence_id: str
     summary: str = ""

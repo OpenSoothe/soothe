@@ -10,18 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Canonical evidence bundle for StrangeLoop → AutopilotMonitor integration
 class EvidenceBundle(BaseModel):
-    """Canonical evidence payload exchanged across StrangeLoop and Autopilot.
-
-    This is the authoritative schema for evidence exchange.
-    StrangeLoop MUST construct this structure from execution context.
-    ContextEngine (via AutopilotMonitor) MUST receive this in fail_goal() signature.
-
-    Args:
-        structured: Machine-readable execution metrics/state for deterministic processing.
-        narrative: Natural language synthesis for LLM reasoning and operator visibility.
-        source: Evidence producer stage (layer2_execute, layer2_plan, layer3_reflect).
-        timestamp: Evidence emission time.
-    """
+    """Canonical evidence payload exchanged between StrangeLoop and Autopilot."""
 
     structured: dict[str, Any] = Field(
         description="Machine-readable execution metrics/state for deterministic processing"
@@ -39,17 +28,7 @@ class EvidenceBundle(BaseModel):
 
 # RFC-200 §205-541: Backoff decision for goal DAG restructuring
 class BackoffDecision(BaseModel):
-    """LLM-driven backoff decision for goal DAG restructuring.
-
-    -541: GoalBackoffReasoner output structure.
-    Determines WHERE to backoff in goal DAG and what directives to apply.
-
-    Args:
-        backoff_to_goal_id: Target goal to backoff to (where to resume in DAG).
-        reason: Natural language reasoning for backoff decision.
-        new_directives: Additional directives to apply after backoff.
-        evidence_summary: Summary of why current goal path failed.
-    """
+    """LLM-driven backoff decision for goal DAG restructuring."""
 
     backoff_to_goal_id: str = Field(
         description="Target goal to backoff to (where to resume in DAG)"
@@ -95,9 +74,8 @@ class PriorStepSummary(BaseModel):
 class GoalEffect(BaseModel):
     """One claimed side-effect of a completed goal — domain-agnostic.
 
-    Opaque to the host: `ref` may be a path, URL, ticket id, channel, or
-    `answer` for narrative-only work. Never inferred from prose or the
-    filesystem; StrangeLoop emits these via structured assess output.
+    Opaque to the host: ``ref`` may be a path, URL, ticket id, channel, or
+    ``answer`` for narrative-only work. Emitted via structured assess output.
     """
 
     kind: GoalEffectKind
@@ -153,13 +131,7 @@ class ToolCallStats(BaseModel):
 
 
 class GoalReportUserTurn(BaseModel):
-    """The 'user' half of a projected ancestor pair — the ancestor's directive.
-
-    -Report-Pair Projection. Carried on
-    `GoalDispatchContextBundle.preamble_messages` and seeded into the
-    StrangeLoop CE ledger as a `LoopHumanMessage(phase="preamble")` before
-    the current goal's user turn.
-    """
+    """The 'user' half of a projected ancestor pair — the ancestor's directive."""
 
     goal_id_origin: str
     content: str = Field(
@@ -169,13 +141,7 @@ class GoalReportUserTurn(BaseModel):
 
 
 class GoalReportAITurn(BaseModel):
-    """The 'ai' half of a projected ancestor pair — the ancestor's goal report.
-
-       Built by `ContextProjector` via the existing `build_goal_report` path
-    from the ancestor's stored
-       `GoalDispatchContextContribution`. Seeded into the CE ledger as a
-       `LoopAIMessage(phase="preamble")`.
-    """
+    """The 'ai' half of a projected ancestor pair — the ancestor's goal report."""
 
     goal_id_origin: str
     outcome: str = Field(description="completed / failed / needs_replan")
@@ -195,10 +161,8 @@ class GoalReportAITurn(BaseModel):
 class GoalDispatchContextBundle(BaseModel):
     """Immutable hydration input for StrangeLoop.
 
-    Built by the daemon's ContextProjector from a goal's parents'
-    GoalDispatchContextContribution entries. Bounded — summaries only,
-    not raw transcripts. StrangeLoop never sees the DAG; it sees this
-    pre-merged bundle.
+    Built by the daemon's ContextProjector from parent goal contributions.
+    Bounded — summaries only, not raw transcripts.
     """
 
     prior_plan_steps: list[PriorStepSummary] = Field(default_factory=list)
@@ -257,10 +221,7 @@ class GoalDispatchContextBundle(BaseModel):
 class GoalDispatchContextContribution(BaseModel):
     """What one goal's execution adds back to the DAG's context pool.
 
-    Emitted by the worker exactly once, just before the terminal `done`
-    chunk, inside the GoalCompletionChunk. Daemon stores it in
-    GoalDispatchContextStore keyed by goal_id; ContextProjector reads
-    parents' contributions to build a successor's bundle.
+    Emitted by the worker once, just before the terminal ``done`` chunk.
     """
 
     model_config = ConfigDict(extra="ignore")

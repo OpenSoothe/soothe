@@ -19,15 +19,7 @@ _INLINE_SUCCESS_BODY_CAP = 800
 
 @dataclass
 class LoopWorkingMemory:
-    """Accumulate agentic-loop facts for Reason prompts.
-
-    Spills large outputs under `SOOTHE_HOME/data/threads/{thread_id}/working_memory/`.
-
-    Args:
-        thread_id: Canonical thread identifier; spill path is `data/threads/{thread_id}/working_memory/`.
-        max_inline_chars: Cap for `render_for_reason` aggregate text.
-        max_entry_chars_before_spill: Spill raw step output when longer than this.
-    """
+    """Accumulate agentic-loop facts for Reason prompts."""
 
     thread_id: str
     max_inline_chars: int = 4000

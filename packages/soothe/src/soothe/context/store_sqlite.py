@@ -32,12 +32,7 @@ def _ensure_ce_schema(conn: Any) -> None:
 
 
 class SqliteContextPersistence:
-    """SQLite-backed persistence for ContextEngine via `SqliteStoreRuntime`.
-
-    Args:
-        loop_id: Loop identifier used as primary key.
-        db_path: Path to the SQLite database file.
-    """
+    """SQLite-backed persistence for ContextEngine via ``SqliteStoreRuntime``."""
 
     def __init__(self, loop_id: str, db_path: Path) -> None:
         self._loop_id = loop_id

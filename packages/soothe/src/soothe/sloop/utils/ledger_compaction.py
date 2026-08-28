@@ -11,16 +11,7 @@ _GOAL_RECAP_PREFIX = "GOAL RECAP:"
 
 
 def compact_planning_human_content(content: str) -> str:
-    """Return ledger-ready content for a recorded plan-phase HumanMessage.
-
-    Applies D1 (rewrite `GOAL:` to non-anchoring recap) when present.
-
-    Args:
-        content: Rendered envelope text from `UserMessageBuilder`.
-
-    Returns:
-        Compacted content suitable for `state.loop_messages`.
-    """
+    """Return ledger-ready content for a recorded plan-phase HumanMessage."""
     if not isinstance(content, str) or not content:
         return content
 

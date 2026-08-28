@@ -93,18 +93,7 @@ def normalize_agentic_final_response_mode(value: Any) -> Any:
 
 
 class AssistantIdentity(BaseModel):
-    """Configurable assistant persona for identity blocks and intake replies.
-
-    All fields default to the original hardcoded values so existing
-    deployments see zero behavior change. Override via
-    `agent.assistant_identity` in `soothe.yml`.
-
-    Args:
-        creator: Attribution line rendered as "invented by {creator}".
-        role_description: Short role clause rendered after the assistant name.
-        vendor_denylist: Model/vendor names the assistant must never claim
-            to be (rendered as a readable "never X, Y, Z" list).
-    """
+    """Configurable assistant persona for identity blocks and intake replies."""
 
     creator: str = Field(
         default="Dr. Xiaming Chen",
@@ -141,10 +130,8 @@ class NotifyTargetConfig(BaseModel):
 class NotifyEventsConfig(BaseModel):
     """Which job-root lifecycle intents to emit.
 
-    All events are enabled by default. To suppress a specific event,
-    add its kind string (e.g. `"sla.overdue"`) to the `disabled`
-    denylist. This replaces the previous four-boolean flag pattern,
-    which was fully redundant — every flag defaulted to `True`.
+    All events are enabled by default; add a kind string to ``disabled``
+    to suppress it.
     """
 
     disabled: set[str] = Field(
@@ -159,11 +146,7 @@ class NotifyEventsConfig(BaseModel):
 
 
 class EmailNotifySinkConfig(BaseModel):
-    """Outbound SMTP settings for `EmailNotifySink` (not IMAP chat).
-
-    Sensitive fields (`smtp_username`, `smtp_password`) accept a plain string
-    or `${ENV_VAR}` (same dual rule as `providers[].api_key`).
-    """
+    """Outbound SMTP settings for ``EmailNotifySink`` (not IMAP chat)."""
 
     enabled: bool = False
     smtp_host: str = ""
@@ -200,10 +183,7 @@ class WebhookNotifySinkConfig(BaseModel):
 
 
 class FeishuNotifySinkConfig(BaseModel):
-    """Feishu/Lark IM notify sink (Phase 1 stub; live send follow-up).
-
-    `app_id` and `app_secret` accept a plain string or `${ENV_VAR}`.
-    """
+    """Feishu/Lark IM notify sink (Phase 1 stub; live send follow-up)."""
 
     enabled: bool = False
     app_id: str = Field(
@@ -228,12 +208,9 @@ class NotifySinksConfig(BaseModel):
 class SlaConfig(BaseModel):
     """SLA monitoring thresholds for overdue gap items.
 
-    When enabled, the AutopilotService watchdog tick scans active goals
-    for unresolved gap items (from `last_gap_analysis`) that have
-    persisted past these thresholds. Each threshold crossing emits an
-    `sla.overdue` notify intent at the corresponding severity tier.
-
-    Set a threshold to `0` to disable that tier.
+    When enabled, the watchdog tick scans active goals for unresolved gap
+    items that have persisted past these thresholds. Set a tier to ``0``
+    to disable it.
     """
 
     enabled: bool = False
@@ -309,48 +286,6 @@ class AutopilotConfig(BaseModel):
     """Autopilot scheduling and self-running configuration.
 
     Controls 24/7 self-running behavior for both goal-level and daemon-level.
-
-    Args:
-        enabled: Whether the AutopilotService scheduling loop is enabled.
-            When False, the daemon constructs the service but does not start
-            the scheduling loop. HTTP /autopilot/submit endpoints are available
-            but goals won't be dispatched automatically.
-        max_retries: Maximum retries per goal on failure.
-        max_parallel_goals: Maximum goals running simultaneously.
-
-        max_send_backs: Per-goal send-back budget for report-commit judgment.
-        max_engine_recoveries: Max engine-driven recoveries per failed goal (deadlock backstop).
-        dreaming_enabled: Enter dreaming mode when all goals complete.
-        monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
-            DAG verification).
-        consensus_model_role: Router role for report-commit judgment; daemon uses
-            `create_chat_model` with automatic fallback to `default` on
-            instantiation failure.
-        judge_allow_structural_dag_ops: Allowlisted structural judge ops
-            (`spawn_goal` / `cancel_goal`). Empty = deny (LoopRail owns fan-out).
-        intake_scope: Forced StrangeLoop intake scope for dispatched goals
-            (`minimal`|`simple`|`complex`); `None` lets the loop run
-            intake classification.
-        verify_periodic_enabled: Master switch for periodic DAG health verification.
-            When `False` (default), the monitor's background health tick is
-            skipped entirely — no structural heuristics, no LLM. Event-driven
-            verification (post-completion, backoff reasoning) still runs. The
-            resource watchdog tick still runs on the same cadence.
-        verify_interval: Background verification tick while non-terminal goals exist.
-            Only used while `verify_periodic_enabled` is `True`.
-        verify_idle_interval: Tick when DAG empty/complete (`0` reuses
-            `verify_interval`); health LLM is skipped while idle.
-        verify_llm_enabled: Kill-switch for periodic health LLM. Only consulted
-            while `verify_periodic_enabled` is `True`.
-        verify_llm_min_nonterminal: Min non-terminal goals before health LLM runs.
-        verify_llm_debounce: Skip health LLM when DAG fingerprint unchanged.
-        webhooks: Webhook URLs by event type (legacy; prefer `notify.sinks.webhook`).
-        notify: Job lifecycle multi-channel notify.
-
-    Note:
-        StrangeLoop iteration budget is shared via `agent.loop.max_iterations` —
-        Autopilot does not redefine it. Dynamic goal creation (decomposition,
-        rails, directives) is always enabled.
     """
 
     # === Autopilot scheduling (daemon-level) ===
@@ -677,21 +612,8 @@ class AutopilotConfig(BaseModel):
 class ContextProjectionConfig(BaseModel):
     """Bounds for GoalDispatchContextBundle merging.
 
-    The ContextProjector unions parents' GoalDispatchContextContributions,
-    deduplicates, and truncates to these caps. Bundle stays small enough to
-    ship over IPC cheaply (~100 KB).
-
-    Args:
-        max_findings: Max LLM-synthesized findings per bundle.
-        max_effects: Max GoalEffect claims per bundle.
-        max_plan_steps: Max prior plan steps per bundle.
-        context_retention_hours: After a root goal reaches a terminal state,
-            its DAG's contributions become evictable from the store this many
-            hours later. Default 168 (1 week). LRU-evict if quota exceeded.
-        max_context_entries: Hard cap on the number of goal contributions
-            held by the in-memory fallback store. When exceeded, the oldest
-            entries (by write time) are evicted. Default 1000. Set to 0 for
-            unbounded (not recommended for production).
+    The ContextProjector unions parent contributions, deduplicates, and
+    truncates to these caps.
     """
 
     max_findings: int = Field(default=20, ge=1, le=200)
@@ -702,29 +624,16 @@ class ContextProjectionConfig(BaseModel):
 
 
 class WorkspaceReservationConfig(BaseModel):
-    """Workspace-prefix conflict gate config.
-
-    Args:
-        enabled: When false, autopilot does not check for workspace overlap
-            (allows multiple goals on overlapping paths). Default true.
-        strict_overlap: When true, any prefix overlap counts as conflict
-            (`/foo/bar` conflicts with `/foo/bar/baz`). Default true.
-    """
+    """Workspace-prefix conflict gate config."""
 
     enabled: bool = True
     strict_overlap: bool = True
 
 
 class LoopWorkingMemoryConfig(BaseModel):
-    """Agentic loop working memory.
+    """Agentic loop working memory scratchpad.
 
-    In-memory scratchpad for the agentic loop; large entries spill under
-    `SOOTHE_HOME/data/threads/{thread_id}/working_memory/`.
-
-    Args:
-        enabled: Enable working memory for Layer 2 Reason prompts.
-        max_inline_chars: Max size of the aggregated block injected into Reason.
-        max_entry_chars_before_spill: Per-step output larger than this is written to disk.
+    Large entries spill under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
     """
 
     enabled: bool = Field(default=True, description="Enable working memory")
@@ -745,8 +654,7 @@ class LoopWorkingMemoryConfig(BaseModel):
 class PlanPromptLedgerConfig(BaseModel):
     """Caps for ledger copies sent to plan-assess / plan-generate.
 
-    All limits use 0 to mean unlimited (preserve legacy behavior: full ledger, no copies).
-    When any limit is positive, the plan phase uses deep-copied, trimmed messages only.
+    Use ``0`` for unlimited (legacy: full ledger, no copies).
     """
 
     plan_ledger_max_messages: int = Field(
@@ -841,13 +749,8 @@ class LoopCheckpointConfig(BaseModel):
 class LoopCheckpointAsyncConfig(BaseModel):
     """Async checkpoint write configuration.
 
-    Checkpoint writes are always coalesced and non-blocking. PostgreSQL uses the
-    process-scoped persistence writer; SQLite uses a per-manager flush worker.
-
-    Args:
-        flush_interval: Periodic forced write interval (seconds).
-        close_timeout_seconds: Max seconds to wait for persist on manager close.
-        durable_flush_timeout: Max seconds for goal-boundary durable flush.
+    Checkpoint writes are always coalesced and non-blocking. PostgreSQL uses
+    the process-scoped persistence writer; SQLite uses a per-manager flush worker.
     """
 
     flush_interval: float = Field(
@@ -873,16 +776,7 @@ class LoopCheckpointAsyncConfig(BaseModel):
 class LoopConcurrencyConfig(BaseModel):
     """Loop execution concurrency and scheduling controls.
 
-    Goal fan-out is owned by `agent.autopilot.max_parallel_goals` (Autopilot
-    scheduler). Each StrangeLoop worker runs one goal; do not reintroduce a
-    loop-level `max_parallel_goals` here.
-
-    Args:
-        max_parallel_steps: Maximum plan steps running concurrently per execute batch.
-        max_parallel_subagents: Maximum subagents running simultaneously.
-        global_max_llm_calls: Cross-level circuit breaker for concurrent LLM calls.
-        step_parallelism: Scheduling strategy for plan steps (sequential/dependency/max).
-        max_parallel_tools: Maximum concurrent tool calls per thread.
+    Goal fan-out is owned by ``agent.autopilot.max_parallel_goals``.
     """
 
     max_parallel_steps: int = Field(
@@ -912,57 +806,9 @@ class OutputStreamingConfig(BaseModel):
     """Configuration for output streaming behavior.
 
     Controls how goal_completion synthesis and other assistant outputs are
-    delivered from daemon to client.
-
-    Three delivery modes:
-
-    - `batch`: Buffer the entire goal_completion synthesis. Emit a single
-      `AIMessageChunk` with `chunk_position="last"` when the agent loop
-      completes. Pure single-shot delivery; the client sees nothing during the
-      synthesis. Intended for headless automation that does not need real-time
-      progress.
-
-    - `adaptive` (default, two-phase):
-
-      1. *Streaming phase* — while cumulative goal_completion chars are below
-         `adaptive_threshold_chars` every incoming chunk is forwarded
-         individually, giving the lowest possible first-token latency.
-      2. *Chunked-streaming phase* — once the threshold is crossed the
-         coalescer buffers incoming text and flushes intermediate
-         `AIMessageChunk` frames whenever the buffer reaches
-         `adaptive_block_chars` characters or `adaptive_block_interval_ms`
-         milliseconds have elapsed since the last block flush, whichever
-         happens first. The final block carries `chunk_position="last"`.
-         This keeps the user informed of progress on long outputs while
-         reducing wire frame count vs. raw passthrough.
-
-    - `streaming`: Raw passthrough at the LLM's native generation speed.
-      Every goal_completion chunk is forwarded immediately with no buffering.
-      Highest wire-frame count and lowest latency — intended for local /
-      low-latency clients that want token-level fidelity.
-
-    If `file_output_threshold_chars` is set (> 0) goal_completion reverts to
-    pure-batch buffering regardless of mode so the final file_output decision
-    sees the complete text.
-
-    Args:
-        mode: Delivery mode (`batch` | `adaptive` | `streaming`).
-        streaming_interval_ms: Daemon WebSocket batching interval (milliseconds).
-        tui_flush_interval_ms: TUI rendering flush interval (milliseconds).
-        tui_first_flush_interval_ms: TUI flush interval for the first tokens (milliseconds).
-        adaptive_threshold_chars: Cumulative chars at which adaptive switches
-            from streaming phase to chunked-streaming phase.
-        adaptive_block_chars: Chars per block in chunked-streaming phase.
-        adaptive_block_interval_ms: Max ms between block flushes in
-            chunked-streaming phase.
-        file_output_threshold_chars: Threshold to write goal_completion to file (0 = never).
-        file_output_preview_chars: Preview chars in TUI when output saved to file.
-        file_output_dir: Directory for output files (default: current workspace root/.soothe/output).
-        message_coalesce_enabled: When true, coalesce plain assistant text chunks per namespace.
-        tool_batch_enabled: Debounce tool invocation wire into `tool_call_updates_batch`.
-        tool_batch_interval_ms: Max wait before flushing a debounced tool batch (milliseconds).
-        suppress_redundant_stream_tool_updates: Drop `soothe.stream.tool_call.update` when batched.
-        skip_redundant_tool_message_wire: Drop empty tool-result wire frames (off by default).
+    delivered from daemon to client. Three delivery modes: ``batch``
+    (single-shot), ``adaptive`` (stream then block-buffer), ``streaming``
+    (raw passthrough).
     """
 
     mode: Literal["batch", "adaptive", "streaming"] = Field(
@@ -1073,16 +919,9 @@ class OutputStreamingConfig(BaseModel):
 class ContextEngineConfig(BaseModel):
     """Context Engine integration for StrangeLoop.
 
-    ContextEngine is always active and replaces PlanManager, LoopWorkingMemory,
-    and GoalContextManager as the internal state backend. The existing prompt
-    pipeline, executor, and LangGraph topology remain unchanged.
-
-    The persistence backend follows `persistence.default_backend` — no
-    separate `persistence_backend` knob is needed. When the global backend
-    is `postgresql`, CE uses PgsqlContextPersistence with the same DSN.
-    When `sqlite`, CE uses SqliteContextPersistence (default). If
-    `postgresql` is configured but `psycopg` is unavailable, CE
-    falls back to SQLite automatically.
+    Always active; replaces PlanManager, LoopWorkingMemory, and
+    GoalContextManager as the internal state backend. The persistence
+    backend follows ``persistence.default_backend``.
     """
 
 
@@ -1171,42 +1010,7 @@ class EvalLoopConfig(BaseModel):
 class StrangeLoopConfig(BaseModel):
     """Configuration for agent loop execution mode.
 
-    Unified configuration consolidating agentic behavior fields and loop execution controls.
-    Behavior fields are placed directly under loop.* for easy access.
-
-    Args:
-        enabled: Enable agent loop mode.
-        max_iterations: Maximum StrangeLoop iterations per run (shared with Autopilot
-            workers; default `DEFAULT_MAX_ITERATIONS` / 99). Autopilot does not
-            define a separate budget.
-        max_subagent_tasks_per_wave: Cap `task` tool completions per Act wave (0 = unlimited).
-        general_purpose_subagent: GP subagent mode (off/full/readonly/per_step). `off` (default)
-            disables GP; `per_step` routes full GP on agent-mode steps (incl. Eval) and read-only
-            GP on plan/ask steps.
-        max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
-        dispatch_idle_seconds: Deadlock detector — max seconds of stream inactivity when no
-            root-level tool is pending. Nested subgraph messages do not clear parent activity.
-        dispatch_tool_timeout_seconds: Optional wall-clock cap for a root tool wave (dispatch
-            until all pending ToolMessages). 0 disables (use `agent.middleware.tool_timeout`).
-        execute_action_retry_max: Extra Execute passes when the step deliverable gate fails (0 = disabled).
-        execute_min_answer_chars: Minimum final assistant text length for deliverable satisfaction.
-        execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
-        final_response: Whether to always synthesize a final CoreAgent report (default),
-            reuse last Execute assistant text when structurally eligible, or use auto heuristics.
-        working_memory: Working memory / spill configuration.
-        report_output: Goal report display and synthesis limits.
-        output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
-        plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts.
-        execute_prompt_ledger: Caps for execute-step CoreAgent ledger projection.
-        checkpoint: Progressive checkpoint persistence and startup resume.
-        concurrency: Parallelism caps and step scheduling strategy.
-        goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default `default`).
-        rules: Declarative completion and scenario thresholds.
-        decompose: Recursive step decomposition budgets; always on.
-        eval: Coverage Eval thread limits; always on when required.
-
-    Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
-    parallel_pre_stream) are always enabled by design and not configurable.
+    Consolidates agentic behavior fields and loop execution controls.
     """
 
     enabled: bool = Field(
@@ -1478,11 +1282,8 @@ class ToolApprovalRule(BaseModel):
 class VeritasFallbackConfig(BaseModel):
     """Stage 4: veritas LLM fallback for ambiguous tool approvals.
 
-    Disabled by default: compound-command splitting and expanded allow rules
-    resolve nearly all tool_approval interrupts deterministically. When no
-    rule matches, the interrupt defers to the human relay (manual mode) or
-    raises `ClarificationDeferredError` (auto mode) instead of spending
-    LLM latency on a veritus call.
+    Disabled by default. When no rule matches, the interrupt defers to the
+    human relay (manual mode) or raises ``ClarificationDeferredError`` (auto).
     """
 
     enabled: bool = False
@@ -1573,17 +1374,9 @@ def _default_allow_rules() -> list[ToolApprovalRule]:
 class ToolApprovalConfig(BaseModel):
     """Deny-list-first tool-approval pipeline config.
 
-    The pipeline runs two stages: deny rules → safety checks. Any tool
-    action that does NOT match a deny rule or fail a safety check is
-    auto-approved in auto mode. There is no allow-list stage — the
-    absence of a deny is an implicit allow. This avoids the compound-
-    command problem where piped commands (`git diff ... | tail -5`)
-    could never match a single allow rule.
-
-    In manual mode the pipeline still runs deny/safety stages (safety
-    property: dangerous actions are always auto-rejected), but
-    non-matching actions are deferred to the human relay instead of
-    being auto-approved.
+    Two stages: deny rules → safety checks. Any action not matching a deny
+    rule or failing a safety check is auto-approved in auto mode. In manual
+    mode, non-matching actions defer to the human relay.
     """
 
     enabled: bool = True
@@ -1699,18 +1492,9 @@ class SkillifyConfig(BaseModel):
 
 
 class CronConfig(BaseModel):
-    """: configuration for the cron service.
+    """Configuration for the cron service.
 
     Natural language scheduled job submission for Autopilot.
-
-    Args:
-        max_jobs: Maximum scheduled jobs per user.
-        poll_interval: Seconds between due-job monitoring ticks.
-        extraction_model: LLM role for natural language extraction.
-        extraction_timeout: Timeout for LLM extraction calls.
-        default_priority: Default job priority when not specified.
-        enable_builtin_jobs: When true, seed built-in recurring maintenance
-            jobs on daemon startup.
     """
 
     max_jobs: int = Field(default=100, ge=1, le=1000, description="Max scheduled jobs per user")

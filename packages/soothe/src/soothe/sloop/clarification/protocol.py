@@ -21,11 +21,7 @@ DeferKind = Literal[
 
 @dataclass(frozen=True)
 class LoopStateView:
-    """Read-only projection of loop state for clarification policies.
-
-    Intentionally narrow: policies receive only what they need to answer
-    a clarification, not the full mutable loop state.
-    """
+    """Read-only projection of loop state for clarification policies."""
 
     goal_id: str
     goal_description: str

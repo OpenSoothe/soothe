@@ -15,16 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class GlobalInputHistory:
-    """Cross-thread global input history stored in JSONL format.
-
-    Stores all user inputs from all threads in a single JSONL file.
-    Provides deduplication, size limits, and cleanup for old entries.
-
-    Args:
-        history_file: Path to global history JSONL file.
-        max_size: Maximum number of entries to retain.
-        dedup_window: Number of recent entries to check for duplicates.
-    """
+    """Cross-thread global input history stored in JSONL format."""
 
     def __init__(
         self,
@@ -42,11 +33,7 @@ class GlobalInputHistory:
         self._load_index_and_cache()
 
     def _load_index_and_cache(self) -> None:
-        """Load current index counter and recent cache from file.
-
-        Reads last line of JSONL file to extract index counter.
-        Loads last N entries (dedup_window) into in-memory cache.
-        """
+        """Load current index counter and recent cache from file."""
         if not self.history_file.exists():
             self._index_counter = 0
             self._recent_cache = []
@@ -93,13 +80,7 @@ class GlobalInputHistory:
         thread_id: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Add entry to global history with deduplication.
-
-        Args:
-            text: User input text (will be stripped).
-            thread_id: Thread where input was submitted.
-            metadata: Optional metadata dict (workspace, preferred_subagent).
-        """
+        """Add an entry to global history with deduplication."""
         stripped = text.strip()
         if not stripped:
             return

@@ -10,11 +10,7 @@ _GOAL_INDEX_IN_FLIGHT: frozenset[str] = frozenset({"running", "interrupted"})
 
 
 def is_goal_index_in_flight(status: str) -> bool:
-    """Return True when a checkpoint goal index entry is still in flight.
-
-    `running` is actively executing; `interrupted` is paused mid-flight by a
-    user cancel or infra event and is still resumable. Both count as in-flight.
-    """
+    """Return True when a checkpoint goal index entry is still in flight."""
     return status in _GOAL_INDEX_IN_FLIGHT
 
 
@@ -23,14 +19,7 @@ def suggest_loop_checkpoint_status(
     loop_status: str,
     goal_index_statuses: list[str],
 ) -> LoopCheckpointStatus:
-    """Suggest loop-level status from goal-index rows (recovery helper).
-
-    When the loop checkpoint says `idle` but goal-index rows are still
-    `running` (or `interrupted`), callers should repair toward `running`.
-    A goal row explicitly `interrupted` also maps to `running` at the
-    loop checkpoint level so the next turn re-enters the goal instead of
-    treating it as terminal.
-    """
+    """Suggest loop-level status from goal-index rows (recovery helper)."""
     if any(is_goal_index_in_flight(s) for s in goal_index_statuses):
         return "running"
     if loop_status in ("idle", "running", "interrupted"):

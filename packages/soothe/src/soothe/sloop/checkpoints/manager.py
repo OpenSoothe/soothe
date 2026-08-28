@@ -19,11 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class StrangeLoopCheckpointPersistenceManager:
-    """Manager for StrangeLoop checkpoint persistence.
-
-    Backend-agnostic delegation pattern.
-    Respects persistence.default_backend configuration (PostgreSQL or SQLite).
-    """
+    """Manager for StrangeLoop checkpoint persistence."""
 
     def __init__(
         self,

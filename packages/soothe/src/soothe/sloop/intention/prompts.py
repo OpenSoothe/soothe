@@ -1,7 +1,4 @@
-"""LLM prompts for intake classification.
-
-- `INTAKE_CLASSIFY_SYSTEM_PROMPT`: social vs task + task complexity + short description.
-"""
+"""LLM prompts for intake classification."""
 
 from __future__ import annotations
 

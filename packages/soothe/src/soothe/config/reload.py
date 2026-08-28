@@ -1,7 +1,4 @@
-"""Config hot-reload support for Soothe.
-
-Provides file system watching and signal-based config reload capabilities.
-"""
+"""Config hot-reload support for Soothe."""
 
 from __future__ import annotations
 
@@ -35,14 +32,7 @@ DEFAULT_MAX_AUDIT_ENTRIES = 100
 
 
 def _compute_config_hash(config: Any) -> str:
-    """Compute a hash of a config object for audit logging.
-
-    Args:
-        config: Config object (Pydantic model, dict, or other serializable).
-
-    Returns:
-        SHA256 hash string of the config.
-    """
+    """Compute a short SHA256 hash of a config object for audit logging."""
     if config is None:
         return "null"
     try:
@@ -60,17 +50,7 @@ def _compute_config_hash(config: Any) -> str:
 
 @dataclass
 class ReloadAuditEntry:
-    """Audit entry for a single reload attempt.
-
-    Attributes:
-        timestamp: ISO format timestamp when reload occurred.
-        config_type: Type of config ('agent' or 'daemon').
-        config_path: Path to the config file.
-        old_config_hash: Hash of previous config (or 'null' if first load).
-        new_config_hash: Hash of new config (or 'error' if load failed).
-        success: Whether reload succeeded.
-        error: Error message if reload failed, None otherwise.
-    """
+    """Audit entry for a single reload attempt."""
 
     timestamp: str
     config_type: str
@@ -82,20 +62,10 @@ class ReloadAuditEntry:
 
 
 class ReloadAuditLog:
-    """Thread-safe audit log for config reload history.
-
-    Stores the last N reload attempts in memory for debugging and monitoring.
-
-    Attributes:
-        max_entries: Maximum number of entries to retain.
-    """
+    """Thread-safe audit log for config reload history."""
 
     def __init__(self, max_entries: int = DEFAULT_MAX_AUDIT_ENTRIES) -> None:
-        """Initialize the audit log.
-
-        Args:
-            max_entries: Maximum number of entries to retain (default 100).
-        """
+        """Initialize the audit log."""
         self._max_entries = max_entries
         self._entries: deque[ReloadAuditEntry] = deque(maxlen=max_entries)
         self._lock = threading.Lock()
@@ -108,18 +78,7 @@ class ReloadAuditLog:
         new_config: Any,
         error: Exception | None = None,
     ) -> ReloadAuditEntry:
-        """Record a reload attempt.
-
-        Args:
-            config_type: Type of config ('agent' or 'daemon').
-            config_path: Path to the config file.
-            old_config: Previous config instance (may be None).
-            new_config: New config instance (may be None on error).
-            error: Exception if reload failed, None otherwise.
-
-        Returns:
-            The created audit entry.
-        """
+        """Record a reload attempt and return the audit entry."""
         entry = ReloadAuditEntry(
             timestamp=datetime.now(UTC).isoformat(),
             config_type=config_type,
@@ -141,14 +100,7 @@ class ReloadAuditLog:
         return entry
 
     def get_history(self, limit: int | None = None) -> list[ReloadAuditEntry]:
-        """Get reload history, most recent first.
-
-        Args:
-            limit: Maximum entries to return (None for all).
-
-        Returns:
-            List of audit entries, most recent first.
-        """
+        """Return reload history, most recent first."""
         with self._lock:
             entries = list(self._entries)
         # Return most recent first
@@ -171,16 +123,7 @@ class ReloadAuditLog:
 
 @dataclass
 class ConfigReloadEvent:
-    """Event emitted when a config file is reloaded.
-
-    Attributes:
-        config_type: Type of config that was reloaded ('agent' or 'daemon').
-        config_path: Path to the config file that changed.
-        old_config: Previous config instance (may be None on first load).
-        new_config: New config instance.
-        error: Exception if reload failed, None otherwise.
-        audit_entry: Audit entry with reload details (hashes, timestamp, etc.).
-    """
+    """Event emitted when a config file is reloaded."""
 
     config_type: str
     config_path: Path
@@ -196,16 +139,7 @@ ConfigReloadCallback = Callable[[ConfigReloadEvent], None]
 
 @dataclass
 class WatchedConfig:
-    """Internal tracking for a watched config file.
-
-    Attributes:
-        path: Path to the config file.
-        config_type: Type identifier ('agent' or 'daemon').
-        loader: Callable that loads and returns the config.
-        callbacks: Set of callbacks to invoke on reload.
-        last_modified: Last modification timestamp seen.
-        validator: Optional callable to validate the loaded config before swap.
-    """
+    """Internal tracking for a watched config file."""
 
     path: Path
     config_type: str
@@ -219,42 +153,8 @@ class WatchedConfig:
 class ConfigWatcher:
     """Watches config files for changes and triggers debounced reload callbacks.
 
-    Supports:
-    - File system watching via watchdog for YAML files
-    - Debounced reload callbacks (prevents rapid-fire reloads)
-    - SIGHUP signal handler for manual reload triggers
-    - Graceful shutdown via threading.Event
-    - Audit logging of all reload attempts
-
-    Example:
-        ```python
-        from soothe.config.reload import ConfigWatcher, DEFAULT_NANO_CONFIG_PATH
-        from soothe.config import SootheConfig
-
-
-        def on_reload(event):
-            if event.error:
-                print(f"Reload failed: {event.error}")
-            else:
-                print(f"Reloaded {event.config_type} config")
-
-
-        watcher = ConfigWatcher()
-
-        # Watch nano agent config
-        watcher.watch_config(
-            path=DEFAULT_NANO_CONFIG_PATH,
-            config_type="agent",
-            loader=lambda: SootheConfig.from_yaml_file(str(DEFAULT_NANO_CONFIG_PATH)),
-            callback=on_reload,
-        )
-
-        # Start watching (non-blocking)
-        watcher.start()
-
-        # ... later ...
-        watcher.stop()
-        ```
+    Supports filesystem watching, debounced reloads, SIGHUP signal handling,
+    graceful shutdown, and audit logging.
     """
 
     def __init__(
@@ -262,15 +162,7 @@ class ConfigWatcher:
         debounce_seconds: float = DEFAULT_DEBOUNCE_SECONDS,
         max_audit_entries: int = DEFAULT_MAX_AUDIT_ENTRIES,
     ) -> None:
-        """Initialize the config watcher.
-
-        Args:
-            debounce_seconds: Minimum seconds between reloads for the same file.
-                Prevents rapid-fire reloads when files are modified multiple times
-                in quick succession (e.g., editor saves).
-            max_audit_entries: Maximum number of audit entries to retain
-                (default 100). Set to 0 to disable audit logging.
-        """
+        """Initialize the config watcher."""
         self._debounce_seconds = debounce_seconds
         self._audit_log = (
             ReloadAuditLog(max_entries=max_audit_entries) if max_audit_entries > 0 else None
@@ -297,21 +189,7 @@ class ConfigWatcher:
         callback: ConfigReloadCallback | None = None,
         validator: Callable[[Any], bool] | None = None,
     ) -> None:
-        """Register a config file to watch.
-
-        Args:
-            path: Path to the config file (e.g., nano.yml, soothe.yml, or daemon.yml).
-            config_type: Type identifier for the config ('agent', 'host', or 'daemon').
-            loader: Callable that loads and returns the config instance.
-                Called on initial load and subsequent reloads.
-            callback: Optional callback to invoke when config is reloaded.
-                Callbacks are stored as weak references and will be removed
-                when the callback object is garbage collected.
-            validator: Optional callable to validate the loaded config before swap.
-                Should return True if config is valid, False otherwise.
-                If validation fails, the config swap is skipped and an error
-                is logged with the callback receiving an error event.
-        """
+        """Register a config file to watch."""
         path = Path(path).expanduser().resolve()
         with self._lock:
             if path in self._watched:
@@ -381,13 +259,7 @@ class ConfigWatcher:
         _logger.info("ConfigWatcher started (debounce=%.1fs)", self._debounce_seconds)
 
     def stop(self) -> None:
-        """Stop watching for config changes.
-
-        Stops the file system observer, cancels pending timers, removes the
-        SIGHUP handler, and waits for the observer thread to finish.
-
-        Safe to call multiple times; subsequent calls are no-ops.
-        """
+        """Stop watching for config changes. Safe to call multiple times."""
         with self._lock:
             if not self._started:
                 return
@@ -409,11 +281,7 @@ class ConfigWatcher:
         _logger.info("ConfigWatcher stopped")
 
     def reload_now(self, path: Path | str | None = None) -> None:
-        """Immediately reload config(s), bypassing debounce.
-
-        Args:
-            path: Specific config path to reload, or None to reload all.
-        """
+        """Immediately reload config(s), bypassing debounce."""
         if path is not None:
             path = Path(path).expanduser().resolve()
             with self._lock:
@@ -423,14 +291,7 @@ class ConfigWatcher:
             self._load_all_configs()
 
     def get_current_config(self, config_type: str) -> Any | None:
-        """Get the current config instance for a given type.
-
-        Args:
-            config_type: Type identifier ('agent' or 'daemon').
-
-        Returns:
-            Current config instance, or None if not loaded yet.
-        """
+        """Return the current config instance for a given type, or None."""
         with self._lock:
             for watched in self._watched.values():
                 if watched.config_type == config_type:
@@ -438,15 +299,7 @@ class ConfigWatcher:
         return None
 
     def get_reload_history(self, limit: int | None = None) -> list[ReloadAuditEntry]:
-        """Get reload history from the audit log.
-
-        Args:
-            limit: Maximum entries to return (None for all).
-
-        Returns:
-            List of audit entries, most recent first.
-            Returns empty list if audit logging is disabled.
-        """
+        """Return reload history from the audit log, most recent first."""
         if self._audit_log is None:
             return []
         return self._audit_log.get_history(limit=limit)
@@ -467,12 +320,7 @@ class ConfigWatcher:
                 self._reload_config(path)
 
     def _reload_config(self, path: Path) -> None:
-        """Reload a single config file and invoke callbacks.
-
-        If a validator is configured for the watched config, it will be called
-        with the loaded config. If validation fails, the config swap is skipped
-        and an error is logged.
-        """
+        """Reload a single config file and invoke callbacks."""
         with self._lock:
             watched = self._watched.get(path)
             if watched is None:

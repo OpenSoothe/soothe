@@ -43,15 +43,7 @@ class SootheRunner(
     StrangeLoopMixin,
     PhasesMixin,
 ):
-    """Protocol-orchestrated agent runner.
-
-    Wraps `create_soothe_agent()` with pre/post protocol steps and
-    provides `astream()` that yields the canonical stream
-    format extended with `soothe.*` protocol custom events.
-
-    Args:
-        config: Soothe configuration. If `None`, uses defaults.
-    """
+    """Protocol-orchestrated agent runner wrapping ``create_soothe_agent()``."""
 
     def __init__(
         self,
@@ -59,13 +51,7 @@ class SootheRunner(
         *,
         identity_runtime: IdentityRuntime | None = None,
     ) -> None:
-        """Initialize the runner with optional config.
-
-        Args:
-            config: Soothe configuration. If `None`, uses defaults.
-            identity_runtime: Optional identity bundle. When enabled,
-                IdentityMiddleware is prepended to the agent middleware stack.
-        """
+        """Initialize the runner with optional config."""
         import time
 
         from soothe.coreagent import create_soothe_agent

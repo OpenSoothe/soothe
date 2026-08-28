@@ -13,19 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class InternalEventBus:
-    """In-memory async event dispatch for AL ↔ GE ↔ AP.
-
-    Provides pub/sub semantics for internal coordination events.
-    All handlers are async and called in subscription order.
-    Errors in handlers are logged but don't fail the emit.
-
-    Thread-safe via asyncio.Lock for concurrent emit/subscribe.
-
-    Usage:
-        bus = InternalEventBus()
-        bus.subscribe("soothe.internal.goal.completed", ge.handle_goal_completed)
-        await bus.emit(InternalGoalCompletedEvent(...))
-    """
+    """In-memory async event dispatch for AL ↔ GE ↔ AP coordination."""
 
     def __init__(self) -> None:
         """Initialize the internal event bus."""

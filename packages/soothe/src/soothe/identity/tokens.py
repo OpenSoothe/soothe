@@ -1,4 +1,4 @@
-"""JWT token generation and validation.."""
+"""JWT token generation and validation."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -9,15 +9,7 @@ from soothe_sdk.protocols.identity import TokenClaims
 
 
 class JWTManager:
-    """
-        JWT token generation and validation.
-
-        Uses HS256 (HMAC-SHA256) algorithm for signing.
-        Access tokens are short-lived (1 hour default).
-        Refresh tokens are longer-lived (7 days default).
-
-    , §Authentication Flow.
-    """
+    """JWT token generation and validation using HS256."""
 
     def __init__(
         self,

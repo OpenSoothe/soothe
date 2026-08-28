@@ -1,7 +1,4 @@
-"""Identity service for soothe..
-
-This module provides AKSK-based authentication and JWT token management.
-"""
+"""Identity service: AKSK authentication and JWT token management."""
 
 from soothe_sdk.identity.errors import (
     AKSKExpiredError,

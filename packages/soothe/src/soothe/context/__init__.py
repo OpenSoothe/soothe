@@ -1,7 +1,4 @@
-"""Context Engine — unified context management for goals, steps, and projection.
-
-Located in soothe.context as foundational infrastructure.
-"""
+"""Context Engine — unified context management for goals, steps, and projection."""
 
 from soothe.context.decomposition import (
     DecompositionProposal,

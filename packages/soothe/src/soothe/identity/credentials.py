@@ -1,4 +1,4 @@
-"""AKSK credential generation and hashing.."""
+"""AKSK credential generation and hashing."""
 
 import hashlib
 import hmac
