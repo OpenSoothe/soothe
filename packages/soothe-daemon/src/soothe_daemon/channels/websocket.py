@@ -1,4 +1,4 @@
-"""WebSocket channel implementation (RFC-620).
+"""WebSocket channel implementation.
 
 WebSocket channel as a proper Channel subclass with streaming support.
 """
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class WebSocketChannel(Channel):
     """WebSocket channel with full streaming support.
 
-    This channel implements the RFC-620 Channel interface for WebSocket.
+    This channel implements the Channel interface for WebSocket.
     It supports:
     - Bidirectional messaging (supports_inbound=True, supports_outbound=True)
     - Real-time streaming (supports_streaming=True)
@@ -594,7 +594,7 @@ class WebSocketChannel(Channel):
         client_id: str | None,
         client_info: dict[str, Any],
     ) -> None:
-        """Periodically send protocol-level ping frames (RFC-450 §8.3).
+        """Periodically send protocol-level ping frames.
 
         If no pong is received within ``heartbeat_timeout_ms``, the connection
         is considered dead and closed with code 1001.

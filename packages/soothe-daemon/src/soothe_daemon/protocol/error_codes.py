@@ -1,10 +1,10 @@
 """Numeric error code registry and structured protocol error helpers.
 
-Implements the protocol-1 error model (RFC-450 §7). The registry is a
+Implements the protocol-1 error model. The registry is a
 JSON-RPC 2.0-style numeric scheme with reserved ranges; all wire error
 responses are produced through the `RpcProtocolError` helper, making a
 malformed error structurally impossible. Error envelopes use the JSON-RPC
-nested ``error:{code, message, data?}`` object per RFC-450 §7.1.
+nested ``error:{code, message, data?}`` object §7.1.
 
 Public API:
     ErrorCode            -- IntEnum of all numeric error codes
@@ -14,7 +14,7 @@ Public API:
         skill_not_found, invalid_params, method_not_found, daemon_not_ready,
         internal_error
 
-Ranges (RFC-450 §7.3):
+Ranges:
     -32768..-32000  Protocol-level (JSON-RPC convention)
     -32000..-32099  Server state
     -32100..-32199  Authorization/session
@@ -45,7 +45,7 @@ __all__ = [
 
 
 class ErrorCode(IntEnum):
-    """Numeric error codes with reserved ranges (RFC-450 §7.3)."""
+    """Numeric error codes with reserved ranges."""
 
     # Protocol-level (-32768 to -32000)
     PARSE_ERROR = -32700
@@ -144,7 +144,7 @@ _SEVERITY: dict[ErrorCode, str] = {
 
 
 def severity_of(code: ErrorCode) -> str:
-    """Return the severity tag for an error code (RFC-450 §7.2).
+    """Return the severity tag for an error code.
 
     Args:
         code: An `ErrorCode` member.
@@ -156,7 +156,7 @@ def severity_of(code: ErrorCode) -> str:
 
 
 class RpcProtocolError(Exception):
-    """Structured protocol error carrying a numeric code (RFC-450 §7.4).
+    """Structured protocol error carrying a numeric code.
 
     Handlers raise `RpcProtocolError` (or a convenience constructor); the
     transport layer catches it and serializes via `to_dict` /
@@ -195,13 +195,13 @@ class RpcProtocolError(Exception):
     def to_dict(self) -> dict[str, Any]:
         """Serialize the error object to a wire-ready envelope.
 
-        Produces the ``{type:'error', error:{code, message, data?}}`` envelope
-        per RFC-450 §7.1. The nested ``error`` object always carries ``code``
-        and ``message``; ``data`` is omitted when empty (no extra context).
+               Produces the ``{type:'error', error:{code, message, data?}}`` envelope
+        §7.1. The nested ``error`` object always carries ``code``
+               and ``message``; ``data`` is omitted when empty (no extra context).
 
-        Returns:
-            Dict with keys ``type`` and ``error`` (a dict with ``code`` (int),
-            ``message``, and optionally ``data``).
+               Returns:
+                   Dict with keys ``type`` and ``error`` (a dict with ``code`` (int),
+                   ``message``, and optionally ``data``).
         """
         error_obj: dict[str, Any] = {
             "code": self.code.value,
@@ -212,7 +212,7 @@ class RpcProtocolError(Exception):
         return {"type": "error", "error": error_obj}
 
     def to_envelope(self, *, proto: str = "1", request_id: str | None = None) -> dict[str, Any]:
-        """Build a full wire-ready error message envelope (RFC-450 §7.1).
+        """Build a full wire-ready error message envelope.
 
         Args:
             proto: Protocol version string (default ``"1"``).
@@ -241,7 +241,7 @@ def build_error_response(
     *,
     proto: str = "1",
 ) -> dict[str, Any]:
-    """Construct a wire-ready error response envelope (RFC-450 §7.1).
+    """Construct a wire-ready error response envelope.
 
     The envelope always includes ``proto``, ``type``, and a nested ``error``
     object with ``code`` and ``message``. ``data`` is included in the

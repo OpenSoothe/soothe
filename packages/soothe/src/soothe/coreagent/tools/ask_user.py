@@ -1,4 +1,4 @@
-"""``ask_user`` tool — pauses the loop for a human answer (RFC-622)."""
+"""``ask_user`` tool — pauses the loop for a human answer."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ _QUESTION_FIELD_RENAMES: dict[str, str] = {
 
 
 class OptionSpec(BaseModel):
-    """A single selectable option for a structured question (RFC-622 §9c).
+    """A single selectable option for a structured question.
 
     ``label`` is the answer display text shown in the recap and sent on
     resume. ``description`` is shown in the hover-preview box when the
@@ -40,7 +40,7 @@ class OptionSpec(BaseModel):
 
 
 class QuestionSpec(BaseModel):
-    """A structured question with options (RFC-622 §9c).
+    """A structured question with options.
 
     The LLM emits 2-4 options. Put the recommended option first and add
     "(Recommended)" to its label. The CLI widget adds an implicit "Other"

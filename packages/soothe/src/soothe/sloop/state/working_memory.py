@@ -1,4 +1,4 @@
-"""In-memory loop working memory with spill under SOOTHE_HOME/data/threads/{thread_id}/working_memory/ (RFC-203)."""
+"""In-memory loop working memory with spill under SOOTHE_HOME/data/threads/{thread_id}/working_memory/."""
 
 from __future__ import annotations
 

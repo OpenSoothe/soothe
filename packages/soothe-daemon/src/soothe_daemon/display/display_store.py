@@ -1,4 +1,4 @@
-"""Display card mutation persistence (RFC-413).
+"""Display card mutation persistence.
 
 SQLite (``databases/display.db``) is the default. When ``persistence.default_backend`` is
 ``postgresql``, the process configures a PostgreSQL store in ``soothe_metadata``.

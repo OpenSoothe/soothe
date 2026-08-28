@@ -1,4 +1,4 @@
-"""LLM-structured decision on whether a coverage Eval step is needed (RFC-905).
+"""LLM-structured decision on whether a coverage Eval step is needed.
 
 For SIMPLE tasks where the structural ``eval_required()`` predicate returns
 False, a fast-model call decides whether the execution evidence still warrants

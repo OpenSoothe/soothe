@@ -1,4 +1,4 @@
-"""Project StrangeLoop state into user-safe synthesis context (RFC-603, RFC-214).
+"""Project StrangeLoop state into user-safe synthesis context.
 
 Goal-synthesis injects current-goal ``execute_step`` ledger turns as native
 messages (like plan-assess) for prompt-cache alignment. Prior-goal execute rows

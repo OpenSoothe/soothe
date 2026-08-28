@@ -1,4 +1,4 @@
-"""Decomposition proposal types for recursive step decompose (RFC-904 / IG-751).
+"""Decomposition proposal types for recursive step decompose.
 
 Threads emit proposals; CE reconcile commits children. These models must not
 write the StepDAG directly.
@@ -50,7 +50,7 @@ class ProposedSubtask(BaseModel):
 
 
 class DecompositionProposal(BaseModel):
-    """Local parent-relative proposal queued for CE reconcile (RFC-904)."""
+    """Local parent-relative proposal queued for CE reconcile."""
 
     parent_step_id: str
     subtasks: list[ProposedSubtask] = Field(min_length=1)

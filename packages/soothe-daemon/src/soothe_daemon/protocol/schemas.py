@@ -1,4 +1,4 @@
-"""Pydantic param models for all protocol-1 message types (RFC-450 §6.2).
+"""Pydantic param models for all protocol-1 message types.
 
 Each model defines the *params* schema for a ``(type, method)`` pair in the
 wire envelope.  The models are registered in ``PARAMS_REGISTRY``, which the
@@ -217,7 +217,7 @@ class LoopExecutionStateFetchParams(ParamsBase):
 class LoopSetClarificationModeParams(ParamsBase):
     """Params for method=loop_set_clarification_mode, type=request.
 
-    Hot-swap the RFC-622 clarification mode on a running goal so the next
+    Hot-swap the clarification mode on a running goal so the next
     ``await_clarification`` node entry uses the new policy without waiting
     for a new turn. Returns ``{"applied": bool}`` — ``False`` when no goal is
     currently running (the caller may retry on the next turn).
@@ -228,7 +228,7 @@ class LoopSetClarificationModeParams(ParamsBase):
 
 
 class LoopHistoryFetchParams(ParamsBase):
-    """Params for method=loop_history_fetch, type=request (RFC-631)."""
+    """Params for method=loop_history_fetch, type=request."""
 
     loop_id: str = Field(..., min_length=1)
 
@@ -295,7 +295,7 @@ class JobDagParams(ParamsBase):
 class JobGuidanceParams(ParamsBase):
     """Params for method=job_guidance, type=request.
 
-    The canonical field name for the guidance text is ``content`` (RFC-450
+    The canonical field name for the guidance text is ``content`` (
     §10.1).
     """
 

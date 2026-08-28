@@ -133,7 +133,7 @@ class AssistantIdentity(BaseModel):
 
 
 class NotifyTargetConfig(BaseModel):
-    """One delivery destination for job lifecycle notify (IG-713).
+    """One delivery destination for job lifecycle notify.
 
     ``kind`` selects the sink address space (``email``, ``feishu_chat_id``,
     ``feishu_open_id``, ``webhook_url``, …).
@@ -272,7 +272,7 @@ class SlaConfig(BaseModel):
 
 
 class AutopilotNotifyConfig(BaseModel):
-    """Job lifecycle notify push (IG-713).
+    """Job lifecycle notify push.
 
     Host router emits channel-agnostic intents; daemon sinks deliver
     (email, webhook, Feishu, …).
@@ -419,7 +419,7 @@ class AutopilotConfig(BaseModel):
 
     consensus_model_role: ModelRole = Field(
         default="think",
-        description="Router model role for RFC-204 report-commit judgment.",
+        description="Router model role for report-commit judgment.",
     )
     judge_allow_structural_dag_ops: list[str] = Field(
         default_factory=list,
@@ -442,8 +442,7 @@ class AutopilotConfig(BaseModel):
         default=True,
         description=(
             "When True and submit omits rail_id, run structured LLM auto-pick "
-            "over the merged LoopRail catalog before workspace/config defaults "
-            "(RFC-231 §10 / IG-728)."
+            "over the merged LoopRail catalog before workspace/config defaults."
         ),
     )
     rail_auto_pick_min_confidence: float = Field(
@@ -566,7 +565,7 @@ class AutopilotConfig(BaseModel):
     webhooks: dict[str, str | None] = Field(default_factory=dict)
     notify: AutopilotNotifyConfig = Field(
         default_factory=AutopilotNotifyConfig,
-        description="Job lifecycle multi-channel notify push (IG-713)",
+        description="Job lifecycle multi-channel notify push",
     )
 
     # === Loop pool (RFC-222) ===
@@ -600,7 +599,7 @@ class AutopilotConfig(BaseModel):
         default=1_209_600.0,
         description=(
             "Wall-clock budget per dispatched autopilot goal in seconds; "
-            "the AutopilotService monitor cancels the worker on overrun (RFC-222 H5). "
+            "the AutopilotService monitor cancels the worker on overrun. "
             "None disables deadline enforcement (default 14d)."
         ),
     )
@@ -681,7 +680,7 @@ class AutopilotConfig(BaseModel):
 
 
 class ContextProjectionConfig(BaseModel):
-    """Bounds for GoalDispatchContextBundle merging (RFC-222 revised).
+    """Bounds for GoalDispatchContextBundle merging.
 
     The ContextProjector unions parents' GoalDispatchContextContributions,
     deduplicates, and truncates to these caps. Bundle stays small enough to
@@ -689,7 +688,7 @@ class ContextProjectionConfig(BaseModel):
 
     Args:
         max_findings: Max LLM-synthesized findings per bundle.
-        max_effects: Max GoalEffect claims per bundle (IG-712).
+        max_effects: Max GoalEffect claims per bundle.
         max_plan_steps: Max prior plan steps per bundle.
         context_retention_hours: After a root goal reaches a terminal state,
             its DAG's contributions become evictable from the store this many
@@ -708,7 +707,7 @@ class ContextProjectionConfig(BaseModel):
 
 
 class WorkspaceReservationConfig(BaseModel):
-    """Workspace-prefix conflict gate config (RFC-222 revised).
+    """Workspace-prefix conflict gate config.
 
     Args:
         enabled: When false, autopilot does not check for workspace overlap
@@ -722,7 +721,7 @@ class WorkspaceReservationConfig(BaseModel):
 
 
 class LoopWorkingMemoryConfig(BaseModel):
-    """Agentic loop working memory (RFC-203).
+    """Agentic loop working memory.
 
     In-memory scratchpad for the agentic loop; large entries spill under
     ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
@@ -749,7 +748,7 @@ class LoopWorkingMemoryConfig(BaseModel):
 
 
 class PlanPromptLedgerConfig(BaseModel):
-    """Caps for RFC-214 ledger copies sent to plan-assess / plan-generate.
+    """Caps for ledger copies sent to plan-assess / plan-generate.
 
     All limits use 0 to mean unlimited (preserve legacy behavior: full ledger, no copies).
     When any limit is positive, the plan phase uses deep-copied, trimmed messages only.
@@ -825,7 +824,7 @@ class ExecutePromptLedgerConfig(BaseModel):
 
 
 class LoopCheckpointConfig(BaseModel):
-    """Loop checkpoint and recovery configuration (RFC-203).
+    """Loop checkpoint and recovery configuration.
 
     Args:
         progressive: Save checkpoint after each step/goal completion.
@@ -845,7 +844,7 @@ class LoopCheckpointConfig(BaseModel):
 
 
 class LoopCheckpointAsyncConfig(BaseModel):
-    """Async checkpoint write configuration (RFC-803 Phase 6).
+    """Async checkpoint write configuration.
 
     Checkpoint writes are always coalesced and non-blocking. PostgreSQL uses the
     process-scoped persistence writer; SQLite uses a per-manager flush worker.
@@ -910,12 +909,12 @@ class LoopConcurrencyConfig(BaseModel):
     )
     checkpoint: LoopCheckpointAsyncConfig = Field(
         default_factory=LoopCheckpointAsyncConfig,
-        description="Async checkpoint write configuration (RFC-803 Phase 6)",
+        description="Async checkpoint write configuration",
     )
 
 
 class OutputStreamingConfig(BaseModel):
-    """Configuration for output streaming behavior (RFC-614).
+    """Configuration for output streaming behavior.
 
     Controls how goal_completion synthesis and other assistant outputs are
     delivered from daemon to client.
@@ -1077,7 +1076,7 @@ class OutputStreamingConfig(BaseModel):
 
 
 class ContextEngineConfig(BaseModel):
-    """Context Engine integration for StrangeLoop (RFC-624 Phase 4).
+    """Context Engine integration for StrangeLoop.
 
     ContextEngine is always active and replaces PlanManager, LoopWorkingMemory,
     and GoalContextManager as the internal state backend. The existing prompt
@@ -1093,7 +1092,7 @@ class ContextEngineConfig(BaseModel):
 
 
 class CompletionRulesConfig(BaseModel):
-    """Declarative completion heuristics (RFC-624)."""
+    """Declarative completion heuristics."""
 
     dag_dependency_threshold: int = Field(default=3, ge=1)
     low_success_rate_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
@@ -1125,7 +1124,7 @@ class StrangeLoopRulesConfig(BaseModel):
 
 
 class DecomposeLoopConfig(BaseModel):
-    """Recursive step decomposition budgets (RFC-904 / IG-751).
+    """Recursive step decomposition budgets.
 
     Decomposition is always on for StrangeLoop step THREADS; this object only
     holds budgets and reconcile model role.
@@ -1164,7 +1163,7 @@ class DecomposeLoopConfig(BaseModel):
 
 
 class EvalLoopConfig(BaseModel):
-    """Coverage Eval thread limits (RFC-905)."""
+    """Coverage Eval thread limits."""
 
     max_eval_rounds: int = Field(
         default=10,
@@ -1175,7 +1174,7 @@ class EvalLoopConfig(BaseModel):
 
 
 class StrangeLoopConfig(BaseModel):
-    """Configuration for agent loop execution mode (RFC-201, unified config).
+    """Configuration for agent loop execution mode.
 
     Unified configuration consolidating agentic behavior fields and loop execution controls.
     Behavior fields are placed directly under loop.* for easy access.
@@ -1199,17 +1198,17 @@ class StrangeLoopConfig(BaseModel):
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
         final_response: Whether to always synthesize a final CoreAgent report (default),
             reuse last Execute assistant text when structurally eligible, or use auto heuristics.
-        working_memory: Working memory / spill configuration (RFC-203).
+        working_memory: Working memory / spill configuration.
         report_output: Goal report display and synthesis limits.
         output_streaming: Enable streaming mode for all AI outputs (true=stream, false=batch).
         plan_prompt_ledger: Ledger projection caps for Plan-phase LLM prompts.
         execute_prompt_ledger: Caps for execute-step CoreAgent ledger projection.
-        checkpoint: Progressive checkpoint persistence and startup resume (RFC-203).
+        checkpoint: Progressive checkpoint persistence and startup resume.
         concurrency: Parallelism caps and step scheduling strategy.
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
         rules: Declarative completion and scenario thresholds.
-        decompose: Recursive step decomposition budgets (RFC-904); always on.
-        eval: Coverage Eval thread limits (RFC-905); always on when required.
+        decompose: Recursive step decomposition budgets; always on.
+        eval: Coverage Eval thread limits; always on when required.
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1395,7 +1394,7 @@ class StrangeLoopConfig(BaseModel):
             "in-place compaction is triggered."
         ),
     )
-    """RFC-224: Trigger threshold for context compaction (0.80 = 80%)."""
+    """ : Trigger threshold for context compaction (0.80 = 80%)."""
 
     output_streaming: OutputStreamingConfig = Field(
         default_factory=OutputStreamingConfig,
@@ -1449,11 +1448,11 @@ class StrangeLoopConfig(BaseModel):
 
     decompose: DecomposeLoopConfig = Field(
         default_factory=DecomposeLoopConfig,
-        description="Recursive step decomposition budgets (RFC-904; always on).",
+        description="Recursive step decomposition budgets.",
     )
     eval: EvalLoopConfig = Field(
         default_factory=EvalLoopConfig,
-        description="Coverage Eval thread limits (RFC-905; required predicates only).",
+        description="Coverage Eval thread limits.",
     )
 
 
@@ -1464,7 +1463,7 @@ class StrangeLoopConfig(BaseModel):
 
 
 class ToolApprovalRule(BaseModel):
-    """One deny or allow rule for tool-action approval (RFC-622 §9b).
+    """One deny or allow rule for tool-action approval.
 
     Pattern syntax (adapted from Claude Code's ``shellRuleMatching``):
 

@@ -1,6 +1,6 @@
 """WhatsApp channel implementation using Node.js bridge.
 
-Migrated from nanoBot with adaptations for soothe-daemon Channel architecture (RFC-620).
+Migrated from nanoBot with adaptations for soothe-daemon Channel architecture.
 """
 
 from __future__ import annotations

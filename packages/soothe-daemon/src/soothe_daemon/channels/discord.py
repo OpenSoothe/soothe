@@ -1,6 +1,6 @@
 """Discord channel implementation using discord.py.
 
-Migrated from nanoBot with adaptations for soothe-daemon Channel architecture (RFC-620).
+Migrated from nanoBot with adaptations for soothe-daemon Channel architecture.
 """
 
 from __future__ import annotations
@@ -327,7 +327,7 @@ if DISCORD_AVAILABLE:
 class DiscordChannel(Channel):
     """Discord channel using discord.py.
 
-    Implements RFC-620 Channel interface with streaming support.
+    Implements Channel interface with streaming support.
     """
 
     name = "discord"

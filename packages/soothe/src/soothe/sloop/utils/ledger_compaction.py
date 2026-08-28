@@ -1,6 +1,6 @@
 """Compact recorded plan-phase ledger turns before they re-enter the next prompt.
 
-The RFC-214 ledger records plan-generate turns as (LoopHumanMessage, LoopAIMessage)
+The ledger records plan-generate turns as (LoopHumanMessage, LoopAIMessage)
 pairs so later turns can see prior reasoning. Plan-assess pairs are no longer
 recorded ; assess continuity uses CE ``GoalNode.last_assessment``.
 

@@ -1,6 +1,6 @@
 """StrangeLoop checkpoint persistence manager.
 
-RFC-215: StrangeLoop Persistence Backend Architecture
+ : StrangeLoop Persistence Backend Architecture
 Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
 """
 
@@ -139,7 +139,7 @@ class StrangeLoopCheckpointPersistenceManager:
 
         Args:
             loop_id: StrangeLoop identifier.
-            current_thread_id: Current active thread ID (== loop_id per RFC-223).
+            current_thread_id: Current active thread ID (== loop_id).
             status: Loop status (default: "running").
         """
         await self._backend.register_loop(loop_id, current_thread_id, status)
@@ -163,7 +163,7 @@ class StrangeLoopCheckpointPersistenceManager:
 
         Args:
             loop_id: Loop identifier.
-            force_status: When True, bypass the RFC-225 goal-count guard so
+            force_status: When True, bypass the goal-count guard so
                 an authoritative caller (stale-loop reconciler) can demote a
                 confirmed-dead zombie loop's ``status`` even when it has goals.
             **fields: Column names and values to update.
@@ -287,7 +287,7 @@ class StrangeLoopCheckpointPersistenceManager:
         status: str = "running",
         started_at: datetime | None = None,
     ) -> None:
-        """Save goal index entry (RFC-626)."""
+        """Save goal index entry."""
         started_at_iso = (started_at or datetime.now(UTC)).isoformat()
         await self._backend.save_goal_record(goal_id, loop_id, thread_id, status, started_at_iso)
         logger.debug(
@@ -307,7 +307,7 @@ class StrangeLoopCheckpointPersistenceManager:
         tokens_used: int = 0,
         completed_at: datetime | None = None,
     ) -> None:
-        """Update goal index entry with execution metrics (RFC-626)."""
+        """Update goal index entry with execution metrics."""
         completed_at_iso = (completed_at or datetime.now(UTC)).isoformat()
         await self._backend.update_goal_record(
             goal_id,

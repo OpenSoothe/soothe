@@ -1,4 +1,4 @@
-"""System and user prompts for the veritas auto-answerer (RFC-622)."""
+"""System and user prompts for the veritas auto-answerer."""
 
 from __future__ import annotations
 
@@ -191,7 +191,7 @@ def build_veritas_user_prompt(
 ) -> str:
     """Render the per-request context for veritas.
 
-    For ``tool_approval`` origin (RFC-622 §9b), a slim prompt is used: only
+    For ``tool_approval`` origin, a slim prompt is used: only
     tool name, args, user request, and goal description. No AGENTS.md, no
     prior clarifications, no recent step outputs. This keeps the LLM cost
     minimal for the ambiguous-case tail that reaches Stage 4.
@@ -279,7 +279,7 @@ def build_veritas_user_prompt(
 
 
 def _build_tool_approval_user_prompt(request: ClarificationRequest) -> str:
-    """Slim prompt for tool-approval fallback (RFC-622 §9b).
+    """Slim prompt for tool-approval fallback.
 
     Only includes what's needed for a safety judgment:
     - Tool name + full args (from ``metadata.action_requests``)

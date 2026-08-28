@@ -1,4 +1,4 @@
-"""Interactive (TUI relay) clarification policy (RFC-622).
+"""Interactive (TUI relay) clarification policy.
 
 The policy pauses the loop graph at a LangGraph ``interrupt(...)`` call. The
 checkpoint snapshot captures the pending question, so TUI close/reopen and
@@ -8,7 +8,7 @@ and the policy unwraps it into a :class:`ClarificationAnswer`.
 
 ``await_clarification`` owns the primary ``clarification_requested`` emit
 (with the correct mode). This policy only re-announces when used as an
-auto→manual upgrade (RFC-623 structured-output failure), via
+auto→manual upgrade, via
 :meth:`answer_as_manual_fallback`.
 """
 
@@ -42,7 +42,7 @@ class InteractiveClarificationPolicy:
     """Relay clarifications to a human via the TUI; loop-level durable pause.
 
     When a ``ToolApprovalPipeline`` is attached (manual clarification mode,
-    RFC-622 §9b), it pre-filters ``tool_approval`` requests: deny/safety
+    ), it pre-filters ``tool_approval`` requests: deny/safety
     stages always auto-reject dangerous actions without asking the human,
     and allow rules auto-approve when ``manual_allow_rules`` is set
     (``tool_approval.manual_scope: ambiguous_only``). Only rule-unresolved
@@ -63,7 +63,7 @@ class InteractiveClarificationPolicy:
         self._manual_allow_rules = manual_allow_rules
 
     def bind_emit(self, emit: EmitFn) -> None:
-        """Attach the runtime emit callback (RFC-623 interactive fallback wiring)."""
+        """Attach the runtime emit callback."""
         self._emit = emit
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
@@ -81,8 +81,8 @@ class InteractiveClarificationPolicy:
     async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Re-announce as ``mode=manual`` then pause (auto→manual upgrade).
 
-        Used when veritas structured output fails and a human is attached
-        (RFC-623). The earlier ``await_clarification`` emit used ``mode=auto``.
+                Used when veritas structured output fails and a human is attached
+        The earlier ``await_clarification`` emit used ``mode=auto``.
         """
         return await self._answer(request, announce=True)
 

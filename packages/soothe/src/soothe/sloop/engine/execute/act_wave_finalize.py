@@ -1,4 +1,4 @@
-"""Act-wave finalize resolution (,, RFC-227).
+"""Act-wave finalize resolution.
 
 This module handles the computation of visible assistant text for Execute waves.
 After each Execute wave, auto goal completion and headless replay read the
@@ -37,7 +37,7 @@ LAST_TOOL_RESULT_HEAD_CHARS = 500
 
 
 def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
-    """Return a compact head string for a single AIMessage tool-call (RFC-227).
+    """Return a compact head string for a single AIMessage tool-call.
 
     Picks the first non-empty argument value (in declaration order), stringifies
     it on one line, strips, and caps at 120 chars. Returns ``""`` when no usable
@@ -64,7 +64,7 @@ def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
 def _aggregate_tool_calls_from_step_messages(
     messages: list[BaseMessage],
 ) -> list[dict[str, Any]]:
-    """Aggregate tool calls across streamed AI message chunks (RFC-227).
+    """Aggregate tool calls across streamed AI message chunks.
 
     The executor's stream collector appends raw ``AIMessageChunk`` deltas to
     ``step_messages`` — each chunk's own ``tool_calls`` is partial: the first

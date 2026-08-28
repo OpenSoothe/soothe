@@ -1,7 +1,7 @@
 """Nested config schemas for ``SootheDaemonConfig``.
 
-Holds ``WebSocketConfig`` / ``TransportConfig`` (RFC-0013)
-plus ``ChannelsConfig`` (RFC-620) for unified channel architecture.
+Holds ``WebSocketConfig`` / ``TransportConfig``
+plus ``ChannelsConfig`` for unified channel architecture.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class WebSocketConfig(BaseModel):
         cors_origins: Allowed CORS origins.
         max_frame_size: Maximum WebSocket frame size in bytes.
         heartbeat_interval_ms: Interval (ms) for protocol-level ping/pong heartbeat
-            declared in the connection_ack handshake (RFC-450 §8.3). Default 30000.
+            declared in the connection_ack handshake. Default 30000.
         heartbeat_timeout_ms: If no pong is received within this window (ms), the
             connection is considered dead and closed. Default 10000.
     """
@@ -52,7 +52,7 @@ class WebSocketConfig(BaseModel):
     )
     heartbeat_interval_ms: int = Field(
         default=30000,
-        description="Protocol-level heartbeat interval in milliseconds (RFC-450 §8.3).",
+        description="Protocol-level heartbeat interval in milliseconds.",
     )
     heartbeat_timeout_ms: int = Field(
         default=10000,
@@ -73,7 +73,7 @@ class TransportConfig(BaseModel):
 
 
 class ChannelsConfig(BaseModel):
-    """Unified channel configuration (RFC-620).
+    """Unified channel configuration.
 
     Replaces TransportConfig with extensible channel architecture.
     Built-in WebSocket channel plus external plugins.
@@ -105,7 +105,7 @@ class ChannelsConfig(BaseModel):
 
 
 class WorkerPoolConfig(BaseModel):
-    """Persistent worker pool configuration (RFC-221 enhancement).
+    """Persistent worker pool configuration.
 
     Pre-warms N worker processes at daemon startup to eliminate ~8s per-query
     overhead (subprocess spawn + SootheRunner init). Workers create fresh
@@ -217,7 +217,7 @@ class WorkerPoolConfig(BaseModel):
 
 
 class DistributedConfig(BaseModel):
-    """Distributed loop execution configuration (RFC-221).
+    """Distributed loop execution configuration.
 
     Controls whether loops run in isolated subprocesses (local multiprocessing)
     or Ray actors (distributed cluster). Worker pool is for local mode;

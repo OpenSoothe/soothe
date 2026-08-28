@@ -1,4 +1,4 @@
-"""Thread lifecycle manager for RFC-452.
+"""Thread lifecycle manager for.
 
 Merged from core/thread/ package - only consumer is SootheRunner.
 """

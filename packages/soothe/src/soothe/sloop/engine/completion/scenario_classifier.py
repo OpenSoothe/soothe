@@ -1,4 +1,4 @@
-"""Scenario classifier for synthesis generation (RFC-616,).
+"""Scenario classifier for synthesis generation.
 
 Determines synthesis style from goal + intent + execution pattern using a fast
 model with structured output. Outline ``sections`` are suggestions (or empty

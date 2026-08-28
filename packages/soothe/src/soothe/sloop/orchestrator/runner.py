@@ -1,4 +1,4 @@
-"""Invoke the compiled Strange Loop graph (RFC-220).
+"""Invoke the compiled Strange Loop graph.
 
 Langfuse: outer ``ainvoke`` receives the LangChain callback handler so the
 Loop Graph run nests planner / CoreAgent spans under one trace; ``langfuse_session_id`` is the

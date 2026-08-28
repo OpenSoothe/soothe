@@ -1,4 +1,4 @@
-"""Planning-specific models for the Context Engine planning submodule (RFC-624 Phase 3c)."""
+"""Planning-specific models for the Context Engine planning submodule."""
 
 from __future__ import annotations
 

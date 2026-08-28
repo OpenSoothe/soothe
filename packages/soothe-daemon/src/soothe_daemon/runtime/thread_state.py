@@ -4,7 +4,7 @@ Registry keys are LangGraph / durability **checkpoint ids** (historically called
 ``thread_id`` in code). **Client routing** uses **``loop_id``**; this module maps
 checkpoint ↔ loop via ``set_thread_loop`` / ``get_thread_loop``.
 
-RFC-307: Identity context (user_id, aksk_id) is stored here for workspace isolation.
+ : Identity context (user_id, aksk_id) is stored here for workspace isolation.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from typing import Any
 class ThreadState:
     """Mutable state for a single LangGraph checkpoint row (or draft).
 
-    RFC-307: user_id and aksk_id populated by IdentityMiddleware for
+     : user_id and aksk_id populated by IdentityMiddleware for
     workspace isolation based on authenticated identity.
     """
 
@@ -162,7 +162,7 @@ class ThreadStateRegistry:
     ) -> None:
         """Set user context from IdentityMiddleware.
 
-        RFC-307 §Middleware Integration: user_id populated for workspace isolation.
+        Integration: user_id populated for workspace isolation.
 
         Args:
             thread_id: Thread identifier.
@@ -176,7 +176,7 @@ class ThreadStateRegistry:
     def get_user_id(self, thread_id: str) -> str | None:
         """Return user_id for *thread_id*.
 
-        RFC-307 §Middleware Integration.
+        Integration.
 
         Args:
             thread_id: Thread identifier.
@@ -190,7 +190,7 @@ class ThreadStateRegistry:
     def get_aksk_id(self, thread_id: str) -> str | None:
         """Return aksk_id for *thread_id*.
 
-        RFC-307 §Middleware Integration.
+        Integration.
 
         Args:
             thread_id: Thread identifier.

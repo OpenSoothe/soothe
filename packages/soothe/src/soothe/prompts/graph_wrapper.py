@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
 
 GraphCallKind = Literal["synthesis", "step_completion"]
-"""Discriminator for LLM calls assembled by this wrapper (RFC-904)."""
+"""Discriminator for LLM calls assembled by this wrapper."""
 
 
 @dataclass
@@ -52,7 +52,7 @@ class GraphPromptWrapper:
     """Prompt injection and message projection for synthesis / step_completion.
 
     Assembles ``[SystemMessage, projected_ledger, HumanMessage]`` (or the
-    step-completion triple) so RFC-904 nodes share projection and wiring.
+    step-completion triple) so nodes share projection and wiring.
 
     Usage::
 

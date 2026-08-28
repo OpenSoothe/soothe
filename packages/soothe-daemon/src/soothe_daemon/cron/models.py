@@ -1,4 +1,4 @@
-"""Cron Service models (RFC-229).
+"""Cron Service models.
 
 Dataclasses and enums for scheduled job representation.
 """

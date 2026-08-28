@@ -1,4 +1,4 @@
-"""Internal EventBus for StrangeLoop, ContextEngine, and AutopilotService coordination (RFC-222).
+"""Internal EventBus for StrangeLoop, ContextEngine, and AutopilotService coordination.
 
 This module provides an in-memory async event dispatch system for
 internal coordination between StrangeLoop, ContextEngine, and AutopilotService.

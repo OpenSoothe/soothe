@@ -1,4 +1,4 @@
-"""IdentityProtocol implementation. RFC-307.
+"""IdentityProtocol implementation..
 
 Provides AKSK-based authentication and JWT token management for soothe-daemon.
 Uses existing PersistenceProtocol backend for storage (tables added to same DB).
@@ -54,7 +54,7 @@ T = TypeVar("T")
 class IdentityService(IdentityProtocol):
     """IdentityProtocol implementation with SQLite or PostgreSQL storage.
 
-    RFC-307 §Protocol Interface implementation.
+    Interface implementation.
 
     Backend follows ``persistence.default_backend`` (unified persistence rule):
     SQLite file or PostgreSQL ``soothe_metadata`` identity_* tables.
@@ -84,7 +84,7 @@ class IdentityService(IdentityProtocol):
             enabled: Service enabled status.
             postgres_dsn: When set, use PostgreSQL instead of SQLite.
 
-        RFC-307 §Configuration.
+
         """
         if postgres_dsn:
             self._backend = "postgresql"
@@ -225,7 +225,7 @@ class IdentityService(IdentityProtocol):
     # -----------------------------------------------------------------------
 
     def create_user(self, user_id: str, metadata: dict | None = None) -> User:
-        """Create a new user. RFC-307 §User."""
+        """Create a new user.."""
         return asyncio.get_event_loop().run_until_complete(
             self._create_user_async(user_id, metadata)
         )
@@ -362,7 +362,7 @@ class IdentityService(IdentityProtocol):
     # -----------------------------------------------------------------------
 
     def create_aksk(self, user_id: str, expiry_days: int | None = None) -> AKSKPair:
-        """Create AKSK pair for user. RFC-307 §AKSKPair."""
+        """Create AKSK pair for user.."""
         return asyncio.get_event_loop().run_until_complete(
             self._create_aksk_async(user_id, expiry_days)
         )
@@ -546,7 +546,7 @@ class IdentityService(IdentityProtocol):
     # -----------------------------------------------------------------------
 
     def authenticate(self, access_key: str, secret_key: str) -> AuthResult | None:
-        """Authenticate with AKSK credentials. RFC-307 §Authentication Flow."""
+        """Authenticate with AKSK credentials. Flow."""
         return asyncio.get_event_loop().run_until_complete(
             self._authenticate_async(access_key, secret_key)
         )
@@ -652,7 +652,7 @@ class IdentityService(IdentityProtocol):
         conn.commit()
 
     def validate_token(self, token: str) -> TokenClaims | None:
-        """Validate JWT token. RFC-307 §Authentication Flow."""
+        """Validate JWT token. Flow."""
         return asyncio.get_event_loop().run_until_complete(self._validate_token_async(token))
 
     async def _validate_token_async(self, token: str) -> TokenClaims | None:
@@ -678,7 +678,7 @@ class IdentityService(IdentityProtocol):
         return cursor.fetchone() is not None
 
     def refresh_token(self, refresh_token: str) -> TokenRefreshResult | None:
-        """Refresh tokens using refresh_token. RFC-307 §Token Refresh Flow."""
+        """Refresh tokens using refresh_token. Refresh Flow."""
         return asyncio.get_event_loop().run_until_complete(self._refresh_token_async(refresh_token))
 
     async def _refresh_token_async(self, refresh_token: str) -> TokenRefreshResult | None:
@@ -914,7 +914,7 @@ class IdentityService(IdentityProtocol):
     def map_external_identity(
         self, channel: str, sender_id: str, user_id: str
     ) -> ExternalIdentityMapping:
-        """Map external channel sender to soothe user. RFC-307 §ExternalIdentityMapping."""
+        """Map external channel sender to soothe user.."""
         return asyncio.get_event_loop().run_until_complete(
             self._map_external_async(channel, sender_id, user_id)
         )
@@ -1007,7 +1007,7 @@ class IdentityService(IdentityProtocol):
         conn.commit()
 
     def resolve_identity(self, channel: str, sender_id: str) -> str | None:
-        """Resolve external sender to user_id. RFC-307 §External Channel Resolution."""
+        """Resolve external sender to user_id. Channel Resolution."""
         return asyncio.get_event_loop().run_until_complete(
             self._resolve_identity_async(channel, sender_id)
         )
@@ -1232,7 +1232,7 @@ def _apply_identity_schema(conn: sqlite3.Connection) -> None:
 def initialize_identity_tables_sync(db_path: Path) -> None:
     """Initialize identity tables via process-scoped ``SqliteStoreRuntime``.
 
-    RFC-307 §Storage Schema. Hard cut: ``databases/identity.db`` layout (RFC-801).
+    Schema. Hard cut: ``databases/identity.db`` layout.
 
     Args:
         db_path: Path to SQLite database file.

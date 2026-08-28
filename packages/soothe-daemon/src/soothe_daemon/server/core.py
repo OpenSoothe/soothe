@@ -227,7 +227,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._config_reload_enabled = False
 
     def _create_identity_service(self) -> Any:
-        """Create IdentityService from daemon identity config (RFC-307).
+        """Create IdentityService from daemon identity config.
 
         Returns:
             IdentityService instance configured with JWT key and SQLite backend.
@@ -281,7 +281,7 @@ class SootheDaemon(DaemonHandlersMixin):
         )
 
     def _build_identity_runtime(self) -> Any | None:
-        """Build identity runtime bundle for agent/runner injection (RFC-307).
+        """Build identity runtime bundle for agent/runner injection.
 
         Returns:
             IdentityRuntime when identity service is enabled, else None.
@@ -1015,7 +1015,7 @@ class SootheDaemon(DaemonHandlersMixin):
         accept_proto: list[str] | None = None,
         client_capabilities: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Build a ``connection_ack`` message per RFC-450 §8.2.
+        """Build a ``connection_ack`` message §8.2.
 
         Negotiates protocol version and capabilities, then returns the
         ack envelope with daemon readiness state and heartbeat interval.
@@ -1537,7 +1537,7 @@ class SootheDaemon(DaemonHandlersMixin):
         This prevents headless clients from timing out while the LLM is processing
         long requests. The heartbeat is only broadcast when a query is running.
 
-        RFC-0013: Heartbeat is broadcast every 5 seconds.
+         : Heartbeat is broadcast every 5 seconds.
         Skip heartbeat if stream is actively flowing (last broadcast < 5s).
         """
         from datetime import UTC, datetime
@@ -1932,7 +1932,7 @@ class SootheDaemon(DaemonHandlersMixin):
     async def _dispatch_with_semaphore(self, client_id: str, msg: dict[str, Any]) -> None:
         """Dispatch message with semaphore control and proper cleanup.
 
-        Validates the message at the transport boundary (RFC-450 §6.4) before
+        Validates the message at the transport boundary before
         dispatching to the router.  This is the final defense-in-depth check;
         transport paths (WebSocket channel, asyncio TCP) also validate before
         reaching this method.

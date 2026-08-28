@@ -1,4 +1,4 @@
-"""PostgreSQL backend for StrangeLoop persistence (RFC-612).
+"""PostgreSQL backend for StrangeLoop persistence.
 
 Backend-agnostic implementation supporting full StrangeLoop persistence operations.
 Uses shared soothe_checkpoints database with goal_records.
@@ -46,7 +46,7 @@ def _is_missing_hot_cold_schema(exc: BaseException) -> bool:
 
 
 class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
-    """PostgreSQL backend for StrangeLoop persistence (RFC-612).
+    """PostgreSQL backend for StrangeLoop persistence.
 
     Backend-agnostic implementation using shared soothe_checkpoints database
     with separate tables for checkpoints, anchors, branches, and goals.
@@ -455,7 +455,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         Args:
             loop_id: StrangeLoop identifier.
-            current_thread_id: Current active thread ID (== loop_id per RFC-223).
+            current_thread_id: Current active thread ID (== loop_id).
             status: Loop status (default: "running").
         """
         checkpoint_data = {
@@ -543,7 +543,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> None:
         """Partially update loop metadata fields with retry.
 
-        RFC-225: ``status`` is owned by ``StrangeLoop`` once the loop has any
+         : ``status`` is owned by ``StrangeLoop`` once the loop has any
         ``goal_history``. Status writes from the daemon path (pre-query
         bookkeeping) are silently dropped for established loops to avoid
         clobbering ``finalize_goal``'s ``"idle"`` back to ``"running"``,
@@ -553,7 +553,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         Args:
             loop_id: Loop identifier.
-            force_status: When True, bypass the RFC-225 goal-count guard so
+            force_status: When True, bypass the goal-count guard so
                 the stale-loop reconciler can demote a confirmed-dead zombie
                 loop to ``idle`` even when it already has goals.
             **fields: Column names and values to update.

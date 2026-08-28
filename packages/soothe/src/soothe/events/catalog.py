@@ -3,7 +3,7 @@
 This module is the single source of truth for host event type strings and
 Pydantic event models, plus registry registration and emission helpers.
 
-Client-facing: ``soothe.<domain>.<component>.<action>`` (RFC-0015).
+Client-facing: ``soothe.<domain>.<component>.<action>``.
 Internal (daemon/worker only, never WebSocket broadcast):
 ``soothe.internal.<component>.<action>``.
 
@@ -227,7 +227,7 @@ class LoopCompletedEvent(LifecycleEvent):
 class DaemonHeartbeatEvent(LifecycleEvent):
     """Heartbeat event broadcast by daemon to keep clients alive during long operations.
 
-    RFC-0013: Daemon broadcasts heartbeat every 5 seconds to subscribed clients.
+     : Daemon broadcasts heartbeat every 5 seconds to subscribed clients.
     This prevents client timeout when LLM operations take longer than the client's
     query start timeout (default 20 seconds).
     """
@@ -382,7 +382,7 @@ class WiredSubagentCancelledEvent(LifecycleEvent):
 
 
 class StrangeLoopStepStartedEvent(LifecycleEvent):
-    """Level 2: Step description in three-level tree (RFC-0020)."""
+    """Level 2: Step description in three-level tree."""
 
     type: Literal["soothe.cognition.strange_loop.step.started"] = (
         "soothe.cognition.strange_loop.step.started"
@@ -402,7 +402,7 @@ class StrangeLoopStepQueuedEvent(LifecycleEvent):
 
 
 class StrangeLoopStepCompletedEvent(LifecycleEvent):
-    """Level 3: Step result in three-level tree (RFC-0020).
+    """Level 3: Step result in three-level tree.
 
     For ``ask_user`` steps resolved by veritas / interactive relay, the optional
     ``clarification`` field carries the questions, the answers, the answer
@@ -423,7 +423,7 @@ class StrangeLoopStepCompletedEvent(LifecycleEvent):
 
 
 class StrangeLoopContextCompactionEvent(LifecycleEvent):
-    """Context window compaction event (RFC-224).
+    """Context window compaction event.
 
     Emitted when automatic context compaction occurs to stay within
     configured threshold. Provides visibility into context management
@@ -507,7 +507,7 @@ class GoalFailedEvent(ProtocolEvent):
 
 
 class GoalRemovedEvent(ProtocolEvent):
-    """Goal removed from DAG (RFC-625).
+    """Goal removed from DAG.
 
     Emitted when a goal is removed from the ContextEngine DAG,
     typically during cleanup or restructuring operations.
@@ -519,7 +519,7 @@ class GoalRemovedEvent(ProtocolEvent):
 
 
 class GoalDecomposedEvent(ProtocolEvent):
-    """Goal decomposed into sub-goals (RFC-625).
+    """Goal decomposed into sub-goals.
 
     Emitted when a complex goal is decomposed into multiple sub-goals
     by the AutopilotMonitor or DAG verification process.
@@ -562,7 +562,7 @@ class GoalDeferredEvent(ProtocolEvent):
 
 
 class AutopilotModeSwitchedEvent(ProtocolEvent):
-    """Autopilot mode switched (RFC-625).
+    """Autopilot mode switched.
 
     Emitted when autopilot mode is toggled on/off for a loop.
     Used by TUI and other subscribers to update their state.

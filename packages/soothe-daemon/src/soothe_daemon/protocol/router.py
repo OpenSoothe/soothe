@@ -118,15 +118,15 @@ _METHOD_TO_HANDLER: dict[str, str] = {
 def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     """Normalize optional runner fields for ``loop_input`` messages.
 
-    Args:
-        msg: Raw client message dict.
+        Args:
+            msg: Raw client message dict.
 
-    Returns:
-        Keys to merge into the internal queue payload: ``preferred_subagent``,
-        ``intake_scope``, ``model``, ``model_params``, ``router_profile``,
-        ``intent_hint`` (normalized to lowercase when set), ``clarification_mode``
-        (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``),
-        ``interaction_mode`` (normalized to ``"agent"``/``"ask"``/``"plan"`` or ``None``).
+        Returns:
+            Keys to merge into the internal queue payload: ``preferred_subagent``,
+            ``intake_scope``, ``model``, ``model_params``, ``router_profile``,
+            ``intent_hint`` (normalized to lowercase when set), ``clarification_mode``
+    ,
+            ``interaction_mode`` (normalized to ``"agent"``/``"ask"``/``"plan"`` or ``None``).
     """
     preferred_subagent = msg.get("preferred_subagent")
     preferred_norm = (
@@ -290,7 +290,7 @@ class MessageRouter:
         *,
         proto: str = "1",
     ) -> None:
-        """Send a protocol-1 response envelope to a client (RFC-450 §9.1).
+        """Send a protocol-1 response envelope to a client.
 
         Wraps ``result`` in the standard ``{proto, type:'response', result, id}``
         envelope and dispatches via ``d._send_client_message``. When
@@ -321,7 +321,7 @@ class MessageRouter:
         *,
         proto: str = "1",
     ) -> None:
-        """Send a protocol-1 ``next`` event for an active subscription (RFC-450 §9.4).
+        """Send a protocol-1 ``next`` event for an active subscription.
 
         Streaming/subscription events use ``{proto, type:'next', payload, id}``
         where ``id`` matches the original subscription request's id. The stream
@@ -428,7 +428,7 @@ class MessageRouter:
         return flat
 
     async def _dispatch_batch(self, client_id: Any, batch: list[Any]) -> None:
-        """Process a batch request array (RFC-450 §5.6).
+        """Process a batch request array.
 
         Each item is dispatched independently. Responses are collected for items
         with an ``id`` field (notifications produce no response). Empty or invalid
@@ -566,18 +566,18 @@ class MessageRouter:
     async def dispatch(self, client_id: Any, msg: dict[str, Any] | list[Any]) -> None:
         """Handle a single client message or batch via the ``HANDLER_REGISTRY`` dispatch table.
 
-        Performs a dict lookup by ``msg.get("type")`` instead of a linear
-        if-chain.  Unknown types receive ``-32601 METHOD_NOT_FOUND``; param
-        validation failures receive ``-32602 INVALID_PARAMS``; handler-raised
-        ``RpcProtocolError`` exceptions are serialized to the standard error
-        envelope.
+                Performs a dict lookup by ``msg.get("type")`` instead of a linear
+                if-chain.  Unknown types receive ``-32601 METHOD_NOT_FOUND``; param
+                validation failures receive ``-32602 INVALID_PARAMS``; handler-raised
+                ``RpcProtocolError`` exceptions are serialized to the standard error
+                envelope.
 
-        RFC-450 §5.6: Batch requests (JSON arrays) are processed by dispatching
-        each item independently and collecting responses into an array.
+        6: Batch requests (JSON arrays) are processed by dispatching
+                each item independently and collecting responses into an array.
 
-        Args:
-            client_id: Client connection identifier.
-            msg: Decoded message dict or batch array.
+                Args:
+                    client_id: Client connection identifier.
+                    msg: Decoded message dict or batch array.
         """
         # Set client_id in logging context for full ID in daemon.log
         if isinstance(client_id, str):
@@ -813,7 +813,7 @@ class MessageRouter:
                 ws_chan._mark_pong_received(client_id)
 
     async def _handle_connection_init(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``connection_init`` handshake message (RFC-450 §8.2).
+        """Handle ``connection_init`` handshake message.
 
         Parses client-declared protocol versions and capabilities, negotiates
         with the daemon's supported set, and responds with ``connection_ack``.
@@ -861,7 +861,7 @@ class MessageRouter:
         )
 
     async def _handle_ping(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``ping`` heartbeat message (RFC-450 §8.3).
+        """Handle ``ping`` heartbeat message.
 
         Responds with a ``pong`` message.
 
@@ -874,7 +874,7 @@ class MessageRouter:
         await d._send_client_message(client_id, pong)
 
     async def _handle_pong(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``pong`` heartbeat acknowledgment (RFC-450 §8.3).
+        """Handle ``pong`` heartbeat acknowledgment.
 
         Pong is an acknowledgment of our ping; no response is sent.  This method
         records liveness via ``_mark_pong_received``.
@@ -975,7 +975,7 @@ class MessageRouter:
         await d._loop_input_dispatcher.enqueue(active_loop, req)
 
     async def _handle_auth(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``auth`` WebSocket message (RFC-307 §WebSocket AKSK Flow).
+        """Handle ``auth`` WebSocket message.
 
         Args:
             client_id: Client identifier.
@@ -1008,7 +1008,7 @@ class MessageRouter:
         await self._send_response(client_id, request_id, result)
 
     async def _handle_auth_refresh(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle ``auth_refresh`` WebSocket message (RFC-307 §Token Refresh Flow).
+        """Handle ``auth_refresh`` WebSocket message.
 
         Args:
             client_id: Client identifier.
@@ -1402,7 +1402,7 @@ class MessageRouter:
     # ---------------------------------------------------------------------------
 
     async def _handle_loop_list(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_list RPC request (RFC-504).
+        """Handle loop_list RPC request.
 
         Args:
             client_id: Client connection identifier.
@@ -1475,7 +1475,7 @@ class MessageRouter:
         )
 
     async def _handle_loop_get(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_get RPC request (RFC-504).
+        """Handle loop_get RPC request.
 
         Args:
             client_id: Client connection identifier.
@@ -1534,7 +1534,7 @@ class MessageRouter:
         )
 
     async def _handle_loop_delete(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_delete RPC request (RFC-504).
+        """Handle loop_delete RPC request.
 
         Args:
             client_id: Client connection identifier.
@@ -1591,7 +1591,7 @@ class MessageRouter:
             )
 
     async def _handle_loop_reattach(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_reattach RPC request (RFC-411).
+        """Handle loop_reattach RPC request.
 
         Reconstruct event history and replay to client for loop reattachment.
 
@@ -1640,7 +1640,7 @@ class MessageRouter:
         await handle_loop_reattach(loop_id, d, client_id)
 
     async def _handle_loop_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_subscribe RPC request (RFC-503).
+        """Handle loop_subscribe RPC request.
 
         Subscribe client to loop topic for real-time event streaming.
         Used by loop continue and loop attach commands.
@@ -1709,7 +1709,7 @@ class MessageRouter:
         schedule_loop_reattach(str(loop_id), d, client_id)
 
     async def _handle_loop_detach(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_detach RPC request (RFC-503).
+        """Handle loop_detach RPC request.
 
         Unsubscribe client from loop events while loop continues running.
         Saves detachment checkpoint for later reattachment.
@@ -1767,7 +1767,7 @@ class MessageRouter:
         )
 
     async def _handle_loop_new(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle loop_new RPC request (RFC-503).
+        """Handle loop_new RPC request.
 
         Create fresh loop with new loop_id for new query/conversation. If the client
         provides a ``workspace`` field (e.g., user's CWD), validate it and record it
@@ -2096,7 +2096,7 @@ class MessageRouter:
         )
 
     async def _handle_loop_messages(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Return persisted conversation / activity rows for a loop (RFC-503 loop-first).
+        """Return persisted conversation / activity rows for a loop.
 
         Resolves the loop's bound LangGraph checkpoint id from metadata, then reads
         ThreadLogger rows via the runner (same storage as ``get_persisted_thread_messages``).
@@ -2290,7 +2290,7 @@ class MessageRouter:
         client_id: Any,
         msg: dict[str, Any],
     ) -> None:
-        """Hot-swap the RFC-622 clarification mode on a running goal.
+        """Hot-swap the clarification mode on a running goal.
 
         Forwards ``mode`` to the active loop runner's ``set_clarification_mode``
         so the next ``await_clarification`` node entry uses the new policy
@@ -2347,7 +2347,7 @@ class MessageRouter:
         await self._send_response(client_id, request_id, {"applied": applied})
 
     async def _handle_loop_history_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Return goal display snapshots plus live card tail (RFC-631)."""
+        """Return goal display snapshots plus live card tail."""
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
@@ -2554,7 +2554,7 @@ class MessageRouter:
     # RFC-228: Autopilot Job IPC Handlers
     # ---------------------------------------------------------------------------
     async def _handle_job_create(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_create RPC request (RFC-228).
+        """Handle job_create RPC request.
 
         Submit a root goal to AutopilotService, creating a new autopilot job.
 
@@ -2629,7 +2629,7 @@ class MessageRouter:
         logger.info("[JobCreate] Created job %s with goal: %s", goal.id, goal_text[:50])
 
     async def _handle_job_status(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_status RPC request (RFC-228).
+        """Handle job_status RPC request.
 
         Query job state: goal status, counts, assigned workers.
 
@@ -2723,7 +2723,7 @@ class MessageRouter:
         )
 
     async def _handle_job_pause(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_pause RPC request (RFC-228).
+        """Handle job_pause RPC request.
 
         Pause goal execution by suspending the root goal.
 
@@ -2812,7 +2812,7 @@ class MessageRouter:
         logger.info("[JobPause] Paused job %s", job_id)
 
     async def _handle_job_resume(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_resume RPC request (RFC-228).
+        """Handle job_resume RPC request.
 
         Resume paused goal execution by reactivating the root goal.
 
@@ -2899,7 +2899,7 @@ class MessageRouter:
         logger.info("[JobResume] Resumed job %s", job_id)
 
     async def _handle_job_cancel(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_cancel RPC request (RFC-228).
+        """Handle job_cancel RPC request.
 
         Cancel job by cancelling the root goal via AutopilotService.
 
@@ -2960,7 +2960,7 @@ class MessageRouter:
         logger.info("[JobCancel] Cancelled job %s", job_id)
 
     async def _handle_job_dag(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_dag RPC request (RFC-228).
+        """Handle job_dag RPC request.
 
         Get ContextEngine DAG snapshot for visualization.
 
@@ -3010,7 +3010,7 @@ class MessageRouter:
         )
 
     async def _handle_job_guidance(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle job_guidance RPC request (RFC-228).
+        """Handle job_guidance RPC request.
 
         Send user guidance to ContextEngine for absorption.
 
@@ -3208,7 +3208,7 @@ class MessageRouter:
         await self._dispatch_autopilot_rpc(client_id, msg, "top")
 
     async def _handle_autopilot_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle autopilot_subscribe RPC request (RFC-228).
+        """Handle autopilot_subscribe RPC request.
 
         Subscribe client to autopilot worker events (bypasses autopilot__* filter).
 
@@ -3248,7 +3248,7 @@ class MessageRouter:
         logger.info("[AutopilotSubscribe] Client %s subscribed to autopilot events", client_id)
 
     async def _handle_autopilot_unsubscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle autopilot_unsubscribe RPC request (RFC-228).
+        """Handle autopilot_unsubscribe RPC request.
 
         Release autopilot worker event subscription.
 
@@ -3314,7 +3314,7 @@ class MessageRouter:
         return service
 
     async def _handle_cron_add(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle cron_add RPC request (RFC-229).
+        """Handle cron_add RPC request.
 
         Create a scheduled job from natural language input.
 
@@ -3408,7 +3408,7 @@ class MessageRouter:
         logger.info("[CronAdd] Created cron job %s: %s", job.id, job.description[:50])
 
     async def _handle_cron_list(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle cron_list RPC request (RFC-229).
+        """Handle cron_list RPC request.
 
         List scheduled jobs for the user.
 
@@ -3445,7 +3445,7 @@ class MessageRouter:
         await self._send_response(client_id, request_id, {"jobs": jobs_data})
 
     async def _handle_cron_show(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle cron_show RPC request (RFC-229).
+        """Handle cron_show RPC request.
 
         Get details for a specific scheduled job.
 
@@ -3506,7 +3506,7 @@ class MessageRouter:
         )
 
     async def _handle_cron_cancel(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle cron_cancel RPC request (RFC-229).
+        """Handle cron_cancel RPC request.
 
         Cancel a scheduled job.
 

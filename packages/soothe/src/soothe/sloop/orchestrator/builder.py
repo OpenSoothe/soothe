@@ -1,4 +1,4 @@
-"""Compile the Strange Loop LangGraph (RFC-904 decompose topology).
+"""Compile the Strange Loop LangGraph.
 
 Live graph: INTAKE → ENTER_LOOP → DISPATCH ⇄ EXECUTE → RECORD_PROGRESS →
 RECONCILE → ROOT_EVAL → FINALIZE (+ AWAIT_USER / DELEGATE). Legacy plan-spine
@@ -76,14 +76,14 @@ def _is_real_checkpointer(obj: Any) -> bool:
 
 
 def build_strange_loop_graph(ctx: LoopRuntimeContext):
-    """Build and compile the Loop orchestrator graph (RFC-904).
+    """Build and compile the Loop orchestrator graph.
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
     Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
     across ``ainvoke`` calls, so a clarification suspended in
     ``await_user`` could never be resumed via ``Command(resume=...)``
     on the next user input — the user's text would be classified as a new
-    goal and the prior interrupt would dangle (RFC-622).
+    goal and the prior interrupt would dangle.
     """
 
     async def intake(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:

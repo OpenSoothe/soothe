@@ -1,4 +1,4 @@
-"""Feishu/Lark NotifySink stub (IG-713 Phase 1).
+"""Feishu/Lark NotifySink stub.
 
 Config schema + registry participation; live IM send is a follow-up.
 When enabled without credentials / live path, deliver returns a clear

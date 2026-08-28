@@ -1,4 +1,4 @@
-"""Structured-output schema for veritas (RFC-622, RFC-623)."""
+"""Structured-output schema for veritas."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class VeritasAnswerSchema(BaseModel):
         defer: When ``True``, veritas is explicitly signaling "ask a human".
             The auto policy translates this into a ``ClarificationDeferredError``
             and the loop transitions to ``awaiting_clarification``.
-        rationale: Short explanation for the audit trail. RFC-623 attaches a
+        rationale: Short explanation for the audit trail. attaches a
             structured prefix (``structured_output_failed: ...``) or marker
             (``answer_was_question``) when veritas itself coerced the result;
             ``AutoClarificationPolicy`` reads these to populate ``DeferKind``.
@@ -46,7 +46,7 @@ def coerce_veritas_response(
     *,
     coerced_confidence: float = 0.7,
 ) -> dict[str, Any]:
-    """Fill missing metadata when the model returns answers-only JSON (RFC-623).
+    """Fill missing metadata when the model returns answers-only JSON.
 
     Args:
         data: Raw structured-output dict from the LLM.
@@ -87,7 +87,7 @@ def coerce_veritas_response(
 
 
 def build_veritas_response_schema(question_count: int) -> dict[str, Any]:
-    """Return the per-request JSON Schema veritas sends to the LLM (RFC-623).
+    """Return the per-request JSON Schema veritas sends to the LLM.
 
     The schema enforces *exactly N non-empty answers OR defer* via ``oneOf``
     so that empty-but-not-deferred and wrong-count responses are rejected at

@@ -1,4 +1,4 @@
-"""Persistent worker pool for loop execution (RFC-221 enhancement).
+"""Persistent worker pool for loop execution.
 
 Pre-warms N worker processes at daemon startup to eliminate ~8s per-query
 overhead. Workers create fresh SootheRunner instances per request (Option A)

@@ -1,6 +1,6 @@
 """Status vocabulary bridge across CE, checkpoint goal index, and loop checkpoint.
 
-Three parallel status namespaces coexist in production (RFC-225, RFC-624, RFC-626):
+Three parallel status namespaces coexist in production:
 
 - **ContextEngine** ``GoalStatus``: ``pending``, ``active``, ``completed``, …
 - **Goal index** (``GoalIndexEntry.status``): ``running``, ``completed``, ``failed``, ``cancelled``

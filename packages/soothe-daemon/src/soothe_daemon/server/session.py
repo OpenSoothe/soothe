@@ -1,4 +1,4 @@
-"""Client session management for event bus architecture (RFC-0013)."""
+"""Client session management for event bus architecture."""
 
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ _PROTO1_WIRE_TYPES: frozenset[str] = frozenset(
 
 
 def _to_next_envelope(event: dict[str, Any], subscription_id: str | None) -> dict[str, Any]:
-    """Wrap a legacy streaming frame as a protocol-1 ``next`` envelope (RFC-450 §9.3).
+    """Wrap a legacy streaming frame as a protocol-1 ``next`` envelope.
 
     Free-form streaming frames (``event``, ``command_response``, card replay
     frames, ``status``) are translated into the unified
@@ -212,8 +212,8 @@ class ClientSession:
         event_queue: Queue for delivering events to the client
         sender_task: Background task that sends events to the client
         wire_tier: Client wire filter tier (``full`` or ``progress``)
-        detach_requested: Whether client explicitly requested detach (RFC-0013)
-        config: Optional SootheConfig for effective streaming config (RFC-614)
+        detach_requested: Whether client explicitly requested detach
+        config: Optional SootheConfig for effective streaming config
         loop_subscription_ids: Maps loop_id → subscription correlation id for ``next`` envelopes
     """
 
@@ -243,7 +243,7 @@ class ClientSessionManager:
         event_bus: EventBus instance for routing events
         cancel_callback: Optional async callback to cancel work for a loop_id on disconnect.
         dispatch_cleanup_callback: Optional async callback to cleanup dispatch tasks.
-        config: Optional SootheConfig for streaming interval configuration (RFC-614).
+        config: Optional SootheConfig for streaming interval configuration.
     """
 
     def __init__(
@@ -338,11 +338,11 @@ class ClientSessionManager:
         subscribing to a specific loop. Loop-scoped clients should only receive
         events from their subscribed loop, not daemon-wide broadcasts.
 
-        RFC-222 §WorkerPool: refuses subscriptions to ``autopilot__*`` worker
+        refuses subscriptions to ``autopilot__*`` worker
         loop_ids. Those are internal autopilot subprocess workers and must
         never be exposed as user-facing sessions.
 
-        RFC-228: If client has ``autopilot_subscribed=True``, bypass the
+         : If client has ``autopilot_subscribed=True``, bypass the
         worker filter so subscribed clients can observe autopilot assignment
         loops (``subscribe_thread`` on ``autopilot__*`` ids).
         """
@@ -356,14 +356,14 @@ class ClientSessionManager:
                 if session is None or not session.autopilot_subscribed:
                     logger.warning(
                         "[Session] rejected subscribe to autopilot worker loop %s by client %s "
-                        "(autopilot_subscribe required per RFC-228)",
+                        "(autopilot_subscribe required)",
                         loop_id,
                         client_id,
                     )
                     return False
                 # Client has autopilot_subscribed=True, allow subscription
                 logger.info(
-                    "[Session] allowing autopilot worker subscription %s for client %s (RFC-228 bypass)",
+                    "[Session] allowing autopilot worker subscription %s for client %s (bypass)",
                     loop_id,
                     client_id,
                 )
@@ -663,7 +663,7 @@ class ClientSessionManager:
         """Send a wire message to one client (serialized per WebSocket connection).
 
         Legacy streaming frames are translated to protocol-1 ``next`` envelopes
-        at this boundary (RFC-450 §9.3) so every client receives the unified
+        at this boundary so every client receives the unified
         wire shape regardless of which daemon code path produced the frame.
         """
         wire = self._translate_for_client(session, message)
@@ -745,7 +745,7 @@ class ClientSessionManager:
         )
 
     async def _sender_loop(self, session: ClientSession) -> None:
-        """Send events from queue with daemon-side filtering and batching (RFC-0022).
+        """Send events from queue with daemon-side filtering and batching.
 
         HIGH/CRITICAL priority events flush immediately without batch wait.
         This prevents goal_completion events from being delayed by the batch timeout.
@@ -901,7 +901,7 @@ class ClientSessionManager:
             raise
 
     def _get_batch_timeout(self) -> float:
-        """Get batch timeout from config (RFC-614).
+        """Get batch timeout from config.
 
         Returns:
             Timeout in seconds (default 0.2 = 200ms).

@@ -1,8 +1,8 @@
-"""StrangeLoop State Manager (RFC-205, RFC-216).
+"""StrangeLoop State Manager.
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
-RFC-216: Multi-thread spanning with loop_id as primary key.
-RFC-215: Unified global SQLite persistence backend (databases/checkpoints.db).
+ : Multi-thread spanning with loop_id as primary key.
+ : Unified global SQLite persistence backend (databases/checkpoints.db).
 PostgreSQL backend support using soothe_checkpoints database.
 Phase 2: Connection pooling to eliminate database lock contention.
 Shared pool for high-concurrency (200+ threads) support.
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 class StrangeLoopStateManager:
-    """Manages StrangeLoop checkpoint lifecycle (RFC-216: loop-scoped, multi-thread).
+    """Manages StrangeLoop checkpoint lifecycle.
 
     Configuration-driven backend selection (PostgreSQL or SQLite).
     Uses PostgreSQL soothe_checkpoints database when configured, SQLite fallback.
@@ -241,10 +241,10 @@ class StrangeLoopStateManager:
         thread_id: str,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> StrangeLoopCheckpoint:
-        """Create new loop for thread (RFC-216: loop-scoped).
+        """Create new loop for thread.
 
         Phase 2: Database schema initialized lazily by writer connection.
-        RFC-626 Phase 3: Initialize with schema_version 5.0 and execution_checkpoint.
+        : Initialize with schema_version 5.0 and execution_checkpoint.
 
         Args:
             thread_id: First thread for this loop
@@ -348,7 +348,7 @@ class StrangeLoopStateManager:
         return goal_record
 
     async def load(self) -> StrangeLoopCheckpoint | None:
-        """Load existing loop checkpoint (RFC-216: by loop_id).
+        """Load existing loop checkpoint.
 
         Backend-aware load (PostgreSQL or SQLite).
         Phase 2: Use reader connection pool for concurrent reads (SQLite).
@@ -536,7 +536,7 @@ class StrangeLoopStateManager:
         *,
         include_goal_history: bool = False,
     ) -> None:
-        """Persist loop checkpoint to SQLite (RFC-216: indexed by loop_id).
+        """Persist loop checkpoint to SQLite.
 
         Args:
             checkpoint: Checkpoint to save
@@ -560,7 +560,7 @@ class StrangeLoopStateManager:
 
         Phase 2: Use single writer connection for SQLite consistency.
         PostgreSQL uses connection pool for async operations.
-        RFC-803 Phase 6: Fire-and-forget async writes with periodic flush.
+        : Fire-and-forget async writes with periodic flush.
 
         Args:
             checkpoint: Checkpoint to persist.
@@ -630,7 +630,7 @@ class StrangeLoopStateManager:
     ) -> None:
         """Perform actual checkpoint write (called by worker or sync fallback).
 
-        RFC-803 Phase 6: Extracted backend write logic for reuse.
+        : Extracted backend write logic for reuse.
         """
         async with self._checkpoint_write_lock:
             hot_cold = self._backend_type == "postgresql"
@@ -648,7 +648,7 @@ class StrangeLoopStateManager:
     async def force_flush(self, *, timeout: float | None = None) -> None:
         """Force immediate checkpoint write (for critical operations).
 
-        RFC-803 Phase 6: Used by finalize_loop, archive_and_finalize, close.
+        : Used by finalize_loop, archive_and_finalize, close.
         """
         timeout = self._durable_flush_timeout if timeout is None else timeout
         if not self._last_save_checkpoint:
@@ -715,7 +715,7 @@ class StrangeLoopStateManager:
         Also preserves daemon-managed fields: client_workspace, detached_at,
         created_at, schema_version.
 
-        RFC-626 Phase 3: Includes execution_checkpoint field for schema 5.0.
+        : Includes execution_checkpoint field for schema 5.0.
         """
         # Serialize complex structures to JSON strings
         thread_ids_json = json.dumps(checkpoint.thread_ids, ensure_ascii=False)
@@ -839,7 +839,7 @@ class StrangeLoopStateManager:
         goal: str,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
     ) -> GoalIndexEntry:
-        """Create new goal index entry and clear working memory (RFC-216).
+        """Create new goal index entry and clear working memory.
 
         Args:
             goal: Goal description (stored in CE, not checkpoint index)
@@ -989,9 +989,9 @@ class StrangeLoopStateManager:
         state: LoopState,
         working_memory: LoopWorkingMemory | None,
     ) -> None:
-        """Update goal record after each iteration (RFC-216, RFC-214).
+        """Update goal record after each iteration.
 
-        RFC-214: Ledger already contains Plan and Execute turns.
+         : Ledger already contains Plan and Execute turns.
         This method only updates metrics and working memory.
 
         Args:
@@ -1284,7 +1284,7 @@ class StrangeLoopStateManager:
 
         Prevent pool exhaustion in concurrent execution.
         Shared pools are closed at daemon level, not per-StrangeLoop.
-        RFC-803 Phase 6: Force final checkpoint flush before closing.
+        : Force final checkpoint flush before closing.
 
         Must be called after StrangeLoop completes to release database connections.
         For shared pool mode, only clears references (pool closed at daemon shutdown).

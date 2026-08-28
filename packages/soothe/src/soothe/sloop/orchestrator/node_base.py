@@ -1,4 +1,4 @@
-"""Generalized StrangeLoop graph node lifecycle (RFC-903).
+"""Generalized StrangeLoop graph node lifecycle.
 
 ``LoopNode`` provides ``pre`` / ``project`` / ``prompt`` / ``process`` / ``post``.
 ``wrap_node`` adapts ``LoopNode`` instances or legacy ``async def(ctx, state)``

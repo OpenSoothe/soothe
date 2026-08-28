@@ -1,4 +1,4 @@
-"""Ray-based loop runner — one actor per loop_id (RFC-221).
+"""Ray-based loop runner — one actor per loop_id.
 
 WARNING: This file imports Ray at module level. It must NEVER be imported
 by local-mode code paths. ``LoopRunnerFactory`` guards the import behind

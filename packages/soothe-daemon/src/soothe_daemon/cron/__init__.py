@@ -1,4 +1,4 @@
-"""Cron Service for Autopilot — Natural Language Scheduled Jobs (RFC-229).
+"""Cron Service for Autopilot — Natural Language Scheduled Jobs.
 
 This module provides natural language scheduled job submission for Autopilot.
 Users describe jobs in plain language; the daemon extracts schedule semantics

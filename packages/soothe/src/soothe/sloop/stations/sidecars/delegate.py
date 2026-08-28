@@ -1,4 +1,4 @@
-"""Wired-subagent intake branch (RFC-630).
+"""Wired-subagent intake branch.
 
 Intake-only wires (``browser_use``, ``deep_research``,
 ``academic_research``): stream the specialist runnable from the intake-only

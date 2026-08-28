@@ -13,7 +13,7 @@ def apply_env_overrides(config: SootheDaemonConfig) -> None:
     """Apply environment-variable overrides to a daemon config in place.
 
     Currently handles ``SOOTHE_DISTRIBUTED=1/true/yes`` -> enable Ray loop
-    execution (RFC-221).
+    execution.
     """
 
     if os.environ.get("SOOTHE_DISTRIBUTED", "").lower() in ("1", "true", "yes"):

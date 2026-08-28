@@ -30,7 +30,11 @@ class _StepCardApp(App[None]):
 
 @pytest.mark.asyncio
 async def test_set_clarification_deferred_shows_reason_and_questions() -> None:
-    """Deferred notice stops the spinner, sets pending status, and renders questions."""
+    """Deferred notice stops the spinner, sets pending status, shows status line.
+
+    Questions are NOT rendered on the step card — they appear in the
+    dedicated clarification/QA card.
+    """
     card = CognitionStepMessage("DEF-01", "Analyze RFC", id="step-def")
     async with _StepCardApp(card).run_test() as pilot:
         card.set_running()
@@ -45,10 +49,6 @@ async def test_set_clarification_deferred_shows_reason_and_questions() -> None:
         assert card._status == "pending"
         assert card._status_widget is not None
         assert card._status_widget.display is True
-
-        # The detail widget should show the questions.
-        assert card._detail_widget is not None
-        assert card._detail_widget.display is True
 
 
 @pytest.mark.asyncio
@@ -71,7 +71,11 @@ async def test_set_clarification_deferred_empty_questions_skips_detail() -> None
 
 
 def test_set_clarification_deferred_with_mock_widgets() -> None:
-    """Unmounted card path — widgets are MagicMock, status + detail updated."""
+    """Unmounted card path — widgets are MagicMock, status updated only.
+
+    Questions are NOT rendered on the step card — they appear in the
+    dedicated clarification/QA card.
+    """
     card = CognitionStepMessage("DEF-03", "Deferred", id="step-def-mock")
     card._status_widget = MagicMock()
     card._detail_widget = MagicMock()
@@ -85,9 +89,8 @@ def test_set_clarification_deferred_with_mock_widgets() -> None:
     # Status widget received a Content.styled update and was displayed.
     assert card._status_widget.display is True
     card._status_widget.update.assert_called_once()
-    # Detail widget received a body update and was displayed.
-    assert card._detail_widget.display is True
-    card._detail_widget.update.assert_called_once()
+    # Detail widget is NOT updated — questions live in the QA card.
+    card._detail_widget.update.assert_not_called()
 
 
 def test_set_clarification_deferred_whitespace_questions_filtered() -> None:

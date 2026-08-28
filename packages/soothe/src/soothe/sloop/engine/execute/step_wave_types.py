@@ -171,7 +171,7 @@ def all_tool_outcomes_failed(outcomes: list[dict[str, Any]]) -> bool:
 
 
 def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
-    """Return the first tool error preview from RFC-211 outcome metadata."""
+    """Return the first tool error preview from outcome metadata."""
     for outcome in outcomes:
         if outcome.get("has_error"):
             preview = outcome.get("error_preview")

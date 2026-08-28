@@ -1,6 +1,6 @@
 """SQLite backend for StrangeLoop checkpoint persistence.
 
-RFC-215: StrangeLoop Persistence Backend Architecture
+ : StrangeLoop Persistence Backend Architecture
 Backend-agnostic implementation with connection pooling
 """
 
@@ -64,7 +64,7 @@ _SLIM_GOAL_RECORD_COLUMNS = frozenset(
 class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     """SQLite backend for StrangeLoop checkpoint persistence.
 
-    / RFC-801: process-scoped ``SqliteStoreRuntime`` per database file.
+    / : process-scoped ``SqliteStoreRuntime`` per database file.
     """
 
     def __init__(self, db_path: Path, pool_size: int = 5) -> None:
@@ -203,7 +203,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
         Args:
             loop_id: Loop identifier.
-            force_status: When True, bypass the RFC-225 goal-count guard so a
+            force_status: When True, bypass the goal-count guard so a
                 caller with authority (e.g. the stale-loop reconciler demoting a
                 confirmed-dead zombie) can write ``status`` even when the loop
                 already has goals. StrangeLoop remains the authoritative writer
@@ -692,7 +692,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     @staticmethod
     def _migrate_goal_records_slim(db: sqlite3.Connection) -> None:
-        """Replace legacy goal_records columns with RFC-626 GoalIndexEntry schema."""
+        """Replace legacy goal_records columns with GoalIndexEntry schema."""
         cursor = db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='goal_records'"
         )
@@ -740,7 +740,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
 
     @staticmethod
     def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
-        """Migrate ``goal_records`` to RFC-626 slim schema when legacy columns exist."""
+        """Migrate ``goal_records`` to slim schema when legacy columns exist."""
         SQLitePersistenceBackend._migrate_goal_records_slim(db)
 
     @staticmethod

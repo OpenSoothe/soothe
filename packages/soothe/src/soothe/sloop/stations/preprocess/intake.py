@@ -1,4 +1,4 @@
-"""Loop Graph entry node: LLM intake classification (RFC-220, RFC-630).
+"""Loop Graph entry node: LLM intake classification.
 
 This node is the sole intake classification call site. It projects the CE
 ledger (prior-goal completion + preamble) into the classify LLM. When
@@ -95,7 +95,7 @@ def _ledger_messages_for_intake(ctx: LoopRuntimeContext) -> list[BaseMessage]:
 
 
 def _should_skip_intent_classify(ctx: LoopRuntimeContext) -> bool:
-    """True when this turn must not run intake LLM (RFC-622 clarification resume)."""
+    """True when this turn must not run intake LLM."""
     if (ctx.clarification_resume_text or "").strip():
         return True
     if ctx.clarification_resume_answers:
@@ -108,7 +108,7 @@ async def node_intent_classify(
     _state: dict[str, Any],
     runnable_config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
-    """Classify user intake with ledger projection (RFC-630)."""
+    """Classify user intake with ledger projection."""
     if _should_skip_intent_classify(ctx):
         logger.info("[Intent] Skipping graph entry classification (clarification resume)")
         return {}

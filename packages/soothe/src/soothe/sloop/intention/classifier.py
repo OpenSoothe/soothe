@@ -1,4 +1,4 @@
-"""Intent classifier facade (RFC-225, RFC-630, RFC-904).
+"""Intent classifier facade.
 
 Intake classification decides social vs task, and for tasks emits
 ``task_complexity`` and a short step-card title. Loop continuation is derived

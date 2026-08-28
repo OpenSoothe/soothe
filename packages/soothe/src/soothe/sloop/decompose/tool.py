@@ -1,4 +1,4 @@
-"""Executor-bound ``decompose_task`` tool (RFC-904 / IG-751)."""
+"""Executor-bound ``decompose_task`` tool."""
 
 from __future__ import annotations
 

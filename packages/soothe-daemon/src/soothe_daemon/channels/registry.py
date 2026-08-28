@@ -1,4 +1,4 @@
-"""Channel discovery registry (RFC-620 §7).
+"""Channel discovery registry.
 
 Provides plugin discovery for channels via:
 1. pkgutil scan of built-in channels in soothe_daemon.channels package

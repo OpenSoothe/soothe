@@ -116,7 +116,7 @@ class SharedPostgreSQLPool:
     async def _open_locked(self) -> AsyncConnectionPool:
         """Build, open, and schema-init the pool. Caller MUST hold ``_init_lock``.
 
-        IG-706: extracted from ``open`` so ``reset_pool`` can reopen without
+         : extracted from ``open`` so ``reset_pool`` can reopen without
         re-entering ``open`` (``asyncio.Lock`` is not reentrant — the prior
         ``await self.open()`` while holding ``_init_lock`` deadlocked the
         recovery path, leaving ``_pool=None`` and every subsequent

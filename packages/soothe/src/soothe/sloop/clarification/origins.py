@@ -1,4 +1,4 @@
-"""Clarification origin constants (RFC-622, RFC-904).
+"""Clarification origin constants.
 
 Live origins: ``execute`` (step ``ask_user``), ``plan_mode_review``
 (plan draft approve/reject gate), ``rail_pause`` (host gate),
@@ -20,7 +20,7 @@ ORIGIN_PLAN_MODE_REVIEW: Final = "plan_mode_review"
 """Human review gate after plan-mode draft (approve / reject / refine)."""
 
 ORIGIN_RAIL_PAUSE: Final = "rail_pause"
-"""LoopRail ``pause_for_user`` human gate (IG-737); host-side Veritas only."""
+"""LoopRail ``pause_for_user`` human gate; host-side Veritas only."""
 
 ORIGIN_TOOL_APPROVAL: Final = "tool_approval"
 """Deepagents ``HumanInTheLoopMiddleware`` tool-action approval gate.

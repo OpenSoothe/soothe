@@ -1,4 +1,4 @@
-"""Daemon-side stream delivery shaping for loop event broadcast (RFC-614).
+"""Daemon-side stream delivery shaping for loop event broadcast.
 
 Three goal_completion delivery modes:
 
@@ -268,7 +268,7 @@ class StreamDeliveryCoalescer:
 
     Supports:
     - goal_completion batching (batch / adaptive modes)
-    - plain assistant text coalescing per namespace (RFC-614)
+    - plain assistant text coalescing per namespace
     - dropping noop ``updates`` tuples
     """
 

@@ -1,4 +1,4 @@
-"""StrangeLoop Eval step support (RFC-905)."""
+"""StrangeLoop Eval step support."""
 
 from soothe.sloop.eval.middleware import EvalStepMiddleware
 

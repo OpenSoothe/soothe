@@ -84,7 +84,7 @@ def _check_process_alive(pid: int) -> CheckResult:
 
 
 def _check_websocket_connectivity(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check WebSocket transport connectivity (RFC-450)."""
+    """Check WebSocket transport connectivity."""
     from soothe_daemon.server import SootheDaemon
 
     ws_host = config.transports.websocket.host if config else "127.0.0.1"
@@ -108,7 +108,7 @@ def _check_websocket_connectivity(config: SootheDaemonConfig | None) -> CheckRes
 
 
 async def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check daemon readiness state via WebSocket handshake (RFC-450).
+    """Check daemon readiness state via WebSocket handshake.
 
     Drains the initial ``status`` push (and other non-ack frames) before
     requiring ``connection_ack``, matching admin RPC handshake behavior.
@@ -303,7 +303,7 @@ def _category_message(status: CheckStatus, *, websocket_ok: bool) -> str:
 
 
 async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResult:
-    """Check daemon health with WebSocket-first priority (RFC-450).
+    """Check daemon health with WebSocket-first priority.
 
     Uses WebSocket-first logic to prioritize actual daemon responsiveness
     over PID file checks.

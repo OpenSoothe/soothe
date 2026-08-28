@@ -1,4 +1,4 @@
-"""Identity service CLI commands. RFC-307 §CLI Commands.
+"""Identity service CLI commands. Commands.
 
 Provides soothed identity subcommands for:
 - User management (create-user, list-users, delete-user)
@@ -110,7 +110,7 @@ def create_user(
 ) -> None:
     """Create a new user.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -133,7 +133,7 @@ def create_user(
 def list_users() -> None:
     """List all users.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -163,7 +163,7 @@ def delete_user(
 ) -> None:
     """Delete user and revoke all credentials.
 
-    RFC-307 §CLI Commands.
+    Commands.
 
     Warning: This also revokes all AKSK pairs and tokens for the user.
     """
@@ -203,7 +203,7 @@ def create_aksk(
 ) -> None:
     """Create AKSK pair for user.
 
-    RFC-307 §CLI Commands.
+    Commands.
 
     WARNING: Save the secret_key securely. It cannot be retrieved later.
     """
@@ -244,7 +244,7 @@ def list_aksk(
 ) -> None:
     """List AKSK pairs for user.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -290,7 +290,7 @@ def revoke_aksk(
 ) -> None:
     """Revoke AKSK and all related tokens.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -327,7 +327,7 @@ def list_tokens(
 ) -> None:
     """List tokens for user.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -375,7 +375,7 @@ def revoke_token(
 ) -> None:
     """Revoke token by JTI.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -395,7 +395,7 @@ def revoke_all_tokens(
 ) -> None:
     """Revoke all tokens for user.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -432,7 +432,7 @@ def map_external(
 ) -> None:
     """Map external channel sender to soothe user.
 
-    RFC-307 §CLI Commands.
+    Commands.
 
     Example: soothed identity map-external --channel telegram --sender-id 12345 --user alice
     """
@@ -459,7 +459,7 @@ def list_mappings(
 ) -> None:
     """List external identity mappings.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -500,7 +500,7 @@ def unmap_external(
 ) -> None:
     """Remove external identity mapping.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     _require_enabled()
 
@@ -524,7 +524,7 @@ def unmap_external(
 def status() -> None:
     """Show identity service status.
 
-    RFC-307 §CLI Commands.
+    Commands.
     """
     from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
 

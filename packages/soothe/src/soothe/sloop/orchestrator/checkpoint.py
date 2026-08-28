@@ -10,7 +10,7 @@ Do **not** use a custom ``checkpoint_ns`` for isolation: LangGraph treats
 non-empty ``checkpoint_ns`` as a subgraph path. Isolation is via dedicated
 ``thread_id`` values with empty ``checkpoint_ns``.
 
-This module is the **single home of the thread-id grammar** (IG-764). Every
+This module is the **single home of the thread-id grammar**. Every
 thread id is built here; no caller composes one inline:
 
 - ``loop`` — ``{loop_id}__strange_loop`` via `strange_loop_thread_id`

@@ -11,7 +11,7 @@ Loop-continuation bootstrap grounds via projected ``goal_completion`` ledger row
 (execute Slice A), not by replaying prior execute rows.
 
 Same-goal DAG dependent steps ground predecessors via projected execute-step ledger rows
-(RFC-214 §3.1); the current-step envelope carries only the task and hints.
+; the current-step envelope carries only the task and hints.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def predecessor_execute_messages_for_branch(
 
     Only messages tagged ``phase == \"execute_step\"`` with a ``step_id`` in
     ``predecessor_step_ids`` are included. Chronological order follows
-    ``loop_messages`` iteration (RFC-214 append order).
+    ``loop_messages`` iteration.
 
     Args:
         loop_messages: ``LoopState.loop_messages`` ledger.

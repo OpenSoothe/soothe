@@ -1,6 +1,6 @@
 """Telegram channel implementation using python-telegram-bot.
 
-Migrated from nanoBot with adaptations for soothe-daemon Channel architecture (RFC-620).
+Migrated from nanoBot with adaptations for soothe-daemon Channel architecture.
 """
 
 from __future__ import annotations
@@ -257,7 +257,7 @@ class TelegramConfig:
 class TelegramChannel(Channel):
     """Telegram channel using polling or webhook mode.
 
-    Implements RFC-620 Channel interface with full streaming support.
+    Implements Channel interface with full streaming support.
     """
 
     name = "telegram"

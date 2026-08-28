@@ -1,4 +1,4 @@
-"""RECONCILE station: drain proposals and commit to CE StepDAG (RFC-904)."""
+"""RECONCILE station: drain proposals and commit to CE StepDAG."""
 
 from __future__ import annotations
 

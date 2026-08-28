@@ -3,7 +3,7 @@
 This module extracts concise, structured metadata from tool execution results
 to enable StrangeLoop reasoning without full content bloat.
 
-RFC-211: StrangeLoop Tool Result Optimization
+ : StrangeLoop Tool Result Optimization
 """
 
 from __future__ import annotations

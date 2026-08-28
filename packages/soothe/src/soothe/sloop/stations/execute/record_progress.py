@@ -1,4 +1,4 @@
-"""Persist iteration and iteration-complete events (RFC-220 ``record_iteration``)."""
+"""Persist iteration and iteration-complete events."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""RFC-214 reference-based dedup for CoreAgent ledger projection."""
+"""reference-based dedup for CoreAgent ledger projection."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _normalize_message_id(value: Any) -> str | None:
 
 
 def message_reference_id(msg: BaseMessage) -> str | None:
-    """Return the stable id used for RFC-214 dedup (``core_agent_message_id`` or ``id``)."""
+    """Return the stable id used for dedup (``core_agent_message_id`` or ``id``)."""
     ref = _normalize_message_id(getattr(msg, "core_agent_message_id", None))
     if ref is not None:
         return ref

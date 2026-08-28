@@ -1,4 +1,4 @@
-"""JWT token generation and validation. RFC-307 §TokenClaims."""
+"""JWT token generation and validation.."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -10,13 +10,13 @@ from soothe_sdk.protocols.identity import TokenClaims
 
 class JWTManager:
     """
-    JWT token generation and validation.
+        JWT token generation and validation.
 
-    Uses HS256 (HMAC-SHA256) algorithm for signing.
-    Access tokens are short-lived (1 hour default).
-    Refresh tokens are longer-lived (7 days default).
+        Uses HS256 (HMAC-SHA256) algorithm for signing.
+        Access tokens are short-lived (1 hour default).
+        Refresh tokens are longer-lived (7 days default).
 
-    RFC-307 §TokenClaims, §Authentication Flow.
+    , §Authentication Flow.
     """
 
     def __init__(
@@ -33,7 +33,7 @@ class JWTManager:
             access_expiry_hours: Access token expiry in hours (1-24)
             refresh_expiry_days: Refresh token expiry in days (1-365)
 
-        RFC-307 §Configuration (token settings).
+        (token settings).
         """
         self.signing_key = signing_key
         self.access_expiry_hours = access_expiry_hours
@@ -57,7 +57,7 @@ class JWTManager:
         Returns:
             Tuple of (JWT token string, TokenClaims)
 
-        RFC-307 §JWT payload structure.
+        payload structure.
         """
         now = datetime.now(UTC)
         expiry = now + timedelta(hours=self.access_expiry_hours)
@@ -101,7 +101,7 @@ class JWTManager:
         Returns:
             Tuple of (JWT token string, TokenClaims)
 
-        RFC-307 §JWT payload structure.
+        payload structure.
         """
         now = datetime.now(UTC)
         expiry = now + timedelta(days=self.refresh_expiry_days)
@@ -141,7 +141,7 @@ class JWTManager:
         Returns:
             TokenClaims if valid, None if invalid or expired
 
-        RFC-307 §Authentication Flow (JWT validation).
+        Flow (JWT validation).
         """
         try:
             payload = jwt.decode(
@@ -189,7 +189,7 @@ def resolve_jwt_key(config_jwt_key: str | None = None) -> str | None:
     Returns:
         JWT signing key, or None if not available
 
-    RFC-307 §JWT key resolution.
+    key resolution.
     """
     import os
     from pathlib import Path
@@ -222,7 +222,7 @@ def generate_jwt_key() -> str:
     Returns:
         URL-safe base64 encoded key string
 
-    RFC-307 §JWT key auto-generation.
+    key auto-generation.
     """
     import secrets
 
@@ -243,7 +243,7 @@ def save_jwt_key(key: str, soothe_home: str) -> Path:
     Returns:
         Path to key file
 
-    RFC-307 §JWT key auto-generation.
+    key auto-generation.
     """
     key_file = Path(soothe_home) / ".jwt_key"
     key_file.parent.mkdir(parents=True, exist_ok=True)

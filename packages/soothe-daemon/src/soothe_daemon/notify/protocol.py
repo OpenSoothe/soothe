@@ -1,4 +1,4 @@
-"""Daemon NotifySink protocol and dispatcher (IG-713)."""
+"""Daemon NotifySink protocol and dispatcher."""
 
 from __future__ import annotations
 

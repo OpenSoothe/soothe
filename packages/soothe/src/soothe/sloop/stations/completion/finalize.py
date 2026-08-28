@@ -1,4 +1,4 @@
-"""Goal completion branch (RFC-220 ``goal_completion``; RFC-219 policy)."""
+"""Goal completion branch."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def _append_goal_completion_ledger_pair(
     final_output: str | None,
     context_engine: Any | None = None,
 ) -> None:
-    """Append RFC-214 Human–AI pair for the goal completion report.
+    """Append Human–AI pair for the goal completion report.
 
     Every completion strategy (``synthesize``, ``ledger_direct``) writes
     an independent ``goal_completion`` unit so the ledger has one canonical terminal

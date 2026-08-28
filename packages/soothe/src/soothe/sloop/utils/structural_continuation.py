@@ -1,4 +1,4 @@
-"""Structural loop-continuation controls (RFC-225, RFC-630).
+"""Structural loop-continuation controls.
 
 Continuation is derived from *this loop's* checkpoint plus an explicit control
 phrase, not from social classification alone. A control phrase without goal

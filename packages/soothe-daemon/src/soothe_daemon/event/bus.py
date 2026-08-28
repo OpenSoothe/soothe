@@ -1,4 +1,4 @@
-"""Event bus for topic-based event routing (RFC-0013).
+"""Event bus for topic-based event routing.
 
 Phase 2: Lock-free publish with reader-writer pattern.
 """
@@ -209,7 +209,7 @@ class EventBus:
         Args:
             topic: Topic identifier (e.g., "loop:abc123")
             event: Event dictionary to broadcast
-            event_meta: Optional EventMeta for filtering (RFC-0022) and priority
+            event_meta: Optional EventMeta for filtering and priority
         """
         if self._event_size_stats is not None:
             self._event_size_stats.record_event_dict(event)

@@ -1,4 +1,4 @@
-"""CronJobStore — Database persistence for cron jobs (RFC-229).
+"""CronJobStore — Database persistence for cron jobs.
 
 SQLite-backed storage via process-scoped ``SqliteStoreRuntime``.
 """

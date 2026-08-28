@@ -1,4 +1,4 @@
-"""Identity service for soothe. RFC-307.
+"""Identity service for soothe..
 
 This module provides AKSK-based authentication and JWT token management.
 """

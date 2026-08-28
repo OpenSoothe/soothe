@@ -1,10 +1,10 @@
-"""Loop reattachment handler — card-ledger replay (RFC-413).
+"""Loop reattachment handler — card-ledger replay.
 
 When a client (re)subscribes to an existing loop, the daemon streams the
 bound display-card ledger through ``soothe.card.*`` wire frames. Clients on the
 new wire (TUI and other protocol-1 consumers) render directly from those frames.
 
-RFC-411's ``history_replay`` / ``loop_reattached`` / ``replay_complete``
+ 's ``history_replay`` / ``loop_reattached`` / ``replay_complete``
 frames were removed when this RFC superseded it, along with the
 reconstructor / enricher modules under ``soothe.events.replay``.
 Clients that still expect those frames should upgrade to consume

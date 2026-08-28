@@ -1,4 +1,4 @@
-"""Loop runner protocol definitions (RFC-221, extended by RFC-222 revised)."""
+"""Loop runner protocol definitions."""
 
 from __future__ import annotations
 
@@ -16,14 +16,14 @@ from soothe.events import StreamChunk
 
 @dataclass(frozen=True)
 class GoalDispatchEnvelope:
-    """Transient dispatch message for worker goal execution (RFC-222 revised).
+    """Transient dispatch message for worker goal execution.
 
     This is a **wire message**, not a persistent entity. Created by the daemon's
     ``AutopilotService`` when dispatching a goal to a subprocess worker, and
     consumed by the worker's ``SootheRunner.astream(autopilot_job=...)`` path.
 
-    **Terminology note (RFC-228):**
-    - "Job" in RFC-228/Desktop UX = user-facing term for a **root Goal** (persistent)
+    **Terminology note:**
+    - "Job" in /Desktop UX = user-facing term for a **root Goal** (persistent)
     - ``GoalDispatchEnvelope`` here = transient dispatch **message** (not stored)
 
     Attached to ``LoopRunRequest.autopilot_job`` when present. The worker
@@ -60,7 +60,7 @@ class LoopRunRequest:
           ``normalized_user_id`` is ``anonymous`` when ``user_id`` is empty, and
           hash uses ``user_id`` (or ``""``) with ``client_workspace_id`` or ``loop_id``.
 
-    RFC-222 revised extension (additive): when ``autopilot_job`` is set, this
+     extension (additive): when ``autopilot_job`` is set, this
     request is dispatched by the daemon's ``AutopilotService``; the worker
     branches to a hydrate-from-bundle path. When ``None``, the worker runs
     today's solo-mode path. The ``LoopRunnerProtocol.run`` signature is
@@ -137,7 +137,7 @@ class LoopRunnerProtocol(Protocol):
     or ``RayLoopRunner`` (Ray actor) — is selected by
     ``soothe_daemon.runner.LoopRunnerFactory`` based on ``SootheDaemonConfig``.
 
-    Cancel escalation (RFC-222 H8 revised): ``cancel()`` is cooperative and
+    Cancel escalation: ``cancel()`` is cooperative and
     best-effort — it only lands at await points inside the running loop. Callers
     that must guarantee termination (goal cancel, deadline) follow up with
     ``is_idle()`` and, if still busy, ``force_kill()``. This mirrors the
@@ -179,7 +179,7 @@ class LoopRunnerProtocol(Protocol):
         ...
 
     def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap the clarification mode on the running goal (RFC-622).
+        """Hot-swap the clarification mode on the running goal.
 
         Rebuilds the ``ClarificationPolicy`` on the live ``LoopRuntimeContext``
         so the next ``await_clarification`` node entry uses the new mode without

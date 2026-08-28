@@ -1,4 +1,4 @@
-"""LoopWorkingMemoryProtocol — agentic Plan-Execute scratchpad (RFC-203)."""
+"""LoopWorkingMemoryProtocol — agentic Plan-Execute scratchpad."""
 
 from __future__ import annotations
 

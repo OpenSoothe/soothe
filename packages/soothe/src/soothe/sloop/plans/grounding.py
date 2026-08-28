@@ -1,4 +1,4 @@
-"""Ground operator-approved intake plans onto the decompose DISPATCH path (RFC-904)."""
+"""Ground operator-approved intake plans onto the decompose DISPATCH path."""
 
 from __future__ import annotations
 

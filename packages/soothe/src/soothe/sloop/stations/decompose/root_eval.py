@@ -1,4 +1,4 @@
-"""ROOT_EVAL station: insert/skip gate for RFC-905 Eval steps."""
+"""ROOT_EVAL station: insert/skip gate for Eval steps."""
 
 from __future__ import annotations
 

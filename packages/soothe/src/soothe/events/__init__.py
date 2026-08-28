@@ -22,7 +22,7 @@ Usage:
     from soothe.events import register_event, EventPriority
     register_event(MyCustomEvent, priority=EventPriority.HIGH)
 
-RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
+ : 4-segment naming convention: soothe.<domain>.<component>.<action>
 """
 
 from __future__ import annotations

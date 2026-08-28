@@ -126,7 +126,11 @@ async def test_click_expands_auto_collapsed_card() -> None:
 
 @pytest.mark.asyncio
 async def test_set_clarification_details_respects_collapse() -> None:
-    """Clarification Q&A content is set but stays hidden when auto-collapsed."""
+    """Clarification answered-notice shows on the status line, not detail widget.
+
+    Questions/Q&A live in the dedicated clarification/QA card; the step card
+    only shows a compact "Answered" status line.
+    """
     card = CognitionStepMessage("S-06", "Ask user", id="step-clar")
     async with _StepCardApp(card).run_test() as pilot:
         card.set_running()
@@ -143,15 +147,10 @@ async def test_set_clarification_details_respects_collapse() -> None:
         )
         await pilot.pause()
 
-        # Content is on the widget but display stays False while collapsed.
-        assert card._detail_widget is not None
-        assert card._detail_widget.display is False
+        # The status line shows the answered notice.
+        assert card._status_widget is not None
+        assert card._status_widget.display is True
         assert card._has_clarification_details is True
-
-        # Expanding reveals the clarification content.
-        card.toggle_collapse()
-        await pilot.pause()
-        assert card._detail_widget.display is True
 
 
 # ── result preview respects collapse ────────────────────────────────────

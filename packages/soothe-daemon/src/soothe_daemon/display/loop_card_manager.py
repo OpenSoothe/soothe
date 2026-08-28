@@ -144,7 +144,7 @@ class LoopCardManager:
         return len(worker.overflow)
 
     async def _notify_card_ingest_pressure(self, loop_id: str, overflow_depth: int) -> None:
-        """Emit ``stream_degraded`` once per backpressure episode (RFC-450 §14)."""
+        """Emit ``stream_degraded`` once per backpressure episode."""
         if overflow_depth <= 0 or loop_id in self._stream_degraded_sent:
             return
         self._stream_degraded_sent.add(loop_id)
@@ -462,7 +462,7 @@ class LoopCardManager:
         Optimization 4: Uses isolated ThreadPoolExecutor instead of
         asyncio.to_thread to prevent contention with general thread pool.
 
-        / RFC-413 Phase 4: append create/update mutations when possible;
+        / : append create/update mutations when possible;
         fall back to ``replace_with`` only when cards disappear from the
         projection. Broadcasts live ``soothe.card.*`` frames after a successful apply.
         """
@@ -509,7 +509,7 @@ class LoopCardManager:
         loop_id: str,
         mutations: list[Any],
     ) -> None:
-        """Publish bound card frames to loop subscribers (RFC-413 Phase 4).
+        """Publish bound card frames to loop subscribers.
 
         Frames are wrapped as ``event`` / ``mode=custom`` so existing
         ``iter_turn_chunks`` clients deliver them (top-level ``soothe.card.*`` is
@@ -582,7 +582,7 @@ class LoopCardManager:
         duration_ms: int = 0,
         tokens_used: int = 0,
     ) -> None:
-        """Fold the live ledger into an immutable goal snapshot (RFC-631)."""
+        """Fold the live ledger into an immutable goal snapshot."""
         from datetime import UTC, datetime
 
         from soothe_daemon.display.display_store import get_display_card_store

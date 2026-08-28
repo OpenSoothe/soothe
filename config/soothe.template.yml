@@ -220,8 +220,10 @@ agent:
 
     # RFC-622 §9b: Multi-stage tool-approval pipeline.
     # Deterministic deny → safety → allow stages resolve most tool_approval
-    # interrupts without an LLM. Veritas remains the final guard for ambiguous
-    # cases. Set enabled: false to send all tool_approval to veritas (pre-§9b).
+    # interrupts without an LLM. Compound commands (cd /path && git status)
+    # are split so each sub-command matches independently. When no rule
+    # matches, the interrupt defers to the human relay or raises
+    # ClarificationDeferredError — veritas LLM fallback is disabled by default.
     tool_approval:
       enabled: true
       # Manual-mode scope (default_mode: manual): deny/safety stages always
@@ -241,21 +243,47 @@ agent:
         - { tool: write_file, pattern: "/etc/**" }
       # Stage 2: safety checks are built-in, bypass-immune (not configurable).
       allow_rules:                      # Stage 3: match = APPROVE
+        # File operations within workspace
         - { tool: edit_file, pattern: "<workspace>/**" }
         - { tool: write_file, pattern: "<workspace>/**" }
+        # Read-only commands
         - { tool: run_command, pattern: "ls *" }
         - { tool: run_command, pattern: "cat *" }
         - { tool: run_command, pattern: "grep *" }
         - { tool: run_command, pattern: "find *" }
+        - { tool: run_command, pattern: "diff *" }
+        - { tool: run_command, pattern: "head *" }
+        - { tool: run_command, pattern: "tail *" }
+        - { tool: run_command, pattern: "wc *" }
+        - { tool: run_command, pattern: "sort *" }
+        # Test / lint / format
         - { tool: run_command, pattern: "pytest*" }
         - { tool: run_command, pattern: "python -m pytest*" }
+        - { tool: run_command, pattern: "python3 -m pytest*" }
         - { tool: run_command, pattern: "ruff *" }
+        - { tool: run_command, pattern: "python3 -m ruff*" }
         - { tool: run_command, pattern: "mypy *" }
-        - { tool: run_command, pattern: "git status" }
+        - { tool: run_command, pattern: "python3 -m mypy*" }
+        - { tool: run_command, pattern: "python3 -m py_compile*" }
+        # Git read-only operations
+        - { tool: run_command, pattern: "git status*" }
         - { tool: run_command, pattern: "git diff*" }
         - { tool: run_command, pattern: "git log*" }
-      veritas_fallback:                 # Stage 4: LLM for ambiguous cases
-        enabled: true
+        - { tool: run_command, pattern: "git show*" }
+        - { tool: run_command, pattern: "git branch*" }
+        # Git local mutations (checkout/reset within workspace)
+        - { tool: run_command, pattern: "git checkout *" }
+        - { tool: run_command, pattern: "git reset *" }
+        # Project scripts
+        - { tool: run_command, pattern: "./scripts/*" }
+        - { tool: run_command, pattern: "bash scripts/*" }
+        - { tool: run_command, pattern: "python3 scripts/*" }
+        - { tool: run_command, pattern: "python scripts/*" }
+        # cp to /tmp (scratch copies for diff workflows)
+        - { tool: run_command, pattern: "cp * /tmp/*" }
+        - { tool: run_command, pattern: "cp * /tmp/**" }
+      veritas_fallback:                 # Stage 4: disabled by default
+        enabled: false
         model_role: fast
         max_context_steps: 0
       audit:

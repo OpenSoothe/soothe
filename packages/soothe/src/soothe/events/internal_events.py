@@ -1,4 +1,4 @@
-"""Internal event types for StrangeLoop, ContextEngine, and AutopilotService coordination (RFC-222).
+"""Internal event types for StrangeLoop, ContextEngine, and AutopilotService coordination.
 
 This module defines event classes for the `soothe.internal.*` namespace.
 These events are used for internal coordination between:
@@ -58,7 +58,7 @@ class InternalGoalFailedEvent(SootheEvent):
 
 
 class InternalGoalReportCommittedEvent(SootheEvent):
-    """CE goal report committed after a StrangeLoop loop end (IG-726).
+    """CE goal report committed after a StrangeLoop loop end.
 
     Canonical trigger signal for Autopilot report-commit judgment. Autopilot
     may still finalize on the same call stack after emit.
@@ -385,7 +385,7 @@ def is_internal_event_type(event_type: str) -> bool:
 
 
 class GoalStatusEvent(SootheEvent):
-    """Goal status transition for autopilot subscribers (RFC-228).
+    """Goal status transition for autopilot subscribers.
 
     Emitted when goal status changes. Clients use this for DAG node updates.
     """
@@ -399,7 +399,7 @@ class GoalStatusEvent(SootheEvent):
 
 
 class GoalProgressEvent(SootheEvent):
-    """Goal progress update for autopilot subscribers (RFC-228).
+    """Goal progress update for autopilot subscribers.
 
     Emitted when goal step count or tool call count changes.
     """
@@ -413,7 +413,7 @@ class GoalProgressEvent(SootheEvent):
 
 
 class GoalCreatedEvent(SootheEvent):
-    """Goal added to DAG for autopilot subscribers (RFC-228).
+    """Goal added to DAG for autopilot subscribers.
 
     Emitted when a new goal is created.
     """
@@ -426,7 +426,7 @@ class GoalCreatedEvent(SootheEvent):
 
 
 class GoalCompletedEvent(SootheEvent):
-    """Goal completed with summary for autopilot subscribers (RFC-228).
+    """Goal completed with summary for autopilot subscribers.
 
     Emitted when a goal finishes successfully with a result summary.
     """
@@ -439,7 +439,7 @@ class GoalCompletedEvent(SootheEvent):
 
 
 class WorkerAssignedEvent(SootheEvent):
-    """Worker assigned to goal for autopilot subscribers (RFC-228).
+    """Worker assigned to goal for autopilot subscribers.
 
     Emitted when an autopilot worker is assigned to a goal.
     """
@@ -451,7 +451,7 @@ class WorkerAssignedEvent(SootheEvent):
 
 
 class WorkerUnassignedEvent(SootheEvent):
-    """Worker released from goal for autopilot subscribers (RFC-228).
+    """Worker released from goal for autopilot subscribers.
 
     Emitted when an autopilot worker finishes or is reassigned.
     """
@@ -464,7 +464,7 @@ class WorkerUnassignedEvent(SootheEvent):
 
 
 def internal_to_client_event(internal_event: SootheEvent) -> SootheEvent | None:
-    """Convert internal event to client-visible event (RFC-228).
+    """Convert internal event to client-visible event.
 
     Used by daemon to bridge internal events for sessions with
     ``autopilot_subscribed=True``.

@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-904, RFC-622)."""
+"""Conditional edges for the Loop Graph."""
 
 from __future__ import annotations
 

@@ -67,7 +67,7 @@ def build_clarification_policy_for_runner(
             pause path uses LangGraph ``interrupt(...)`` regardless.
         human_attached: When ``True`` and ``mode`` resolves to ``"auto"``,
             wire an :class:`InteractiveClarificationPolicy` as the
-            ``interactive_fallback`` (RFC-623). Veritas structured-output
+            ``interactive_fallback``. Veritas structured-output
             failures then degrade to a TUI prompt instead of terminating the
             loop. Headless callers (autopilot) pass ``False`` and keep the
             hard-defer path on veritas failure.
@@ -163,7 +163,7 @@ def bind_clarification_emit(
     policy: ClarificationPolicy | None,
     emit: EmitFn,
 ) -> None:
-    """Wire runtime ``emit`` into interactive clarification legs (RFC-623).
+    """Wire runtime ``emit`` into interactive clarification legs.
 
     Runners build the policy before the graph ``emit`` closure exists. Call
     this once ``emit`` is available so auto→manual upgrades

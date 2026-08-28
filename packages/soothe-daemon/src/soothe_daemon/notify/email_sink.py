@@ -1,4 +1,4 @@
-"""Production SMTP EmailNotifySink (IG-713)."""
+"""Production SMTP EmailNotifySink."""
 
 from __future__ import annotations
 

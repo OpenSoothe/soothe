@@ -1,4 +1,4 @@
-"""Unified workspace resolution core with pluggable precedence (RFC-621).
+"""Unified workspace resolution core with pluggable precedence.
 
 Provides a single ``resolve_workspace()`` function that each resolution chain
 calls with the appropriate precedence level.  Existing public functions

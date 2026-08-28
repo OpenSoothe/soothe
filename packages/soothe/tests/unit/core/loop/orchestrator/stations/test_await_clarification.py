@@ -470,3 +470,25 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
     assert requested[0]["plan_path"] == "/ws/.soothe/plans/v2.md"
     assert "Unified model" in requested[0]["plan_markdown"]
     assert any(n == "clarification_answered" for n, _ in ctx.emitted)
+
+
+async def test_clarification_requested_forwards_step_id_from_resume_ticket() -> None:
+    """The paused step id is forwarded so the TUI can show 'awaiting answer'."""
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    ctx = _StubCtx(policy=policy)
+    state = _pending_state()
+    state["resume_ticket"] = {"step_id": "step-01", "thread_id": "t1", "step_description": "d"}
+    await node_await_clarification(ctx, state)
+    requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
+    assert len(requested) == 1
+    assert requested[0]["step_id"] == "step-01"
+
+
+async def test_clarification_requested_step_id_empty_without_resume_ticket() -> None:
+    """No resume_ticket → step_id is empty (non-step origins)."""
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    ctx = _StubCtx(policy=policy)
+    await node_await_clarification(ctx, _pending_state())
+    requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
+    assert len(requested) == 1
+    assert requested[0].get("step_id", "") == ""

@@ -3,7 +3,7 @@
 This module provides persistence infrastructure for StrangeLoop checkpoints
 with thread/loop isolation and dual backend support (SQLite/PostgreSQL).
 
-RFC-215: StrangeLoop Persistence Backend Architecture
+ : StrangeLoop Persistence Backend Architecture
 ArchiveBackend for loop archival and knowledge transfer.
 """
 

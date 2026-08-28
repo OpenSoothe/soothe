@@ -1,4 +1,4 @@
-"""Execute phase logic for StrangeLoop (RFC-201).
+"""Execute phase logic for StrangeLoop.
 
 Act-wave visible answer resolution is integrated here.
 
@@ -300,14 +300,14 @@ class Executor:
 
         Args:
             core_agent: Layer 1 CoreAgent for step execution
-            checkpointer: LangGraph checkpointer for thread fork inheritance (RFC-223).
+            checkpointer: LangGraph checkpointer for thread fork inheritance.
             max_parallel_steps: Max steps to run **concurrently** in one batch. ``execute`` repeats
                 batches until all ready steps finish (e.g. 4 ready steps and ``2`` → two batches of 2).
-                ``0`` means unlimited (RFC-201 / concurrency).
+                ``0`` means unlimited.
             config: Optional Soothe config for Act wave caps.
             loop_id: Optional loop identifier for Langfuse trace correlation.
             clarification_detector: When set with ``clarification_capture`` and
-                ``clarification_loop_state_view``, enables RFC-622 clarification
+                ``clarification_loop_state_view``, enables clarification
                 relay during the CoreAgent stream.
             clarification_capture: Side-channel that receives the first detected
                 ``ask_user`` request. The caller reads ``capture.pending_request``
@@ -319,7 +319,7 @@ class Executor:
                 the first ``Command(resume=...)`` to resume after a prior
                 clarification was answered.
             context_engine: Optional ContextEngine instance for dual-write
-                ledger recording (RFC-624 Phase 4).
+                ledger recording.
             step_brief_hydrator: Optional :class:`StepBriefHydrator` for between-wave
                 dependent step brief expansion.
         """
@@ -789,7 +789,7 @@ class Executor:
         - ``ask_user`` and ``action_requests`` (tool-approval) interrupts,
           when ``detector``/``capture`` are provided, are written to
           ``capture`` and the stream returns early so the StrangeLoop can route
-          to ``await_clarification`` (RFC-622). The originating step's id and
+          to ``await_clarification``. The originating step's id and
           description (``step_id`` / ``step_description``) are recorded on
           ``capture`` alongside the thread_id so the resume path can re-emit
           ``step_started`` with the same step identity the TUI already shows.
@@ -942,7 +942,7 @@ class Executor:
         mcp_state: dict[str, Any] | None = None,
         tool_activation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Build LangGraph input for execute waves (RFC-225 carries continue_loop_mode)."""
+        """Build LangGraph input for execute waves."""
         out: dict[str, Any] = {"messages": messages}
         if routing_classification is not None:
             out["routing_classification"] = routing_classification
@@ -993,7 +993,7 @@ class Executor:
 
     @staticmethod
     def _seed_skill_activation(loop_state: LoopState) -> dict[str, Any] | None:
-        """Rehydrate ``skill_activation`` from LoopState for graph input (RFC-105).
+        """Rehydrate ``skill_activation`` from LoopState for graph input.
 
         Also registers slash-invoked skills (``/skill:`` expansion) via
         ``mark_invoked`` so the progressive loading registry tracks them.
@@ -1032,7 +1032,7 @@ class Executor:
         graph_output: dict[str, Any] | None,
         loop_state: LoopState,
     ) -> None:
-        """Copy ``skill_activation`` from graph output back into LoopState (RFC-105).
+        """Copy ``skill_activation`` from graph output back into LoopState.
 
         Also clears slash invocation signal fields — they are consumed once by
         ``_seed_skill_activation`` and should not persist across iterations.
@@ -1383,7 +1383,7 @@ class Executor:
         steps: list[StepAction],
         gather_results: list[Any],
     ) -> None:
-        """Append RFC-214 Human/AI ledger pairs for each parallel step.
+        """Append Human/AI ledger pairs for each parallel step.
 
         Execute waves record per-step ledger rows so subsequent THREAD /
         synthesis projections can see prior step evidence.
@@ -1612,7 +1612,7 @@ class Executor:
         Pure-function over wave outputs; no I/O. Always overwrites
         ``state.prior_progress`` so the digest reflects the most recent wave.
         Wave index increments within the same iteration; resets to 0 on a new
-        iteration. See RFC-227 §5.3 for the derivation rules.
+        iteration. See.3 for the derivation rules.
 
         Sourcing notes (production-accurate):
         - Tool names come from ``AIMessage.tool_calls`` on assistant turns in
@@ -1748,7 +1748,7 @@ class Executor:
         tool_calls: list[ToolCallHead],
         evidence_excerpts: list[str],
     ) -> Literal["none", "low", "medium", "high"]:
-        """Deterministic progress hint over wave outputs. See RFC-227 §5.3."""
+        """Deterministic progress hint over wave outputs. See.3."""
         if steps_failed > 0:
             return "low"
         if not tool_calls and not evidence_excerpts:
@@ -1901,7 +1901,17 @@ class Executor:
                                     iteration=state.iteration,
                                 )
                             all_step_results.append(res.step_result)
-                            yield res.step_result
+                            # A clarification (tool_approval / ask_user) paused
+                            # the step mid-stream — it resumes after the user
+                            # answers. Do NOT yield the StepExecutionRecord to
+                            # node_execute: that would fire step_completed,
+                            # causing the TUI to mark the card as done and
+                            # remove it. On resume, a new step_started for the
+                            # same step_id would then create a duplicate card.
+                            # Instead, keep the card in its running state so
+                            # the resume path re-attaches to the existing card.
+                            if not res.paused_by_clarification:
+                                yield res.step_result
                 else:
                     yield item
         except asyncio.CancelledError:
@@ -2014,7 +2024,7 @@ class Executor:
         immediately for upstream TUI/WebSocket display and is not duplicated on the
         returned ``_ExecuteStepResult.events`` list.
 
-        RFC-211: Collects outcome metadata instead of full output string.
+         : Collects outcome metadata instead of full output string.
         Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
         Thread isolation via random ``{main}__{hex5}`` thread ids; predecessor context via ledger
         projection into graph input (no checkpoint fork).
@@ -2022,9 +2032,9 @@ class Executor:
         Args:
             step: StepAction with description and optional hints
             thread_id: Logical thread ID for StepExecutionRecord, logs, and durability lookups
-            workspace: Thread-specific workspace path (RFC-103)
+            workspace: Thread-specific workspace path
             routing_classification: Loop routing payload for middleware.
-            continue_loop_mode: True when this loop has prior goals (RFC-225);
+            continue_loop_mode: True when this loop has prior goals;
                 flows into LangGraph state so middleware injects loop-continuation guidance.
             loop_state: When set, generates isolated thread ID; multi-dep steps inject
                 predecessor ledger messages.
@@ -2478,7 +2488,7 @@ class Executor:
                     )
                     if recovered:
                         logger.info(
-                            "[decompose] RFC-905 text recovery: recovered %d "
+                            "[decompose] text recovery: recovered %d "
                             "proposal(s) from eval step %s final text "
                             "(ai_text_len=%d)",
                             len(recovered),
@@ -2488,7 +2498,7 @@ class Executor:
                         self.decompose_proposals.extend(recovered)
                     else:
                         logger.debug(
-                            "[decompose] RFC-905 text recovery: no proposals "
+                            "[decompose] text recovery: no proposals "
                             "recoverable from eval step %s (ai_text_len=%d)",
                             step.id,
                             len(final_ai_text),
@@ -2625,7 +2635,7 @@ class Executor:
         for real-time display, while also collecting output content for the final
         result.
 
-        RFC-211: Also extracts tool_call_id and generates outcome metadata.
+         : Also extracts tool_call_id and generates outcome metadata.
         Collects AIMessage objects for token usage extraction.
         Collects ``task`` tool return text (delegate finals) for goal completion when
         subgraph AIMessages are not folded into root-graph act aggregation.

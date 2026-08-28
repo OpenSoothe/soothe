@@ -1,4 +1,4 @@
-"""Synthesis execution logic for comprehensive final report generation (RFC-603, RFC-616).
+"""Synthesis execution logic for comprehensive final report generation.
 
 Consolidated execution module:
 - Scenario classification (Phase 1 via ScenarioClassifier)
@@ -51,7 +51,7 @@ _DEFAULT_SYNTHESIS_EVIDENCE_MAX = GOAL_COMPLETION_REPORT_MAX_CHARS
 
 
 class SynthesisGenerator:
-    """Generate synthesis reports from execution evidence (RFC-616).
+    """Generate synthesis reports from execution evidence.
 
     Two-phase synthesis: scenario classification, then CoreAgent generation.
     """
@@ -251,7 +251,7 @@ def generate_user_fallback_summary(
     state: LoopState,
     plan_result: PlanResult,
 ) -> str:
-    """Generate user-friendly fallback summary (RFC-211 /).
+    """Generate user-friendly fallback summary.
 
     NEVER leak internal evidence_summary to users.
     Generate user-friendly completion summary instead.

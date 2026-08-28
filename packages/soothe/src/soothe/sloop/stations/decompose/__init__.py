@@ -1,1 +1,1 @@
-"""Recursive decompose graph stations (RFC-904 / IG-751 P3)."""
+"""Recursive decompose graph stations."""

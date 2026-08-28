@@ -32,7 +32,7 @@ class StrangeLoopPersistenceBackend(ABC):
 
         Args:
             loop_id: StrangeLoop identifier.
-            current_thread_id: Current active thread ID (== loop_id per RFC-223).
+            current_thread_id: Current active thread ID (== loop_id).
             status: Loop status (default: "running").
         """
         pass
@@ -57,7 +57,7 @@ class StrangeLoopPersistenceBackend(ABC):
 
         Args:
             loop_id: Loop identifier.
-            force_status: When True, bypass the RFC-225 goal-count guard so
+            force_status: When True, bypass the goal-count guard so
                 an authoritative caller (stale-loop reconciler) can demote a
                 confirmed-dead zombie loop's ``status`` even when it has goals.
             **fields: Column names and values to update. Supported keys:

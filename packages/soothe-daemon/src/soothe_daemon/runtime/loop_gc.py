@@ -33,7 +33,7 @@ async def _cancel_and_detach_loop(daemon: Any, loop_id: str) -> None:
 async def _collect_loop_thread_ids(daemon: Any, loop_id: str) -> list[str]:
     """Find all thread ids belonging to ``loop_id`` for GC deletion.
 
-    Per IG-764, loop metadata no longer indexes fork threads. The main thread
+    Per, loop metadata no longer indexes fork threads. The main thread
     is the bare ``loop_id``; every fork (execute-step, synth, intake) shares
     the ``{loop_id}__`` prefix. Query the LangGraph checkpoint tables directly
     (the durability index does not register fork threads). Falls back to

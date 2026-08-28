@@ -1,4 +1,4 @@
-"""Automatic context window compaction for StrangeLoop threads (RFC-224).
+"""Automatic context window compaction for StrangeLoop threads.
 
 This module provides ContextWindowManager which handles:
 - Estimating token count from checkpoint messages
@@ -6,7 +6,7 @@ This module provides ContextWindowManager which handles:
 - Triggering in-place compaction via LLM summarization
 - Updating LoopState metrics after compaction
 
-RFC-224: When estimated token count exceeds threshold (default 80%),
+ : When estimated token count exceeds threshold (default 80%),
 in-place compaction is triggered to enable long-running goals to
 continue autonomously without hitting model context limits.
 """
@@ -74,7 +74,7 @@ _MAX_MESSAGES_FOR_SUMMARY_PROMPT = 100
 
 @dataclass(frozen=True, slots=True)
 class ContextCompactionResult:
-    """Result from automatic context compaction (RFC-224).
+    """Result from automatic context compaction.
 
     Attributes:
         thread_id: Thread that was compacted.
@@ -94,7 +94,7 @@ class ContextCompactionResult:
 class ContextWindowManager:
     """Manages automatic context window compaction for StrangeLoop threads.
 
-    RFC-224: After execute waves, check estimated context size and trigger
+     : After execute waves, check estimated context size and trigger
     in-place summarization when threshold exceeded.
 
     Args:
@@ -159,7 +159,7 @@ class ContextWindowManager:
         Used internally when checkpoint is already loaded, avoiding
         redundant async call.
 
-        IG-761: delegates to the unified ``estimate_token_usage`` API so
+         : delegates to the unified ``estimate_token_usage`` API so
         context-window estimation stays consistent with the executor's token
         accounting. The unified API prefers real ``usage_metadata`` on AI
         messages (no double-estimation of turns the provider already

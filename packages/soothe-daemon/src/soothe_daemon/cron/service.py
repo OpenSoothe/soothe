@@ -1,4 +1,4 @@
-"""CronService — orchestrator for cron jobs (RFC-229).
+"""CronService — orchestrator for cron jobs.
 
 Coordinates NL extraction, persistence, and execution through AutopilotService.
 """
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class CronService:
-    """Orchestrating service for cron jobs (RFC-229).
+    """Orchestrating service for cron jobs.
 
     Coordinates:
     - NL extraction via CronExtractionService
@@ -502,7 +502,7 @@ class CronService:
             await self._store.update_status(job_id, JobStatus.FAILED)
 
     async def _handle_internal_goal_completed(self, event: Any) -> None:
-        """Handle InternalGoalCompletedEvent for recurring job rescheduling (RFC-229).
+        """Handle InternalGoalCompletedEvent for recurring job rescheduling.
 
         Bridge from internal event to handle_goal_completion when goal has cron_job_id.
 

@@ -271,6 +271,11 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
         mock_summary.assert_not_called()
         # No StepCompletionReport yielded
         assert not any(isinstance(r, StepCompletionReport) for r in results)
+        # No StepExecutionRecord yielded — the step is paused, not complete.
+        # Yielding it would fire step_completed in node_execute, causing the
+        # TUI to mark the card as done and remove it before the resume
+        # re-attaches.
+        assert not any(isinstance(r, StepExecutionRecord) for r in results)
 
     @pytest.mark.asyncio
     async def test_completion_report_task_runs_when_not_paused(self) -> None:

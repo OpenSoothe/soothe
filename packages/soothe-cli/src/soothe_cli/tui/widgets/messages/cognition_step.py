@@ -1483,37 +1483,30 @@ class CognitionStepMessage(Vertical):
         source: str,
         confidence: float | None,
     ) -> None:
-        """Render Q&A pairs for an ask_user step on the detail widget.
+        """Show a compact answered-notice on the step card.
 
         Called after :meth:`set_complete` for steps whose ``step_completed``
         event payload includes a ``clarification`` block (RFC-622, RFC-623).
-        Lays out one ``Q: ... / A: ...`` pair per question with a header line
-        showing the answer source and (optional) veritas confidence.
+        Only a status line is shown — the full Q&A pairs are rendered in the
+        dedicated clarification/QA card.
         """
-        if self._detail_widget is None:
-            return
         if not questions and not answers:
             return
         self._has_clarification_details = True
-        header_bits = [f"source={source or 'unknown'}"]
-        if confidence is not None:
-            header_bits.append(f"confidence={confidence:.2f}")
-        header = "Answered (" + ", ".join(header_bits) + ")"
-        lines: list[str] = [header]
-        pair_count = max(len(questions), len(answers))
-        for i in range(pair_count):
-            q = questions[i].strip() if i < len(questions) else ""
-            a = answers[i].strip() if i < len(answers) else ""
-            if q:
-                lines.append(f"Q{i + 1}: {q}")
-            if a:
-                lines.append(f"A{i + 1}: {a}")
-            else:
-                lines.append(f"A{i + 1}: (no answer)")
-        body = "\n".join(lines)
-        self._detail_widget.update(self._step_branched_execute_body(body, muted=True))
-        if not self._card_collapsed:
-            self._detail_widget.display = True
+        if self._status_widget is not None:
+            g = get_glyphs()
+            gutter = _card_body_gutter(self._step_header_glyph())
+            header_bits = [f"source={source or 'unknown'}"]
+            if confidence is not None:
+                header_bits.append(f"confidence={confidence:.2f}")
+            summary = "Answered (" + ", ".join(header_bits) + ")"
+            line = f"{gutter}{g.circle_filled} {summary}"
+            try:
+                colors = theme.get_theme_colors(self)
+            except Exception:  # noqa: BLE001
+                colors = theme.DARK_COLORS
+            self._status_widget.update(Content.styled(line, colors.success))
+            self._status_widget.display = True
 
     def set_result_preview(self, text: str) -> None:
         """Show a short preview of the goal_completion result in the detail area."""
@@ -1552,18 +1545,14 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.display = True
 
     def set_awaiting_clarification(self, questions: list[str]) -> None:
-        """Pause the running animation and show the pending questions.
+        """Pause the running animation and show the awaiting-notice on the step card.
 
         Called when a ``soothe.loop.clarification.requested`` event arrives
         while the loop graph is suspended on ``await_clarification``
-        (RFC-622 / RFC-623). Stops the spinner, marks the card as awaiting an
-        answer, and renders the questions in the detail area so the user
-        knows what to type. ``set_clarification_details`` will replace the
-        body with the Q&A pairs once ``step_completed`` arrives.
+        (RFC-622 / RFC-623). Stops the spinner and marks the card as awaiting
+        an answer. Only the status line is shown on the step card — the actual
+        questions are rendered in the dedicated clarification/QA card.
         """
-        clean = [q.strip() for q in questions if q and q.strip()]
-        if not clean:
-            return
         self._stop_animation()
         self._status = "pending"
         self._refresh_header_title()
@@ -1577,11 +1566,6 @@ class CognitionStepMessage(Vertical):
             line = f"{gutter}{g.circle_empty} Awaiting your answer..."
             self._status_widget.update(Content.styled(line, colors.warning))
             self._status_widget.display = True
-        if self._detail_widget is not None:
-            lines = [f"Q{i + 1}: {q}" for i, q in enumerate(clean)]
-            body = "\n".join(lines)
-            self._detail_widget.update(self._step_branched_execute_body(body, muted=False))
-            self._detail_widget.display = True
 
     def set_clarification_deferred(self, reason: str, questions: list[str]) -> None:
         """Show the deferred clarification notice on the step card.
@@ -1589,10 +1573,9 @@ class CognitionStepMessage(Vertical):
         Called when a ``soothe.loop.clarification.deferred`` event arrives.
         The loop has terminated (no live ``interrupt()``), so this is
         informational only — the user should provide more detail in their
-        next message. Stops the spinner and renders the questions so the
-        user knows what was asked.
+        next message. Stops the spinner and shows the status line. The actual
+        questions are rendered in the dedicated clarification/QA card.
         """
-        clean = [q.strip() for q in questions if q and q.strip()]
         self._stop_animation()
         self._status = "pending"
         self._refresh_header_title()
@@ -1607,11 +1590,6 @@ class CognitionStepMessage(Vertical):
             line = f"{gutter}{g.circle_empty} Clarification deferred: {short_reason}"
             self._status_widget.update(Content.styled(line, colors.warning))
             self._status_widget.display = True
-        if self._detail_widget is not None and clean:
-            lines = [f"Q{i + 1}: {q}" for i, q in enumerate(clean)]
-            body = "\n".join(lines)
-            self._detail_widget.update(self._step_branched_execute_body(body, muted=False))
-            self._detail_widget.display = True
 
     def set_interrupted(self, message: str) -> None:
         """Mark step as aborted (stream error / cancel) while still running."""

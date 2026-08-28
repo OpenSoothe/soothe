@@ -1,4 +1,4 @@
-"""Transport-agnostic message validation (RFC-450 §6).
+"""Transport-agnostic message validation.
 
 Provides Pydantic-based schema validation at the transport boundary.  Every
 incoming message is validated against a params model from ``PARAMS_REGISTRY``
@@ -41,7 +41,7 @@ _ENVELOPE_TYPES: frozenset[str] = VALID_TYPES - _CONTROL_TYPES
 
 
 def validate_message(msg: dict[str, Any]) -> list[str]:
-    """Validate a wire message against the schema registry (RFC-450 §6.3).
+    """Validate a wire message against the schema registry.
 
     Performs three checks:
     1. Envelope: ``type`` field is present and known.

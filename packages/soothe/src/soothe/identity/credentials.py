@@ -1,4 +1,4 @@
-"""AKSK credential generation and hashing. RFC-307 §AKSKPair."""
+"""AKSK credential generation and hashing.."""
 
 import hashlib
 import hmac
@@ -24,7 +24,7 @@ def generate_access_key() -> str:
     Returns:
         Access key string (e.g., "AK-x7k2m9p4q1w8")
 
-    RFC-307 §AKSKPair format.
+    format.
     """
     random_chars = secrets.token_urlsafe(12)[:ACCESS_KEY_LENGTH]
     return f"{ACCESS_KEY_PREFIX}-{random_chars}"
@@ -39,7 +39,7 @@ def generate_secret_key() -> str:
     Returns:
         Secret key string (e.g., "SK-a1b2c3d4e5f6g7h8...")
 
-    RFC-307 §AKSKPair format.
+    format.
     """
     random_chars = secrets.token_urlsafe(24)[:SECRET_KEY_LENGTH]
     return f"{SECRET_KEY_PREFIX}-{random_chars}"
@@ -58,7 +58,7 @@ def hash_secret_key(secret_key: str) -> str:
     Returns:
         SHA-256 hex digest string (64 chars)
 
-    RFC-307 §Security Checklist.
+    Checklist.
     """
     return hashlib.sha256(secret_key.encode()).hexdigest()
 
@@ -77,7 +77,7 @@ def verify_secret_key(secret_key: str, hash_value: str) -> bool:
     Returns:
         True if secret_key matches hash, False otherwise
 
-    RFC-307 §Security Checklist (constant-time comparison).
+    Checklist (constant-time comparison).
     """
     expected_hash = hash_secret_key(secret_key)
     # hmac.compare_digest provides constant-time comparison

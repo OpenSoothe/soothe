@@ -1534,7 +1534,7 @@ class ThreadLoopRunner:
         await pool.cancel_request(self._loop_id)
 
     def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap clarification mode on the running goal (RFC-622).
+        """Hot-swap clarification mode on the running goal.
 
         Reaches the live ``SootheRunner`` inside the worker thread via the
         pool's ``_live_runners`` registry and calls ``set_clarification_mode``

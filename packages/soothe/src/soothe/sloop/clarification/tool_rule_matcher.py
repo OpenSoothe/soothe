@@ -1,14 +1,20 @@
-"""Pattern matching for tool-approval rules (RFC-622 §9b).
+"""Pattern matching for tool-approval rules.
 
 Adapts Claude Code's ``shellRuleMatching.ts`` command matching and
 ``filesystem.ts`` path matching to Python. Supports three command pattern
 syntaxes (exact, prefix ``:*``, wildcard ``*``) and gitignore-style path
 matching via ``pathspec``.
+
+Compound commands (``cd /path && git status``, ``A && B || C``) are split
+on shell operators (``&&``, ``||``, ``;``, ``|``) so each sub-command is
+matched independently. ``cd`` and ``pushd`` prefixes are stripped because
+they are side-effect-free directory changes that don't warrant blocking.
 """
 
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import PurePosixPath
 
 import pathspec
@@ -18,6 +24,60 @@ import pathspec
 # ---------------------------------------------------------------------------
 
 _WORKSPACE_TOKEN = "<workspace>"
+
+# Shell operators that chain commands. We split on these so each sub-command
+# is matched independently against deny/allow rules.
+_COMPOUND_SPLIT_RE = re.compile(r"\s*(?:&&|\|\||;|\|)\s*")
+
+# Commands that are pure directory changes — stripped before matching.
+_DIR_CHANGE_PREFIXES = ("cd", "pushd", "popd")
+
+
+def _strip_dir_change(command: str) -> str:
+    """Strip ``cd``/``pushd``/``popd`` sub-commands from a compound command.
+
+    ``cd /path && git status`` → ``git status``
+    ``pushd /path && make && popd`` → ``make``
+    ``cd /path && git status && git diff`` → ``git status && git diff``
+    """
+    parts = _COMPOUND_SPLIT_RE.split(command.strip())
+    # Strip leading cd/pushd segments
+    while parts:
+        first = parts[0].strip()
+        try:
+            tokens = shlex.split(first, posix=True)
+        except ValueError:
+            break
+        if tokens and tokens[0] in _DIR_CHANGE_PREFIXES:
+            parts = parts[1:]
+            continue
+        break
+    # Strip trailing popd segments
+    while parts:
+        last = parts[-1].strip()
+        try:
+            tokens = shlex.split(last, posix=True)
+        except ValueError:
+            break
+        if tokens and tokens[0] in _DIR_CHANGE_PREFIXES:
+            parts = parts[:-1]
+            continue
+        break
+    return " && ".join(parts) if parts else ""
+
+
+def split_compound_command(command: str) -> list[str]:
+    """Split a compound shell command into individual sub-commands.
+
+    Strips ``cd``/``pushd``/``popd`` segments (directory changes are
+    side-effect-free) and splits on ``&&``, ``||``, ``;``, and ``|`` so
+    each remaining sub-command is matched independently.
+
+    Returns at least one element. Returns ``[""]`` for empty input.
+    """
+    stripped = _strip_dir_change(command)
+    parts = _COMPOUND_SPLIT_RE.split(stripped)
+    return [p.strip() for p in parts if p.strip()]
 
 
 def _parse_command_rule(pattern: str) -> dict[str, str]:
@@ -113,17 +173,8 @@ def _match_wildcard(pattern: str, command: str, *, case_insensitive: bool = Fals
     return re.fullmatch(regex_str, command, flags) is not None
 
 
-def match_command_rule(command: str, pattern: str) -> bool:
-    """Match a shell command against a permission pattern.
-
-    Supports three syntaxes (mirrors Claude Code's ``parsePermissionRule``):
-
-    - ``"exact"`` — exact string match (e.g. ``"git status"``)
-    - ``"prefix:*"`` — prefix match (e.g. ``"grep:*"`` matches ``"grep -r foo"``)
-    - ``"wildcard*"`` — wildcard match (e.g. ``"pytest*"`` matches ``"pytest -xvs"``)
-
-    Matching is case-insensitive for commands.
-    """
+def _match_single_command(command: str, pattern: str) -> bool:
+    """Match a single (non-compound) command against a permission pattern."""
     if not command or not pattern:
         return False
 
@@ -138,6 +189,32 @@ def match_command_rule(command: str, pattern: str) -> bool:
     if rule["type"] == "wildcard":
         return _match_wildcard(pattern, command.strip(), case_insensitive=True)
     return False
+
+
+def match_command_rule(command: str, pattern: str) -> bool:
+    """Match a shell command against a permission pattern.
+
+    Supports three syntaxes (mirrors Claude Code's ``parsePermissionRule``):
+
+    - ``"exact"`` — exact string match (e.g. ``"git status"``)
+    - ``"prefix:*"`` — prefix match (e.g. ``"grep:*"`` matches ``"grep -r foo"``)
+    - ``"wildcard*"`` — wildcard match (e.g. ``"pytest*"`` matches ``"pytest -xvs"``)
+
+    Compound commands (``cd /path && git status``) are split into
+    sub-commands; the rule matches if **every** sub-command matches.
+    ``cd``/``pushd``/``popd`` segments are stripped before matching.
+
+    Matching is case-insensitive for commands.
+    """
+    if not command or not pattern:
+        return False
+
+    sub_commands = split_compound_command(command)
+    if not sub_commands:
+        return False
+    # Every sub-command must match — a single non-matching segment means
+    # the whole compound command is ambiguous (defer).
+    return all(_match_single_command(sc, pattern) for sc in sub_commands)
 
 
 # ---------------------------------------------------------------------------
@@ -194,4 +271,5 @@ def match_path_rule(path: str, pattern: str, workspace_root: str | None) -> bool
 __all__ = [
     "match_command_rule",
     "match_path_rule",
+    "split_compound_command",
 ]

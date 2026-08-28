@@ -1,6 +1,6 @@
-"""Project StrangeLoop ledger messages for execute / synthesis / intake (RFC-214).
+"""Project StrangeLoop ledger messages for execute / synthesis / intake.
 
-RFC-214: The complete ledger includes all phases. CoreAgent execution sees only
+ : The complete ledger includes all phases. CoreAgent execution sees only
 ``execute_step`` messages (plan-phase reasoning is not injected into the
 CoreAgent thread). Goal-completion synthesis uses the current-goal execute
 segment (plus optional compacted prior terminal status). Intake classify may
@@ -258,7 +258,7 @@ def project_loop_messages_for_plan(
     """Return ledger messages for plan LLM prompts.
 
     Args:
-        loop_messages: RFC-214 ledger from ``LoopState.loop_messages``.
+        loop_messages: ledger from ``LoopState.loop_messages``.
         ledger_cfg: Optional caps; ``None`` treated as all limits disabled.
 
     Returns:
@@ -444,7 +444,7 @@ def project_last_goal_completion_for_intake(
     terminal AI report.
 
     Args:
-        loop_messages: Full RFC-214 ledger loaded from CE persistence.
+        loop_messages: Full ledger loaded from CE persistence.
         ledger_cfg: Optional caps (same knobs as plan prompts).
         include_boundary: When True (default), prepend boundary marker.
             Set False where the classifier needs the prior scope signal.
@@ -713,7 +713,7 @@ def project_cross_goal_completion_tail(
     """Project K prior-goal ``goal_completion`` units for execute Slice A.
 
     Args:
-        loop_messages: Full RFC-214 ledger.
+        loop_messages: Full ledger.
         k: Maximum number of prior goal completion units to project.
         ledger_cfg: Optional caps.
         include_boundary: When False (default for execute), omit boundary marker
@@ -930,7 +930,7 @@ def project_predecessor_execute_ledger_for_step(
     instead of an inline ``PRIOR STEP EVIDENCE`` block in the current envelope.
 
     Args:
-        loop_messages: RFC-214 ledger from ``LoopState.loop_messages``.
+        loop_messages: ledger from ``LoopState.loop_messages``.
         step: Step about to execute on an isolated branch thread.
         decision: Current scoped plan decision (for transitive dependency closure).
         max_messages: Cap on copied ledger rows; ``None`` uses the branch default.
@@ -966,13 +966,13 @@ def project_predecessor_execute_ledger_for_step(
 def project_loop_messages_for_core_agent(
     loop_messages: list[BaseMessage],
 ) -> list[BaseMessage]:
-    """Return ledger messages for CoreAgent thread (RFC-214).
+    """Return ledger messages for CoreAgent thread.
 
     Filters to only execute_step phase messages. Historical plan-spine ledger
     turns are not injected into the CoreAgent thread.
 
     Args:
-        loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
+        loop_messages: complete ledger from ``LoopState.loop_messages``.
 
     Returns:
         Filtered list with only execute_step Human/AI message pairs.
@@ -1052,7 +1052,7 @@ def project_loop_messages_for_synthesis(
     *,
     prior_goal_tail: int = 0,
 ) -> list[BaseMessage]:
-    """Return ledger messages for goal-synthesis prompts (RFC-214).
+    """Return ledger messages for goal-synthesis prompts.
 
     Unlike plan-assess / plan-generate, synthesis injects only ``execute_step``
     human/AI turns from the **current goal segment** — plan-phase reasoning and
@@ -1064,7 +1064,7 @@ def project_loop_messages_for_synthesis(
     trimming as plan prompts).
 
     Args:
-        loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
+        loop_messages: complete ledger from ``LoopState.loop_messages``.
         ledger_cfg: Optional size caps; ``None`` treated as all limits disabled.
         prior_goal_tail: Max prior-goal terminal units to prepend.
 

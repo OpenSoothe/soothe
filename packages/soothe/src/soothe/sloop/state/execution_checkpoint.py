@@ -1,4 +1,4 @@
-"""GoalIndexEntry for RFC-626 Phase 3 checkpoint goal index.
+"""GoalIndexEntry for checkpoint goal index.
 
 Goal/step/ledger state is recovered from CE persistence on restart.
 The checkpoint stores only a lightweight goal index (GoalIndexEntry).
@@ -13,22 +13,22 @@ from pydantic import BaseModel, Field
 
 
 class GoalIndexEntry(BaseModel):
-    """Minimal goal index entry for checkpoint (RFC-626 Phase 3).
+    """Minimal goal index entry for checkpoint.
 
-    Goal state recovered from CE GoalNode. Checkpoint only stores
-    goal_id and status for loop-level tracking.
+       Goal state recovered from CE GoalNode. Checkpoint only stores
+       goal_id and status for loop-level tracking.
 
-    Per RFC-626 §4: GoalIndexEntry stores loop-level goal index metadata only.
-    CE GoalNode is the authoritative source for goal state.
+    §4: GoalIndexEntry stores loop-level goal index metadata only.
+       CE GoalNode is the authoritative source for goal state.
 
-    Attributes:
-        goal_id: Goal identifier (CE lookup key, 8-char hex).
-        status: Goal execution status.
-        thread_id: Thread that executed this goal.
-        started_at: Goal start timestamp.
-        completed_at: Goal completion timestamp (None if running).
-        duration_ms: Goal execution duration in milliseconds.
-        tokens_used: Tokens used for this goal.
+       Attributes:
+           goal_id: Goal identifier (CE lookup key, 8-char hex).
+           status: Goal execution status.
+           thread_id: Thread that executed this goal.
+           started_at: Goal start timestamp.
+           completed_at: Goal completion timestamp (None if running).
+           duration_ms: Goal execution duration in milliseconds.
+           tokens_used: Tokens used for this goal.
     """
 
     # Identity (CE lookup key)

@@ -1,4 +1,4 @@
-"""Mutable runtime bundle for LangGraph Strange Loop nodes (RFC-220).
+"""Mutable runtime bundle for LangGraph Strange Loop nodes.
 
 Per-iteration planner scratch lives on ``LoopRuntimeContext`` (not graph
 channels) because payloads reference rich non-primitive models that are not
@@ -96,7 +96,7 @@ class LoopRuntimeContext:
         *,
         reason: str = "",
     ) -> None:
-        """Persist a hard-defer park so the goal stays resumable (RFC-622).
+        """Persist a hard-defer park so the goal stays resumable.
 
         When a Context Engine handle is wired (``ce`` + ``ce_goal_id``), calls
         ``mark_awaiting_clarification`` so Autopilot skips redispatch

@@ -1,4 +1,4 @@
-"""Veritas subagent: intent-grounded clarification auto-answerer (RFC-622)."""
+"""Veritas subagent: intent-grounded clarification auto-answerer."""
 
 from __future__ import annotations
 

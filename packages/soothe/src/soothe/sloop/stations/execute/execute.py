@@ -1,4 +1,4 @@
-"""Execute planned steps via CoreAgent (RFC-220 ``execute``, RFC-622 relay)."""
+"""Execute planned steps via CoreAgent."""
 
 from __future__ import annotations
 

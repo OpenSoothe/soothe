@@ -1,6 +1,6 @@
 """File logging for isolated loop workers (multiprocessing subprocess or Ray actor).
 
-RFC-221 workers run outside the daemon process and need their own ``soothe.*``
+ workers run outside the daemon process and need their own ``soothe.*``
 handlers so diagnostics land under each loop's persistence directory.
 """
 

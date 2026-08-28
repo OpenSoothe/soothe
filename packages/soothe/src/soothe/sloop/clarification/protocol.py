@@ -75,7 +75,7 @@ class ClarificationDeferredError(Exception):
     goal status and terminates the loop until the question is answered
     out-of-band (e.g. by ``soothe goal answer ...``).
 
-    RFC-623 attaches a ``kind: DeferKind`` so operators can distinguish
+     attaches a ``kind: DeferKind`` so operators can distinguish
     legitimate "I don't know" defers from forced ones (e.g. the LLM produced
     malformed structured output). The kind is propagated into the
     ``LOOP_CLARIFICATION_DEFERRED`` event payload.

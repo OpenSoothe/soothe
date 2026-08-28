@@ -1,4 +1,4 @@
-"""PostgreSQL CronJobStore (RFC-229) — used when persistence.default_backend=postgresql."""
+"""PostgreSQL CronJobStore — used when persistence.default_backend=postgresql."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""LLM prompts for intake classification (RFC-630 / RFC-904).
+"""LLM prompts for intake classification.
 
 - ``INTAKE_CLASSIFY_SYSTEM_PROMPT``: social vs task + task complexity + short description.
 """

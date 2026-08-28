@@ -1,4 +1,4 @@
-"""HTTP webhook NotifySink (IG-713)."""
+"""HTTP webhook NotifySink."""
 
 from __future__ import annotations
 

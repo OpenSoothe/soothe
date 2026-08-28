@@ -1,4 +1,4 @@
-"""Context Engine — unified context management for goals, steps, and projection (RFC-624, RFC-625).
+"""Context Engine — unified context management for goals, steps, and projection.
 
 Located in soothe.context as foundational infrastructure.
 """

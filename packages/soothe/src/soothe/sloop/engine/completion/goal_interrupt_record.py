@@ -1,4 +1,4 @@
-"""Interrupted-goal ledger marker (RFC-214 ledger phase ``goal_interrupted``).
+"""Interrupted-goal ledger marker.
 
 When a goal is terminated mid-Execute **without** reaching the
 ``goal_completion`` success node — i.e. user cancel / new query superseding an

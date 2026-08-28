@@ -1,4 +1,4 @@
-"""Channel message types (RFC-620 §2.1).
+"""Channel message types.
 
 ChannelMessage handles platform routing and delivery, separate from
 agent-centric SootheEvent types. Translation occurs at ChannelManager boundary.

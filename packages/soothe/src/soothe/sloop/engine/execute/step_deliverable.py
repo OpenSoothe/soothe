@@ -1,4 +1,4 @@
-"""Step deliverable gate for execute action retry (RFC-630).
+"""Step deliverable gate for execute action retry.
 
 Structural evidence checks, optional fast-LLM assessment, and
 failure-mode-specific retry instructions.

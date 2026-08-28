@@ -36,7 +36,8 @@ async def test_click_expands_auto_collapsed_card_with_clarification() -> None:
         assert card._detail_widget is not None
         assert card._detail_widget.display is False
 
-        # Clarification Q&A content is set but stays hidden while collapsed.
+        # Clarification answered-notice shows on the status line only.
+        # Questions/Q&A live in the dedicated clarification/QA card.
         card.set_clarification_details(
             questions=["What output format do you want?"],
             answers=["Markdown table"],
@@ -44,11 +45,5 @@ async def test_click_expands_auto_collapsed_card_with_clarification() -> None:
             confidence=None,
         )
         await pilot.pause()
-        assert card._detail_widget.display is False
-
-        # Clicking expands the card and reveals the clarification detail.
-        await pilot.click("#step-card")
-        await pilot.pause()
-
-        assert not card.has_class("-collapsed")
-        assert card._detail_widget.display is True
+        assert card._status_widget is not None
+        assert card._status_widget.display is True

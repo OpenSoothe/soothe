@@ -1,9 +1,9 @@
-"""StrangeLoop Checkpoint Models (RFC-216, RFC-214, RFC-626).
+"""StrangeLoop Checkpoint Models.
 
 Defines step-level semantic traces for agentic goal execution.
-RFC-216 extends to multi-thread spanning with infinite lifecycle.
-RFC-214 introduces unified message ledger replacing fragmented traces.
-RFC-626 Phase 3: ExecutionCheckpoint pattern with execution-only fields.
+ extends to multi-thread spanning with infinite lifecycle.
+ introduces unified message ledger replacing fragmented traces.
+: ExecutionCheckpoint pattern with execution-only fields.
 """
 
 from __future__ import annotations
@@ -84,9 +84,9 @@ class ThreadHealthMetrics(BaseModel):
 
 
 class StrangeLoopCheckpoint(BaseModel):
-    """Complete StrangeLoop state (RFC-216: multi-thread spanning).
+    """Complete StrangeLoop state.
 
-    RFC-626 Phase 3: Added execution_checkpoint field for schema 5.0.
+    : Added execution_checkpoint field for schema 5.0.
     goal_history is now a lightweight index (GoalIndexEntry pattern).
     Goal/step/ledger state recovered from CE persistence on restart.
     """
@@ -204,7 +204,7 @@ _GOAL_INDEX_FIELDS = frozenset(
 
 
 def _strip_enriched_goal_index_fields(item: Any) -> Any:
-    """Drop pre-RFC-626 goal content from ``goal_history`` rows on load."""
+    """Drop pre- goal content from ``goal_history`` rows on load."""
     if not isinstance(item, dict):
         return item
     return {k: v for k, v in item.items() if k in _GOAL_INDEX_FIELDS}
@@ -221,7 +221,7 @@ def normalize_checkpoint_data(
     document for daemon bookkeeping. ``StrangeLoopStateManager.load()`` expects a full
     ``StrangeLoopCheckpoint`` schema.
 
-    RFC-626 Phase 3: Supports schema 5.0 execution_checkpoint field.
+    : Supports schema 5.0 execution_checkpoint field.
     Lazy migration: fills defaults for missing execution_checkpoint.
     """
     out = dict(data)

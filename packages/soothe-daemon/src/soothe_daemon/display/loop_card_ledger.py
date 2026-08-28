@@ -120,7 +120,7 @@ class LoopCardLedger:
             self._loaded = True
 
     async def reset_for_next_goal(self) -> None:
-        """Clear live card segment after a goal snapshot freeze (RFC-631)."""
+        """Clear live card segment after a goal snapshot freeze."""
         header = build_header_mutation(loop_id=self._loop_id, created_by=self._created_by)
         async with self._lock:
             await asyncio.to_thread(self._store.replace_mutations, self._loop_id, [header])

@@ -1,4 +1,4 @@
-"""Schedule math for the cron service (RFC-204, RFC-229).
+"""Schedule math for the cron service.
 
 Supports delayed execution (``--delay``), specific time (``--at``), simple
 recurrence (``--every``), and cron expressions (``--cron``). Also hosts the

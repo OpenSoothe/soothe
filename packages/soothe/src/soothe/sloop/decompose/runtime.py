@@ -1,4 +1,4 @@
-"""Runtime context for executor-bound ``decompose_task`` (RFC-904 / IG-751)."""
+"""Runtime context for executor-bound ``decompose_task``."""
 
 from __future__ import annotations
 

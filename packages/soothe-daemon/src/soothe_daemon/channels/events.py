@@ -1,4 +1,4 @@
-"""Channel event types (RFC-620 §2.2).
+"""Channel event types.
 
 Agent-layer events for channel messages. These SootheEvent subclasses
 represent user input (ChannelMessageReceived) and agent output (TextEvent,

@@ -1,4 +1,4 @@
-"""Context Engine — unified context management for goals, steps, and projection (RFC-624, RFC-625)."""
+"""Context Engine — unified context management for goals, steps, and projection."""
 
 from __future__ import annotations
 
@@ -140,7 +140,7 @@ def _normalize_ledger_entry(
 ) -> tuple[str, dict[str, Any], str | None]:
     """Normalize persisted ledger rows to the current ``_msg_type`` wire shape.
 
-    Pre-RFC-624 rows stored ``type``, ``content``, and ``phase`` only. They are
+    Pre- rows stored ``type``, ``content``, and ``phase`` only. They are
     upgraded on read so ``load()`` uses a single reconstruction path.
     """
     entry = dict(entry_data)
@@ -470,7 +470,7 @@ class ContextEngine:
             goal.action_history.append(action)
 
     def increment_iteration(self, goal_id: str) -> int:
-        """Increment the iteration count for a goal (RFC-624 Phase 4 Step 4).
+        """Increment the iteration count for a goal.
 
         Called by ``record_iteration`` after each iteration checkpoint is persisted.
         Returns the new iteration value.
@@ -514,7 +514,7 @@ class ContextEngine:
         *,
         iteration: int,
     ) -> None:
-        """Overwrite per-goal assess audit snapshot (RFC-624)."""
+        """Overwrite per-goal assess audit snapshot."""
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
             goal.last_assessment = assessment.model_dump(mode="json")
@@ -613,7 +613,7 @@ class ContextEngine:
         goal_id: str,
         report: dict[str, Any],
     ) -> int:
-        """Upsert ``GoalNode.report`` and bump ``report_revision`` (IG-726).
+        """Upsert ``GoalNode.report`` and bump ``report_revision``.
 
         Autopilot judgment MUST read from the committed report after this call.
         Idempotent content writes still bump the revision so each loop-end
@@ -1115,7 +1115,7 @@ class ContextEngine:
         *,
         source: str = "user",
     ) -> bool:
-        """Absorb guidance from Autopilot cognition / job IPC (RFC-228 / IG-733).
+        """Absorb guidance from Autopilot cognition / job IPC.
 
         Accumulates guidance for the next worker dispatch (see Autopilot
         ``GoalDispatchContextBundle.operator_guidance``). Does not create goals.
@@ -1304,7 +1304,7 @@ class ContextEngine:
         """Reset goals stuck in 'active' to 'pending' after crash.
 
         Goals whose ``attempts_after_crash`` exceeds ``max_retries`` are
-        failed so host recovery can act (IG-707; was suspend / operator wait).
+        failed so host recovery can act.
         """
         recovered = self._dag.recover_active_goals()
         failed: list[str] = []

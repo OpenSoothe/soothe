@@ -1,4 +1,4 @@
-"""Build NotifyDispatcher from Autopilot notify config (IG-713)."""
+"""Build NotifyDispatcher from Autopilot notify config."""
 
 from __future__ import annotations
 

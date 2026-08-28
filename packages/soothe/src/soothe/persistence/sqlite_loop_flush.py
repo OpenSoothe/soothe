@@ -1,4 +1,4 @@
-"""Process-scoped SQLite checkpoint coalesce flush (RFC-803).
+"""Process-scoped SQLite checkpoint coalesce flush.
 
 Mirrors ``LoopPersistenceWriter`` for SQLite: managers enqueue; one worker
 drains onto the shared checkpoints ``SqliteStoreRuntime``.

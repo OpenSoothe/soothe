@@ -1,4 +1,4 @@
-"""Build the default clarification policy based on runtime mode (RFC-622)."""
+"""Build the default clarification policy based on runtime mode."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def build_default_clarification_policy(
         emit: Optional emit function for ``InteractiveClarificationPolicy``.
         min_confidence: Threshold for auto policy.
         interactive_fallback: Optional policy injected into
-            :class:`AutoClarificationPolicy` (RFC-623). Invoked when veritas
+            :class:`AutoClarificationPolicy`. Invoked when veritas
             itself fails (``DeferKind == "structured_output_failed"``) and a
             human is wired. Ignored for manual mode.
         force_manual_origins: Origins that skip veritas and use the interactive
@@ -46,7 +46,7 @@ def build_default_clarification_policy(
             results to the interactive fallback (auto→manual upgrade) instead
             of a hard defer. Ignored for manual mode.
         tool_approval_pipeline: Optional pipeline for deterministic
-            tool-approval evaluation (RFC-622 §9b). In auto mode, deny →
+            tool-approval evaluation. In auto mode, deny →
             safety → allow stages resolve most ``tool_approval`` interrupts
             without an LLM (veritas remains the final guard). In manual mode
             it pre-filters the human relay: deny/safety always auto-reject,

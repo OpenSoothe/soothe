@@ -1,4 +1,4 @@
-"""Goal-entry and continuation policy for StrangeLoop preprocess (RFC-904).
+"""Goal-entry and continuation policy for StrangeLoop preprocess.
 
 Fresh vs structural-continuation detection for ``enter_loop`` routing.
 Plan-spine mid-loop helpers (lightweight generate, inventory, bypass assess)

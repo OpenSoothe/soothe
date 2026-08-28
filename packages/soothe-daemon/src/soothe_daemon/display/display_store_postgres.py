@@ -1,7 +1,7 @@
-"""PostgreSQL persistence for per-loop display card mutations (RFC-413).
+"""PostgreSQL persistence for per-loop display card mutations.
 
 Used when ``persistence.default_backend`` is ``postgresql``. Tables live in the
-RFC-612 ``metadata`` database (``soothe_metadata``) beside durability KV rows.
+ ``metadata`` database (``soothe_metadata``) beside durability KV rows.
 
 Moved from ``soothe_nano`` to the daemon (PR-2). The store applies its
 own ``_SCHEMA`` on pool open — same pattern as ``PostgresCronJobStore`` and

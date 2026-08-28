@@ -1,4 +1,4 @@
-"""Step-level planning subengine for ContextEngine (RFC-624 Phase 3c).
+"""Step-level planning subengine for ContextEngine.
 
 Absorbs PlanManager responsibilities: plan ingestion, step outcome recording,
 DagPlanningContext construction, completion heuristics, and DAG report formatting.

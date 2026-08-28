@@ -1,4 +1,4 @@
-"""DISPATCH station: claim CE ready steps into an execute decision (RFC-904)."""
+"""DISPATCH station: claim CE ready steps into an execute decision."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ async def _ensure_root_step(ctx: LoopRuntimeContext) -> str | None:
 
 
 async def _ground_root_with_approved_plan(ctx: LoopRuntimeContext, root_id: str) -> None:
-    """Stamp operator-approved intake plan onto the root THREAD description (RFC-904)."""
+    """Stamp operator-approved intake plan onto the root THREAD description."""
     from soothe.sloop.plans.grounding import (
         compose_root_full_description,
         consume_approved_plan_from_state,

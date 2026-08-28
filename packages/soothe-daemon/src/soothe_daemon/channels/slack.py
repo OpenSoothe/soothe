@@ -1,6 +1,6 @@
 """Slack channel implementation using Socket Mode.
 
-Migrated from nanoBot with adaptations for soothe-daemon Channel architecture (RFC-620).
+Migrated from nanoBot with adaptations for soothe-daemon Channel architecture.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ class SlackConfig:
 class SlackChannel(Channel):
     """Slack channel using Socket Mode.
 
-    Implements RFC-620 Channel interface with streaming support.
+    Implements Channel interface with streaming support.
     """
 
     name = "slack"

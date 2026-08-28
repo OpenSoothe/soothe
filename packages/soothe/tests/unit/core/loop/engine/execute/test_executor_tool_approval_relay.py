@@ -189,6 +189,26 @@ def test_detector_formats_run_command_with_command_arg() -> None:
     assert "rm -rf /" in req.questions[0]
 
 
+def test_detector_truncates_long_command_arg() -> None:
+    """Long command args are truncated with ellipsis for readability."""
+    detector = ClarificationDetector()
+    long_cmd = "python3 -c 'import sys; print(" + "x" * 200 + ")'"
+    req = detector.from_tool_approval_interrupt(
+        {"action_requests": [{"name": "run_command", "args": {"command": long_cmd}}]},
+        interrupt_id="i",
+        loop_state=_view(),
+    )
+    assert req is not None
+    q = req.questions[0]
+    assert q.startswith("Approve run_command (command=")
+    assert q.endswith("?")
+    # Truncated — the full command should NOT be in the question
+    assert long_cmd not in q
+    assert "…" in q
+    # The truncated preview should be present
+    assert long_cmd[:50] in q
+
+
 # ---------------------------------------------------------------------------
 # Executor: tool_approval_enabled captures; disabled auto-approves
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""Thread selection logic for execute steps (RFC-223).
+"""Thread selection logic for execute steps.
 
 Thread IDs are **decoupled from step IDs**: each new step gets a random
 5-hex thread_id from `execute_step_thread_id` (the id grammar lives in

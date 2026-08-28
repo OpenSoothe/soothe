@@ -1,4 +1,4 @@
-"""Ledger manager for the Context Engine (RFC-624)."""
+"""Ledger manager for the Context Engine."""
 
 from __future__ import annotations
 

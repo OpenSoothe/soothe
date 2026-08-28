@@ -56,7 +56,7 @@ def _record_ledger_message(
     msg: Any,
     phase: str,
 ) -> None:
-    """Record a message to the CE LedgerManager (RFC-624 Phase 4 Stage 2).
+    """Record a message to the CE LedgerManager.
 
     When ``context_engine`` is provided, writes to the CE ledger.
     The ``loop_messages`` property on LoopState automatically reflects CE
@@ -142,7 +142,7 @@ class LoopHumanMessage(HumanMessage):
     - Execution phase (``execute_step``, ``goal_completion``, plus legacy
       plan-spine tags still present in old ledgers)
     - Wave tracking (wave_id for execute_wave phase)
-    - CoreAgent dedup (core_agent_message_id for RFC-214 reference-based dedup)
+    - CoreAgent dedup (core_agent_message_id for reference-based dedup)
 
     All fields are Optional to support all message creation points uniformly,
     including planner/synthesis calls without thread context.
@@ -206,7 +206,7 @@ class LoopAIMessage(AIMessage):
     - usage_metadata for standardized token counts
     - tool_calls for tool tracking
     - StrangeLoop-specific metadata (iteration, phase)
-    - CoreAgent dedup (core_agent_message_id for RFC-214 reference-based dedup)
+    - CoreAgent dedup (core_agent_message_id for reference-based dedup)
 
     NOTE: LoopAIMessage is rarely directly instantiated - CoreAgent returns
     AIMessage/AIMessageChunk from .astream(). This class enables future
@@ -243,7 +243,7 @@ class LoopAIMessage(AIMessage):
 
 
 class LoopAIMessageChunk(AIMessageChunk):
-    """Streaming AI chunk with StrangeLoop ``phase`` metadata (RFC-614)."""
+    """Streaming AI chunk with StrangeLoop ``phase`` metadata."""
 
     thread_id: str | None = None
     iteration: int | None = None

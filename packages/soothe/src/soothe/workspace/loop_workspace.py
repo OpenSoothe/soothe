@@ -92,7 +92,7 @@ def _resolve_mount_roots(
     *,
     workspace_mapping: dict[str, Any] | None = None,
 ) -> tuple[str | None, str | None]:
-    """Resolve RFC-621 mount roots from loop metadata or config."""
+    """Resolve mount roots from loop metadata or config."""
     hr: str | None = None
     cr: str | None = None
     if workspace_mapping:

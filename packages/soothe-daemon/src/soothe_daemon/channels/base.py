@@ -1,4 +1,4 @@
-"""Channel base class (RFC-620 §1).
+"""Channel base class.
 
 All communication endpoints (WebSocket, Telegram, Discord, etc.)
 implement this single Channel abstract class with capability flags.

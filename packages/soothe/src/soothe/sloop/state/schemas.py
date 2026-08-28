@@ -1,4 +1,4 @@
-"""Schemas for StrangeLoop execution (RFC-201,, RFC-214)."""
+"""Schemas for StrangeLoop execution."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ GoalProgress = Annotated[GoalProgressLiteral, BeforeValidator(_coerce_goal_progr
 
 
 class EvidenceEntry(BaseModel):
-    """Evidence row for plan validation (RFC-220).
+    """Evidence row for plan validation.
 
     Attributes:
         evidence_id: Stable id for the evidence ledger.
@@ -62,11 +62,11 @@ class EvidenceEntry(BaseModel):
 
 StepKind = Literal["action", "ask_user", "eval"]
 """Step kind. ``action`` runs through CoreAgent; ``ask_user`` short-circuits
-into the clarification relay (RFC-622)."""
+into the clarification relay."""
 
 
 class PlanGenerateStep(BaseModel):
-    """Single step in plan-generate structured output (RFC-604,).
+    """Single step in plan-generate structured output.
 
     Separate from ``StepAction`` so the LLM schema omits executor-only fields
     (``subagent``, ``evidence_refs``). Converted to ``StepAction`` when building
@@ -74,7 +74,7 @@ class PlanGenerateStep(BaseModel):
 
     When ``kind == "ask_user"`` the executor does NOT invoke CoreAgent for this
     step — instead it routes ``questions`` through the configured
-    ``ClarificationPolicy`` (RFC-622) and records a synthesized successful step
+    ``ClarificationPolicy`` and records a synthesized successful step
     result containing the answers.
 
     Attributes:
@@ -124,7 +124,7 @@ class StepAction(BaseModel):
 
     Keep execution-critical fields (used by executor).
     ``full_description`` carries detailed execution context.
-    RFC-622 / ``kind`` and ``questions`` carry planner-emitted
+     / ``kind`` and ``questions`` carry planner-emitted
     ``ask_user`` steps through to the clarification relay.
 
     Attributes:
@@ -142,7 +142,7 @@ class StepAction(BaseModel):
         subagent: Named subagent when ``execution_hint='subagent'``.
         requires_tool_use: When set, execute deliverable gate requires successful tool use
             (for direct-answer steps).
-        is_dag_root: True when this step has no CE ``parent_step_id`` (RFC-904 root).
+        is_dag_root: True when this step has no CE ``parent_step_id``.
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -316,7 +316,7 @@ def trailing_numeric_suffix_from_step_id(step_id: str) -> int | None:
 
 
 class PlanResult(BaseModel):
-    """Plan phase output with full reasoning chain (RFC-604,).
+    """Plan phase output with full reasoning chain.
 
     Result of the Plan-And-Execute loop's Plan phase, which combines planning,
     progress assessment, and goal-distance estimation in a single structured response.
@@ -326,7 +326,7 @@ class PlanResult(BaseModel):
     Attributes:
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Descriptive progress level (none | low | medium | high | complete).
-        assessment_reasoning: Optional status justification (often empty after RFC-904).
+        assessment_reasoning: Optional status justification (often empty after ).
         next_action: Internal orchestration hint (not shown in TUI).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
@@ -355,7 +355,7 @@ class PlanResult(BaseModel):
     effects: list[GoalEffect] = Field(
         default_factory=list,
         max_length=50,
-        description="Domain-agnostic side-effect claims when status is done (IG-712)",
+        description="Domain-agnostic side-effect claims when status is done",
     )
 
     wave_plan: dict[str, Any] | None = Field(
@@ -372,7 +372,7 @@ class PlanResult(BaseModel):
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
     terminal_after_execute: bool = Field(default=False)
-    """RFC-226: when True, the plan asserts its single step IS the goal completion.
+    """ : when True, the plan asserts its single step IS the goal completion.
 
     The Loop Graph routes from ``record_progress`` directly toward finalize /
     goal completion when this flag is set (e.g. wired-subagent one-step plans).
@@ -416,7 +416,7 @@ class PlanResult(BaseModel):
 
 
 class ToolCallHead(BaseModel):
-    """One tool invocation captured from the most recent execute wave (RFC-227).
+    """One tool invocation captured from the most recent execute wave.
 
     Attributes:
         name: Tool name (e.g. ``run_command``, ``read_file``).
@@ -430,7 +430,7 @@ class ToolCallHead(BaseModel):
 
 
 class WaveStepProgress(BaseModel):
-    """One executed step row in the most recent wave (RFC-227 plan-context digest)."""
+    """One executed step row in the most recent wave."""
 
     step_id: str = Field(default="", max_length=64)
     description: str = Field(default="", max_length=500)
@@ -439,7 +439,7 @@ class WaveStepProgress(BaseModel):
 
 
 class PriorProgressDigest(BaseModel):
-    """Compact, truthful snapshot of the most recent execute wave (RFC-227).
+    """Compact, truthful snapshot of the most recent execute wave.
 
     Refreshed by the executor at the end of every wave (parallel or sequential).
     Used for interrupt digests and execute-side progress context. Never used as
@@ -468,7 +468,7 @@ class PriorProgressDigest(BaseModel):
 
 
 class PlanGeneration(BaseModel):
-    """Runtime plan-generate result (RFC-604).
+    """Runtime plan-generate result.
 
     Built server-side from ``PlanGenerationWire`` LLM output. Not sent
     directly as the structured-output schema to plan-generate models.
@@ -519,7 +519,7 @@ class StepExecutionRecord(BaseModel):
     Attributes:
         step_id: ID of the step
         success: Whether execution succeeded
-        outcome: Structured metadata from tool execution (RFC-211)
+        outcome: Structured metadata from tool execution
         error: Error message (if failed)
         error_type: Error classification
         duration_ms: Execution duration in milliseconds
@@ -669,7 +669,7 @@ def _step_node_to_result(node: Any) -> StepExecutionRecord:
 
 
 class LoopState(BaseModel):
-    """State for agentic loop (RFC-201, RFC-214).
+    """State for agentic loop.
 
     Bounded lists prevent memory leaks from unbounded accumulation during
     long-running queries with many iterations.
@@ -681,7 +681,7 @@ class LoopState(BaseModel):
         skill_context: Skill reference only (SKILL.md body) when ``goal`` was expanded from
             ``/skill:``; used in execute-step ``<SKILL_CONTEXT>`` (not the full composed goal).
         thread_id: Thread context
-        workspace: Thread-specific workspace path (RFC-103)
+        workspace: Thread-specific workspace path
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
@@ -692,13 +692,13 @@ class LoopState(BaseModel):
         evidence_summary: Accumulated evidence summary
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
-        working_memory: Loop working-memory instance (RFC-203) when enabled.
-        loop_messages: RFC-214: Unified message ledger (CE-backed property when bound).
+        working_memory: Loop working-memory instance when enabled.
+        loop_messages: : Unified message ledger (CE-backed property when bound).
         last_wave_answer_from_delegate_final: True when the latest execute wave answer came from ``task`` tool returns
             (``task_tool_aggregate`` provenance), not root-graph assistant stream.
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps.
-        continue_loop: RFC-225 flag — True when this loop has prior goals (carrier for executor wiring).
-        prior_progress: RFC-227 per-wave digest produced by the executor.
+        continue_loop: flag — True when this loop has prior goals (carrier for executor wiring).
+        prior_progress: per-wave digest produced by the executor.
     """
 
     goal: str
@@ -901,7 +901,7 @@ class LoopState(BaseModel):
     )
 
     def bind_ce(self, ce: Any, goal_id: str) -> None:
-        """Bind this LoopState to a ContextEngine instance (RFC-624 Phase 4).
+        """Bind this LoopState to a ContextEngine instance.
 
         After binding, @property accessors for loop_messages, step_results,
         and completed_step_ids query CE instead of the local cache.

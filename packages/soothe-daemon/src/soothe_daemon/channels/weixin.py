@@ -6,7 +6,7 @@ bot token obtained via QR code login.
 
 Protocol reverse-engineered from ``@tencent-weixin/openclaw-weixin`` v1.0.3.
 
-Migrated from nanoBot with adaptations for soothe-daemon Channel architecture (RFC-620).
+Migrated from nanoBot with adaptations for soothe-daemon Channel architecture.
 """
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ class WeixinChannel(Channel):
     WeChat messages. Authentication is via QR code login which produces
     a bot token.
 
-    Implements RFC-620 Channel interface.
+    Implements Channel interface.
     """
 
     name = "weixin"

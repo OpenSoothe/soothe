@@ -1,4 +1,4 @@
-"""WebSocket auth message handler. RFC-307 §WebSocket Message Types.
+"""WebSocket auth message handler. Message Types.
 
 Handles auth and auth_refresh WebSocket messages for AKSK-based
 authentication and token renewal.
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class AuthHandler:
     """Handle WebSocket auth/auth_refresh messages.
 
-    RFC-307 §Authentication Flow.
+    Flow.
 
     This handler processes:
     - auth: AKSK credentials → access_token + refresh_token
@@ -45,7 +45,7 @@ class AuthHandler:
     ) -> dict:
         """Process auth message with AKSK credentials.
 
-        RFC-307 §WebSocket AKSK Flow.
+        AKSK Flow.
 
         Args:
             access_key: Access key (AK-{16 chars}).
@@ -88,7 +88,7 @@ class AuthHandler:
     ) -> dict:
         """Process auth_refresh message.
 
-        RFC-307 §Token Refresh Flow.
+        Refresh Flow.
 
         Args:
             refresh_token: JWT refresh token.
@@ -123,7 +123,7 @@ class AuthHandler:
 def build_auth_response_error(error_code: str, message: str | None = None) -> dict:
     """Build standardized auth error response.
 
-    RFC-307 §WebSocket Message Types.
+    Message Types.
 
     Args:
         error_code: Error code (invalid_credentials, aksk_expired, etc.).
@@ -151,7 +151,7 @@ def build_auth_response_error(error_code: str, message: str | None = None) -> di
 def build_refresh_response_error(error_code: str, message: str | None = None) -> dict:
     """Build standardized refresh error response.
 
-    RFC-307 §WebSocket Message Types.
+    Message Types.
 
     Args:
         error_code: Error code (invalid_refresh_token, etc.).

@@ -1,4 +1,4 @@
-"""Workspace plan artifact helpers (RFC-633)."""
+"""Workspace plan artifact helpers."""
 
 from __future__ import annotations
 

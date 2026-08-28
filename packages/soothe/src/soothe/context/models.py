@@ -1,4 +1,4 @@
-"""Data models for the Context Engine (RFC-624, RFC-625)."""
+"""Data models for the Context Engine."""
 
 from __future__ import annotations
 
@@ -51,10 +51,10 @@ MAX_GOAL_DEPTH = 5
 
 
 class EvidenceEntry(BaseModel):
-    """Evidence row for plan validation (RFC-220).
+    """Evidence row for plan validation.
 
     Reused from loop/state/schemas.py for GoalNode.evidence_ledger field
-    in RFC-624 Phase 4 Step 4 consolidation.
+    in Step 4 consolidation.
 
     Attributes:
         evidence_id: Stable id for the evidence ledger.
@@ -95,7 +95,7 @@ class DeferredItem(BaseModel):
 
 
 class StepCloseReport(BaseModel):
-    """Structured action-thread close assessment (RFC-905)."""
+    """Structured action-thread close assessment."""
 
     goal_portion_complete: bool = True
     early_exit: bool = False
@@ -114,7 +114,7 @@ class StepCloseReport(BaseModel):
 class StepNode(BaseModel):
     """Single step within a goal's step DAG.
 
-    Lineage / decompose fields (RFC-904): ``parent_step_id``,
+    Lineage / decompose fields: ``parent_step_id``,
     ``secondary_parent_step_ids``, ``replacement_of``, ``recompose_count``.
     Scheduler uses ``dependencies`` + ``status`` only.
     """
@@ -199,7 +199,7 @@ class StepDAG(BaseModel):
             node.status = "skipped"
 
     def mark_decomposed(self, step_id: str) -> None:
-        """Mark a step as decomposed after its proposal was committed (RFC-904)."""
+        """Mark a step as decomposed after its proposal was committed."""
         node = self.nodes.get(step_id)
         if node is not None:
             node.status = "decomposed"
@@ -244,7 +244,7 @@ class StepDAG(BaseModel):
         return depth
 
     def tree_green(self) -> bool:
-        """True when the StepDAG is coverage-ready for ROOT_EVAL (RFC-904).
+        """True when the StepDAG is coverage-ready for ROOT_EVAL.
 
         No pending/active steps; no unresolved failed leaves; every
         non-superseded leaf is completed; decomposed/superseded parents do not
@@ -289,7 +289,7 @@ class StepDAG(BaseModel):
         return max(eval_nodes, key=lambda node: node.plan_iteration)
 
     def eval_required(self) -> bool:
-        """Return whether RFC-905 requires a new Eval at action-tree green."""
+        """Return whether a new Eval is required at action-tree green."""
         if not self.action_tree_green():
             return False
         latest = self.latest_eval()
@@ -370,16 +370,16 @@ class StepDAG(BaseModel):
 
 
 class GoalNode(BaseModel):
-    """Single goal in the unified Goal+Step DAG (RFC-624, RFC-625).
+    """Single goal in the unified Goal+Step DAG.
 
-    Migrated fields from Goal model (autopilot/models.py) per RFC-625:
-    - retry_count, max_retries, send_back_count, max_send_backs (RFC-204)
-    - workspace, attempts_after_crash (RFC-222)
-    - pending_clarification (RFC-622)
-    - guidance_accumulated (RFC-228)
+    Migrated fields from Goal model (autopilot/models.py):
+    - retry_count, max_retries, send_back_count, max_send_backs
+    - workspace, attempts_after_crash
+    - pending_clarification
+    - guidance_accumulated
     - report (GoalReport on completion)
 
-    New dreaming fields per RFC-625:
+    New dreaming fields:
     - topic, findings, distilled
     """
 
@@ -415,7 +415,7 @@ class GoalNode(BaseModel):
         default_factory=list,
         description=(
             "Legacy append-only evidence ids (schema retained for persistence). "
-            "Autopilot judgment SoT is ``report`` / ``report_revision`` (IG-726)."
+            "Autopilot judgment SoT is ``report`` / ``report_revision``."
         ),
     )
 
@@ -595,7 +595,7 @@ class GoalStepDAG(BaseModel):
     # ── Scheduling ──────────────────────────────────────────────
 
     def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Return ready candidates without mutation (read-only, RFC-625).
+        """Return ready candidates without mutation (read-only).
 
         Mirrors GoalEngine._filter_ready_candidates: filters by
         status == "pending", checks hard dependencies (all in
@@ -623,7 +623,7 @@ class GoalStepDAG(BaseModel):
         return ready[:limit]
 
     def claim_goal(self, goal_id: str, loop_id: str | None = None) -> GoalNode | None:
-        """Atomically transition goal to active (RFC-222, RFC-625).
+        """Atomically transition goal to active.
 
         Re-checks conflicts and dependencies at claim time to prevent race conditions.
         Returns the goal if claimed, None if ineligible, conflict appeared, or deps unmet.

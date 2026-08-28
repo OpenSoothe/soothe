@@ -1,4 +1,4 @@
-"""PostgreSQL persistence backend for the Context Engine (RFC-624 Phase 4).
+"""PostgreSQL persistence backend for the Context Engine.
 
 Stores CE DAG and ledger in PostgreSQL keyed by ``loop_id``. Writes go through
 the process-scoped persistence writer; reads use the shared soothe_checkpoints pool.

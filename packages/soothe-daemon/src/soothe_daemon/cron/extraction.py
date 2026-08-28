@@ -1,4 +1,4 @@
-"""CronExtractionService — LLM-based schedule extraction (RFC-229).
+"""CronExtractionService — LLM-based schedule extraction.
 
 Extracts structured schedule information from natural language input
 using LLM with structured output.

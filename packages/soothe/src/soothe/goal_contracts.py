@@ -48,7 +48,7 @@ class EvidenceBundle(BaseModel):
 class BackoffDecision(BaseModel):
     """LLM-driven backoff decision for goal DAG restructuring.
 
-    RFC-200 §205-541: GoalBackoffReasoner output structure.
+    -541: GoalBackoffReasoner output structure.
     Determines WHERE to backoff in goal DAG and what directives to apply.
 
     Args:
@@ -100,7 +100,7 @@ class PriorStepSummary(BaseModel):
 
 
 class GoalEffect(BaseModel):
-    """One claimed side-effect of a completed goal — domain-agnostic (IG-712).
+    """One claimed side-effect of a completed goal — domain-agnostic.
 
     Opaque to the host: ``ref`` may be a path, URL, ticket id, channel, or
     ``answer`` for narrative-only work. Never inferred from prose or the
@@ -162,7 +162,7 @@ class ToolCallStats(BaseModel):
 class GoalReportUserTurn(BaseModel):
     """The 'user' half of a projected ancestor pair — the ancestor's directive.
 
-    RFC-222 §Goal-Report-Pair Projection. Carried on
+    -Report-Pair Projection. Carried on
     ``GoalDispatchContextBundle.preamble_messages`` and seeded into the
     StrangeLoop CE ledger as a ``LoopHumanMessage(phase="preamble")`` before
     the current goal's user turn.
@@ -178,10 +178,10 @@ class GoalReportUserTurn(BaseModel):
 class GoalReportAITurn(BaseModel):
     """The 'ai' half of a projected ancestor pair — the ancestor's goal report.
 
-    Built by ``ContextProjector`` via the existing ``build_goal_report`` path
-    (RFC-204 §1.3, IG-726) from the ancestor's stored
-    ``GoalDispatchContextContribution``. Seeded into the CE ledger as a
-    ``LoopAIMessage(phase="preamble")``.
+       Built by ``ContextProjector`` via the existing ``build_goal_report`` path
+    from the ancestor's stored
+       ``GoalDispatchContextContribution``. Seeded into the CE ledger as a
+       ``LoopAIMessage(phase="preamble")``.
     """
 
     goal_id_origin: str
@@ -200,7 +200,7 @@ class GoalReportAITurn(BaseModel):
 
 
 class GoalDispatchContextBundle(BaseModel):
-    """Immutable hydration input for StrangeLoop (RFC-222 revised).
+    """Immutable hydration input for StrangeLoop.
 
     Built by the daemon's ContextProjector from a goal's parents'
     GoalDispatchContextContribution entries. Bounded — summaries only,
@@ -214,7 +214,7 @@ class GoalDispatchContextBundle(BaseModel):
     tool_call_summary: ToolCallStats = Field(default_factory=ToolCallStats)
     operator_guidance: list[str] = Field(
         default_factory=list,
-        description="Operator guidance texts from cognition intake (RFC-228 / IG-733)",
+        description="Operator guidance texts from cognition intake",
     )
     cached_system_prompt_hash: str | None = Field(
         default=None,
@@ -223,8 +223,7 @@ class GoalDispatchContextBundle(BaseModel):
     preamble_messages: list[GoalReportUserTurn | GoalReportAITurn] = Field(
         default_factory=list,
         description=(
-            "Projected ancestor (user, ai) pairs in topological order (RFC-222 "
-            "§Goal-Report-Pair Projection). Flattened: "
+            "Projected ancestor (user, ai) pairs in topological order. Flattened: "
             "[user₀, ai₀, user₁, ai₁, …]. Seeded into the StrangeLoop CE ledger "
             "as a preamble transcript before the current goal turn. Additive: "
             "the flat prior_* fields stay for structured consumers."

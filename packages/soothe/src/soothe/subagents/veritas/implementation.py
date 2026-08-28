@@ -1,4 +1,4 @@
-"""Veritas auto-answerer: single structured-output LLM call (RFC-622, RFC-623)."""
+"""Veritas auto-answerer: single structured-output LLM call."""
 
 from __future__ import annotations
 
@@ -214,7 +214,7 @@ def _any_answer_is_a_question(
     answers: list[str],
     answer_is_question: list[bool] | None = None,
 ) -> bool:
-    """Detect whether any answer is itself a question (RFC-630 compliance).
+    """Detect whether any answer is itself a question.
 
     Prefers the model's structured self-classification (``answer_is_question``
     field) when available. Falls back to the legacy ``endswith("?")`` regex
@@ -233,7 +233,7 @@ def _preview_questions(questions: tuple) -> str:
 
 
 def _question_text(question: Any) -> str:
-    """Render a structured question (RFC-622 §9c) or plain string as text."""
+    """Render a structured question or plain string as text."""
     if isinstance(question, dict):
         return str(question.get("question") or question.get("header") or "")
     return str(question)

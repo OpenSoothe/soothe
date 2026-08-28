@@ -1,4 +1,4 @@
-"""Structured action-thread close assessment for Eval triggering (RFC-905)."""
+"""Structured action-thread close assessment for Eval triggering."""
 
 from __future__ import annotations
 

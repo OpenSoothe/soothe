@@ -1,4 +1,4 @@
-"""Main StrangeLoop orchestration (RFC-201)."""
+"""Main StrangeLoop orchestration."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
 
 
 class StrangeLoop:
-    """Agentic goal execution via the RFC-904 DISPATCH / THREAD graph.
+    """Agentic goal execution via the DISPATCH / THREAD graph.
 
     Orchestration is a compiled LangGraph whose configurable checkpoint key is ``loop_id``.
     Execute runs claimed CE steps via CoreAgent (``thread_id``).
@@ -215,17 +215,17 @@ class StrangeLoop:
         interaction_mode: str | None = None,  # per-goal "agent"|"ask"|"plan" graph selection
         approved_plan_path: str | None = None,  # Bug #3: plan-mode approve exec goal
     ) -> AsyncGenerator[tuple[str, Any], None]:
-        """Run loop with progress events (RFC-0020 compliant).
+        """Run loop with progress events.
 
         Yields progress events during execution for display.
 
         Args:
             goal: Goal description to execute
             thread_id: Thread context for execution
-            workspace: Thread-specific workspace path (RFC-103)
+            workspace: Thread-specific workspace path
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
-            intent: IntentClassification (RFC-225). When omitted, the graph entry
+            intent: IntentClassification. When omitted, the graph entry
                 ``intent_classify`` node runs classification with full CE ledger
                 projection (prior-goal completion + preamble). Loop continuation is
                 derived from the checkpoint.
@@ -233,7 +233,7 @@ class StrangeLoop:
                 - new_goal: Normal goal execution flow
                 - chitchat: Handled via in-graph fast-path and runner chitchat response
             routing_classification: ``RoutingClassification`` for CoreAgent middleware.
-            clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
+            clarification_policy: Optional ``ClarificationPolicy`` used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
                 requests are deferred via the legacy no-policy path.
             resume_interrupted: When True, skip the chitchat fast-path and recover
@@ -243,7 +243,7 @@ class StrangeLoop:
                 and ``strange-loop-graph`` share one pinned trace.
             preamble: Optional flattened list of ``BaseMessage`` (ancestor
                 ``(user, ai)`` pairs) projected by the daemon's
-                ``ContextProjector`` (RFC-222 §Goal-Report-Pair Projection).
+                ``ContextProjector``.
                 When present, seeded into the CE ledger (phase ``"preamble"``)
                 after ``state.bind_ce`` and before the graph runs, so the
                 executing LLM begins with a real multi-turn transcript. ``None``

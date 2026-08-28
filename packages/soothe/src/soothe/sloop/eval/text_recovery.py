@@ -1,4 +1,4 @@
-"""Recover decompose_task proposals from LLM text output (RFC-905 fail-safe).
+"""Recover decompose_task proposals from LLM text output.
 
 When an Eval step's LLM emits continuation subtasks as text/JSON instead of
 calling the ``decompose_task`` tool, this module extracts the JSON payload

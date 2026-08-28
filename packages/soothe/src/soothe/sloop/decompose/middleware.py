@@ -1,4 +1,4 @@
-"""Middleware: inject decompose prompts / tool on step THREADS (RFC-904).
+"""Middleware: inject decompose prompts / tool on step THREADS.
 
 In plan/ask modes the ``decompose_task`` tool is **stripped** from the schema
 so the LLM cannot call it. A ``awrap_tool_call`` guard also intercepts any

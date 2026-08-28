@@ -1,7 +1,7 @@
 """Prefetched static host prompt fragments.
 
 All fragments are read once at import time to maximize prompt cache hit rate.
-Cache Strategy (RFC-104):
+Cache Strategy:
 - Static fragments loaded at module init (0 file I/O per request)
 - Module constants reused across all StrangeLoop invocations
 

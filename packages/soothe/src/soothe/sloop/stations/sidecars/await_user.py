@@ -1,4 +1,4 @@
-"""Loop graph node that resolves a pending clarification (RFC-622).
+"""Loop graph node that resolves a pending clarification.
 
 Invoked when a prior node set ``pending_clarification`` (execute ask_user,
 plan-mode review, etc.). Dispatches to ``ClarificationPolicy``; on
@@ -75,6 +75,22 @@ async def node_await_clarification(
     }
     if request.origin_node == ORIGIN_PLAN_MODE_REVIEW:
         _attach_plan_review_payload(requested_payload, ctx, pending)
+
+    # Surface the paused step id so the TUI can show "awaiting answer" on the
+    # existing step card instead of marking it complete. The resume_ticket is
+    # stored on LoopState by node_execute when a tool_approval / ask_user
+    # interrupt is captured.
+    resume_ticket = state.get("resume_ticket") or getattr(
+        getattr(ctx, "loop_state", None), "resume_ticket", None
+    )
+    if resume_ticket is not None:
+        rt_step_id = (
+            resume_ticket.get("step_id")
+            if isinstance(resume_ticket, dict)
+            else getattr(resume_ticket, "step_id", None)
+        )
+        if rt_step_id:
+            requested_payload["step_id"] = str(rt_step_id)
 
     resume_turn = bool(
         (getattr(ctx, "clarification_resume_answers", None) or [])
@@ -243,7 +259,7 @@ def _summary(questions: tuple) -> str:
 
 
 def _question_text(question: Any) -> str:
-    """Render a structured question (RFC-622 §9c) or plain string as text."""
+    """Render a structured question or plain string as text."""
     if isinstance(question, dict):
         return str(question.get("question") or question.get("header") or "")
     return str(question)

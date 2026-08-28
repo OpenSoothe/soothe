@@ -1,4 +1,4 @@
-"""Daemon job lifecycle notify sinks (IG-713)."""
+"""Daemon job lifecycle notify sinks."""
 
 from soothe_daemon.notify.factory import (
     build_notify_dispatcher,

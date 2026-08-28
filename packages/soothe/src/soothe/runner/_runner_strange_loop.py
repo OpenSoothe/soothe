@@ -1,6 +1,6 @@
-"""Layer 2 StrangeLoop Runner (RFC-0008).
+"""Layer 2 StrangeLoop Runner.
 
-Implements Plan → Execute loop using StrangeLoop (RFC-201).
+Implements Plan → Execute loop using StrangeLoop.
 """
 
 from __future__ import annotations
@@ -194,7 +194,7 @@ def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
     Tool rows must reach the WebSocket so the CLI can render
-    ``on_tool_call`` / ``on_tool_result`` (RFC-0020).
+    ``on_tool_call`` / ``on_tool_result``.
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -441,20 +441,20 @@ class StrangeLoopMixin:
         resume_interrupted: bool = False,
         approved_plan_path: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Run Layer 2: StrangeLoop goal execution (RFC-0008).
+        """Run Layer 2: StrangeLoop goal execution.
 
-        Implements Reason → Act via StrangeLoop with RFC-0020 progress events.
+        Implements Reason → Act via StrangeLoop with progress events.
 
         Args:
             user_input: Goal description to execute
             thread_id: Thread context for execution
-            workspace: Thread-specific workspace path (RFC-103)
+            workspace: Thread-specific workspace path
             max_iterations: Maximum loop iterations (default: 8)
             preferred_subagent: Optional subagent hint for routing
             intake_scope: Optional client-forced scope (``minimal``|``simple``|
                 ``complex``). When set (and not a clarification resume), skips
                 intake classification.
-            clarification_mode: RFC-622 mode for this goal (``"auto"`` /
+            clarification_mode: mode for this goal (``"auto"`` /
                 ``"manual"``). ``None`` falls back to
                 ``config.agent.clarification.default_mode``.
             interaction_mode: per-request CoreAgent interaction mode
@@ -754,6 +754,7 @@ class StrangeLoopMixin:
                             else "manual",
                             plan_path=str(payload.get("plan_path") or ""),
                             plan_markdown=str(payload.get("plan_markdown") or ""),
+                            step_id=str(payload.get("step_id") or ""),
                         ).to_dict()
                     )
 

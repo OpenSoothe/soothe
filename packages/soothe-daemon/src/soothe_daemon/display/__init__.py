@@ -1,4 +1,4 @@
-"""Daemon-side display card infrastructure (RFC-413).
+"""Daemon-side display card infrastructure.
 
 This package owns the per-loop card ledger that backs the TUI's resume flow:
 

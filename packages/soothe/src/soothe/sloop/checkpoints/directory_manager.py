@@ -4,7 +4,7 @@ Ensures thread/loop isolation:
 - data/threads/ (CoreAgent Layer 1)
 - data/loops/ (StrangeLoop Layer 2)
 
-RFC-215: StrangeLoop Persistence Backend Architecture
+ : StrangeLoop Persistence Backend Architecture
 """
 
 from __future__ import annotations

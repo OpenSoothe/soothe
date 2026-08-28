@@ -1,4 +1,4 @@
-"""Channel module (RFC-620).
+"""Channel module.
 
 Provides unified Channel abstraction for all communication endpoints:
 - WebSocket (built-in, supports streaming)

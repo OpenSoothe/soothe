@@ -1,4 +1,4 @@
-"""Deterministic CE reconcile for DecompositionProposal batches (RFC-904 / IG-751 P2).
+"""Deterministic CE reconcile for DecompositionProposal batches.
 
 LLM-assisted semantic dedup / cross-subtree inference is P4. This module always
 runs exact dedup, branch/depth/step budgets, ID assignment, and commit.

@@ -5,7 +5,52 @@ from __future__ import annotations
 from soothe.sloop.clarification.tool_rule_matcher import (
     match_command_rule,
     match_path_rule,
+    split_compound_command,
 )
+
+# ---------------------------------------------------------------------------
+# Compound command splitting
+# ---------------------------------------------------------------------------
+
+
+class TestSplitCompoundCommand:
+    def test_single_command(self) -> None:
+        assert split_compound_command("git status") == ["git status"]
+
+    def test_cd_prefix_stripped(self) -> None:
+        result = split_compound_command("cd /path && git status")
+        assert result == ["git status"]
+
+    def test_cd_prefix_no_semicolon(self) -> None:
+        result = split_compound_command("cd /path; git status")
+        assert result == ["git status"]
+
+    def test_multiple_and(self) -> None:
+        result = split_compound_command("cd /path && git status && git diff")
+        assert result == ["git status", "git diff"]
+
+    def test_pipe_separator(self) -> None:
+        result = split_compound_command("git log | head -10")
+        assert result == ["git log", "head -10"]
+
+    def test_or_separator(self) -> None:
+        result = split_compound_command("false || true")
+        assert result == ["false", "true"]
+
+    def test_pushd_stripped(self) -> None:
+        result = split_compound_command("pushd /path && make && popd")
+        assert result == ["make"]
+
+    def test_empty_after_strip(self) -> None:
+        result = split_compound_command("cd /path")
+        assert result == []
+
+    def test_empty_command(self) -> None:
+        assert split_compound_command("") == []
+
+    def test_whitespace_only(self) -> None:
+        assert split_compound_command("   ") == []
+
 
 # ---------------------------------------------------------------------------
 # Command pattern matching
@@ -48,6 +93,48 @@ class TestMatchCommandRule:
 
     def test_empty_pattern(self) -> None:
         assert match_command_rule("git status", "") is False
+
+
+# ---------------------------------------------------------------------------
+# Compound command matching
+# ---------------------------------------------------------------------------
+
+
+class TestCompoundCommandMatching:
+    """Compound commands split into sub-commands; all must match."""
+
+    def test_cd_and_git_status_matches(self) -> None:
+        assert match_command_rule("cd /path && git status", "git status*") is True
+
+    def test_cd_and_git_diff_matches(self) -> None:
+        assert match_command_rule("cd /path && git diff", "git diff*") is True
+
+    def test_cd_and_ls_matches(self) -> None:
+        assert match_command_rule("cd /path && ls -la", "ls *") is True
+
+    def test_cd_and_pytest_matches(self) -> None:
+        assert (
+            match_command_rule("cd /path && python3 -m pytest -xvs", "python3 -m pytest*") is True
+        )
+
+    def test_compound_mixed_match_no_match(self) -> None:
+        """cd && git status && curl — curl doesn't match git status pattern."""
+        assert (
+            match_command_rule("cd /path && git status && curl https://example.com", "git status*")
+            is False
+        )
+
+    def test_cd_and_git_log_piped_to_head(self) -> None:
+        """cd && git log | head — both sub-commands must match the pattern."""
+        assert (
+            match_command_rule("cd /path && git log --oneline | head -10", "git log*") is False
+        )  # head doesn't match git log*
+
+    def test_cd_only_stripped_to_empty(self) -> None:
+        assert match_command_rule("cd /path", "git status") is False
+
+    def test_multiple_cd_segments(self) -> None:
+        assert match_command_rule("cd /a && cd /b && git status", "git status*") is True
 
 
 # ---------------------------------------------------------------------------

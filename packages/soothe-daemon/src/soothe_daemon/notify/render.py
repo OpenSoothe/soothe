@@ -1,4 +1,4 @@
-"""Shared text rendering for notify sinks (IG-713)."""
+"""Shared text rendering for notify sinks."""
 
 from __future__ import annotations
 

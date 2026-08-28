@@ -1,4 +1,4 @@
-"""Terminal handling when ``max_iterations`` is exhausted (RFC-220 ``iteration_gate`` branch)."""
+"""Terminal handling when ``max_iterations`` is exhausted."""
 
 from __future__ import annotations
 

@@ -95,7 +95,7 @@ class DaemonHandlersMixin:
     async def _handle_client_message(self, client_id: str, msg: dict[str, Any]) -> None:
         """Handle a message from a client (WebSocket transport).
 
-        Validates the message at the transport boundary (RFC-450 §6.4) before
+        Validates the message at the transport boundary before
         dispatching to the router.
         """
         errors = validate_message(msg)

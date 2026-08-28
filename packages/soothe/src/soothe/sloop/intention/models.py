@@ -1,6 +1,6 @@
-"""Intent classification Pydantic models (RFC-225, RFC-630).
+"""Intent classification Pydantic models.
 
-Intent classification produces a 4-class intake label (RFC-630) —
+Intent classification produces a 4-class intake label
 ``chitchat`` | ``minimal`` | ``simple`` | ``complex`` — that drives
 ``route_after_preprocess`` branch routing. Whether an agentic query continues an
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
@@ -28,10 +28,10 @@ from soothe_sdk.intention.models import RoutingClassification, TaskComplexity
 
 
 class IntakeLabel(StrEnum):
-    """4-class intake label for branch routing (RFC-630).
+    """4-class intake label for branch routing.
 
     Continuation is NOT a label — it is a structural overlay from the
-    checkpoint (RFC-225). The intake LLM never decides continuation.
+    checkpoint. The intake LLM never decides continuation.
 
     - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
@@ -91,7 +91,7 @@ def derive_intake_label_from_task_complexity(
 
 
 class IntentClassification(BaseModel):
-    """Primary intent classification model (RFC-225, RFC-630).
+    """Primary intent classification model.
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
@@ -106,7 +106,7 @@ class IntentClassification(BaseModel):
     ``intake_label`` drives ``route_after_preprocess``.
 
     Args:
-        intake_label: 4-class intake label for branch routing (RFC-630).
+        intake_label: 4-class intake label for branch routing.
         reasoning: Brief reasoning for classification.
         chitchat_response: Direct reply for ``chitchat`` intake only.
         task_short_description: Short step-card title for agentic goals.

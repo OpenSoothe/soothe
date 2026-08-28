@@ -2,12 +2,12 @@
 
 This submodule provides:
 - MessageRouter: Transport-agnostic message dispatch
-- ErrorCode: Numeric error code registry (RFC-450 §7.3)
-- RpcProtocolError: Structured exception with numeric code (RFC-450 §7.4)
+- ErrorCode: Numeric error code registry
+- RpcProtocolError: Structured exception with numeric code
 - build_error_response: Wire-ready error envelope constructor
-- validate_message: Pydantic schema validation at transport boundary (RFC-450 §6)
+- validate_message: Pydantic schema validation at transport boundary
 - validate_message_size: Message size validation
-- PARAMS_REGISTRY: Maps (type, method) to Pydantic params model (RFC-450 §6.2)
+- PARAMS_REGISTRY: Maps (type, method) to Pydantic params model
 
 The numeric error model (ErrorCode / RpcProtocolError / build_error_response)
 is the protocol-1 canonical API.

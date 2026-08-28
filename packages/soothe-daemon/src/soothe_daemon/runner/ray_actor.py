@@ -1,4 +1,4 @@
-"""Ray actor hosting SootheRunner in an isolated worker process (RFC-221).
+"""Ray actor hosting SootheRunner in an isolated worker process.
 
 WARNING: This file imports Ray at module level. It must NEVER be imported
 by local-mode code paths. Only ``RayLoopRunner`` (ray_runner.py) imports it,

@@ -1,4 +1,4 @@
-"""LoopRunnerFactory — creates per-loop runner instances (RFC-221)."""
+"""LoopRunnerFactory — creates per-loop runner instances."""
 
 from __future__ import annotations
 

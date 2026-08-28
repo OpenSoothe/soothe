@@ -1,4 +1,4 @@
-"""Channel manager for coordinating all communication channels (RFC-620).
+"""Channel manager for coordinating all communication channels.
 
 Coordinates inbound routing, outbound dispatch, streaming, and retry policy
 for WebSocket and plugin channels.
@@ -27,7 +27,7 @@ _SEND_RETRY_DELAYS = (1, 2, 4)
 
 
 class ChannelManager:
-    """Manages all channels and coordinates message routing (RFC-620).
+    """Manages all channels and coordinates message routing.
 
     The channel manager:
     1. Initializes enabled channels from configuration (via registry)
@@ -43,7 +43,7 @@ class ChannelManager:
         soothe_config: Optional SootheConfig (for command handlers).
         session_manager: Optional ClientSessionManager for WebSocket sessions.
         autopilot_service: Optional AutopilotService for WebSocket command handlers.
-        cron_service: Optional CronService for WebSocket command handlers (RFC-229).
+        cron_service: Optional CronService for WebSocket command handlers.
         memory_profiler: Optional MemoryProfiler for WebSocket command handlers.
     """
 
@@ -67,7 +67,7 @@ class ChannelManager:
             soothe_config: Optional SootheConfig (for command handlers).
             session_manager: Optional ClientSessionManager for session management.
             autopilot_service: Optional daemon-owned AutopilotService.
-            cron_service: Optional daemon-owned CronService (RFC-229).
+            cron_service: Optional daemon-owned CronService.
             memory_profiler: Optional MemoryProfiler for memory command handlers.
         """
         self._config = config
@@ -131,7 +131,7 @@ class ChannelManager:
         media: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        """Handle inbound message from a channel (RFC-620 §6.1).
+        """Handle inbound message from a channel.
 
         Called by Channel._handle_message(). Creates or retrieves loop_id,
         publishes ChannelMessageReceived to EventBus.
@@ -205,7 +205,7 @@ class ChannelManager:
         return loop_id
 
     def _build_channels(self) -> None:
-        """Build channel instances based on configuration (RFC-620 §7)."""
+        """Build channel instances based on configuration."""
         # Use new Channel implementations
         from soothe_daemon.channels.websocket import WebSocketChannel
 
@@ -393,7 +393,7 @@ class ChannelManager:
         chat_id: str,
         message: Any,
     ) -> None:
-        """Send message to specific channel/chat (RFC-620 outbound dispatch).
+        """Send message to specific channel/chat.
 
         Args:
             channel_name: Target channel name.
@@ -419,7 +419,7 @@ class ChannelManager:
         chat_id: str,
         message: Any,
     ) -> None:
-        """Send with exponential backoff retry (RFC-620 §3).
+        """Send with exponential backoff retry.
 
         Args:
             channel: Channel instance.
@@ -546,7 +546,7 @@ class ChannelManager:
         chat_id: str,
         message: ChannelMessage,
     ) -> None:
-        """Send message with streaming support (RFC-620 §6.3).
+        """Send message with streaming support.
 
         For streaming channels, sends deltas directly (optionally coalesced).
         For non-streaming channels, buffers deltas until stream end.

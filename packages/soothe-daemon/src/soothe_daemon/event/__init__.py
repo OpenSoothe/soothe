@@ -1,4 +1,4 @@
-"""Event infrastructure for the daemon (RFC-0013,,, RFC-411).
+"""Event infrastructure for the daemon.
 
 This submodule provides:
 - EventBus: Topic-based pub/sub with lock-free publishing

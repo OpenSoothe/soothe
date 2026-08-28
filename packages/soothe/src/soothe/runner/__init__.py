@@ -68,7 +68,7 @@ class SootheRunner(
 
         Args:
             config: Soothe configuration. If ``None``, uses defaults.
-            identity_runtime: Optional identity bundle (RFC-307). When enabled,
+            identity_runtime: Optional identity bundle. When enabled,
                 IdentityMiddleware is prepended to the agent middleware stack.
         """
         import time
@@ -733,7 +733,7 @@ class SootheRunner(
     # -- main stream --------------------------------------------------------
 
     def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap the clarification mode on the running goal (RFC-622).
+        """Hot-swap the clarification mode on the running goal.
 
         Forwards to the live ``StrangeLoop`` instance, which rebuilds the
         ``ClarificationPolicy`` and swaps it on the active ``LoopRuntimeContext``.
@@ -775,28 +775,28 @@ class SootheRunner(
         ``soothe.*`` type prefix.
 
         **Two execution modes** (selected in priority order):
-        - ``autopilot_job`` set (RFC-222 revised): daemon-dispatched goal, runs
+        - ``autopilot_job`` set: daemon-dispatched goal, runs
           ``_run_autopilot_job`` which hydrates from the bundle and emits a
           ``GoalCompletionChunk`` at the end. StrangeLoop never sees the DAG.
           ``user_input`` is ignored.
-        - Default (RFC-201): Agentic loop with Reason → Act iteration.
+        - Default: Agentic loop with Reason → Act iteration.
 
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
-            workspace: Thread-specific workspace path (RFC-103). When omitted, resolved via
+            workspace: Thread-specific workspace path. When omitted, resolved via
                 ``resolve_workspace_for_stream`` (daemon default, then cwd). The
                 resolved path is always a non-empty absolute directory string for this call.
             preferred_subagent: Optional subagent hint merged into StrangeLoop.
             intake_scope: Optional client-forced intake scope
                 (``minimal``|``simple``|``complex``); skips the intake LLM when set.
             client_loop_id: Daemon client loop scope for logging and stream correlation.
-            autopilot_job: When set, signals an autopilot-dispatched job (RFC-222 revised).
+            autopilot_job: When set, signals an autopilot-dispatched job.
                 Worker hydrates StrangeLoop from ``autopilot_job.merged_context`` and runs
                 ``autopilot_job.goal_description``; ``user_input`` is ignored. Emits a
                 ``GoalCompletionChunk`` exactly once before the terminal chunk.
                 ``None`` (default) keeps today's behavior.
-            clarification_mode: RFC-622 per-request mode (``"auto"`` / ``"manual"``).
+            clarification_mode: per-request mode (``"auto"`` / ``"manual"``).
                 ``None`` falls back to ``config.agent.clarification.default_mode``.
                 Ignored when ``autopilot_job`` is set (autopilot forces ``"auto"``).
             interaction_mode: per-request CoreAgent interaction mode
@@ -889,7 +889,7 @@ class SootheRunner(
         The base ``SootheRunner`` is autopilot-agnostic: it must never receive a
         non-``None`` ``autopilot_job``. The daemon constructs
         ``soothe_autopilot.AutopilotSootheRunner`` in autopilot worker loops; that
-        subclass overrides this hook with the RFC-222 goal-dispatch implementation.
+        subclass overrides this hook with the goal-dispatch implementation.
 
         Raises:
             RuntimeError: If a bare ``SootheRunner`` receives an ``autopilot_job``.

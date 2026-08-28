@@ -1,4 +1,4 @@
-"""Goal scheduling for ContextEngine (RFC-624 Phase 3c).
+"""Goal scheduling for ContextEngine.
 
 Extracts scheduling logic from GoalEngine for use with ContextEngine's
 GoalStepDAG. Provides ready-goal computation, atomic goal claiming,
@@ -32,7 +32,7 @@ class GoalScheduler:
         self._dag = dag
 
     def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
-        """Compute ready goals (read-only, no status mutation, RFC-625).
+        """Compute ready goals (read-only, no status mutation).
 
         Delegates to GoalStepDAG.peek_ready_goals which implements:
         - Filter by status == "pending"

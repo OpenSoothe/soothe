@@ -797,7 +797,7 @@ class QueryEngine:
         )
 
     def _get_output_streaming_config(self, daemon: Any) -> dict[str, Any]:
-        """Get output streaming config parameters from daemon config (RFC-614)."""
+        """Get output streaming config parameters from daemon config."""
         config = getattr(daemon, "_config", None)
         if config is None:
             return {

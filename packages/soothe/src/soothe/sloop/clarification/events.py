@@ -1,4 +1,4 @@
-"""Wire events for the clarification relay (RFC-622)."""
+"""Wire events for the clarification relay."""
 
 from __future__ import annotations
 
@@ -29,6 +29,11 @@ class ClarificationRequestedEvent(SootheEvent):
     # RFC-633 planner-subagent review card (empty for other origins).
     plan_path: str = ""
     plan_markdown: str = ""
+    # Step id of the paused step (when origin is execute / tool_approval).
+    # The TUI uses this to show "awaiting answer" on the existing step card
+    # instead of marking it complete. Empty for plan-mode review and other
+    # non-step origins.
+    step_id: str = ""
 
     model_config = ConfigDict(extra="allow")
 

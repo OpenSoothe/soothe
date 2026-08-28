@@ -2,7 +2,7 @@
 
 Action-approval interrupts (soothe_deepagents tool review) and ``ask_user``
 interrupts both bubble up through :class:`ClarificationCapture` to the
-``await_clarification`` loop node (RFC-622). This module owns the resume-payload
+``await_clarification`` loop node. This module owns the resume-payload
 translators that turn a clarified answer back into the ``Command(resume=...)``
 shape each origin's middleware expects.
 """
@@ -386,10 +386,10 @@ def is_ask_user_interrupt(value: Any) -> bool:
 def is_tool_approval_interrupt(value: Any) -> bool:
     """Return True if ``value`` is a deepagents ``action_requests`` interrupt.
 
-    The ``HumanInTheLoopMiddleware`` emits this shape when a tool call matches
-    an ``interrupt_on`` rule. These are captured into the clarification relay
-    (``tool_approval`` origin) and resolved by the multi-stage pipeline
-    (RFC-622 §9b) or veritas fallback — never auto-approved silently.
+       The ``HumanInTheLoopMiddleware`` emits this shape when a tool call matches
+       an ``interrupt_on`` rule. These are captured into the clarification relay
+       (``tool_approval`` origin) and resolved by the multi-stage pipeline
+    or veritas fallback — never auto-approved silently.
     """
     return isinstance(value, Mapping) and "action_requests" in value
 
