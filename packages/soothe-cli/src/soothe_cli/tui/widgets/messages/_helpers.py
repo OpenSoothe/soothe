@@ -12,9 +12,8 @@ from typing import Any
 from textual.content import Content
 
 from soothe_cli.display import theme
-from soothe_cli.settings import get_glyphs
-
 from soothe_cli.display.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
+from soothe_cli.settings import get_glyphs
 
 logger = logging.getLogger(__name__)
 
