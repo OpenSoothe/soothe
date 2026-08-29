@@ -22,9 +22,6 @@ providers:
       - glm-5.2                  # Default / think
       - qwen3.6-flash            # Fast role
       - qwen3.7-plus             # Image / multimodal
-      - kimi-k2.5
-      - kimi-k2.7-code
-      - MiniMax-M3
       - text-embedding-v4
 
 # =============================================================================
@@ -37,14 +34,6 @@ router_profiles:
       fast: "openai-custom:qwen3.6-flash"
       think: "openai-custom:glm-5.2"
       image: "openai-custom:qwen3.7-plus"
-      ocr: null
-
-  - name: production-minimax
-    router:
-      default: "openai-custom:MiniMax-M3"
-      fast: "openai-custom:qwen3.6-flash"
-      think: "openai-custom:MiniMax-M3"
-      image: "openai-custom:MiniMax-M3"
       ocr: null
 
 active_router_profile: production
@@ -83,3 +72,14 @@ vector_store_router:
 workspace_mount:
   host_root: ${SOOTHE_WORKSPACE_HOST_ROOT}
   container_root: /var/lib/soothe/workspaces
+
+# =============================================================================
+# Security Configuration
+# =============================================================================
+security:
+  allow_paths_outside_workspace: true
+  require_approval_for_outside_paths: false
+  allowed_paths:
+    - "**"
+  whitelist_paths_bypass: []
+  whitelist_commands_bypass: []
