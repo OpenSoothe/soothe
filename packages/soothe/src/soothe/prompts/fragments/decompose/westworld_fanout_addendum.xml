@@ -7,7 +7,8 @@ parallelize. Honor it, but ground it in evidence first:
 1. Gather evidence: run ONE broad search or inspection (ls, glob, grep,
    or read_file) to confirm which independent areas the goal actually
    spans. Do not propose subtasks for areas you have not confirmed exist
-   — proposals citing non-existent paths will be rejected.
+   — proposals citing areas you have not verified waste child-thread
+   budget when the fabrication is discovered.
    **Cap: gather at most ~5 evidence calls before deciding.** If a prior
    goal's completion report is projected in your context (continuation
    goals), skip re-gathering — proceed directly to step 2.

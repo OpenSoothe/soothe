@@ -9,8 +9,8 @@ one thread.
 BUT first gather evidence. Before proposing any subtasks, run one broad
 search or inspection (ls, glob, grep, or read_file) to confirm which
 areas the goal actually spans. Do not propose subtasks for areas you
-have not confirmed exist — proposals citing files or directories that
-do not exist will be rejected.
+have not confirmed exist — proposals citing areas you have not verified
+waste child-thread budget when the fabrication is discovered.
 
 After gathering evidence: when you see 2+ confirmed independent areas
 that do not depend on each other's results (the common case for complex

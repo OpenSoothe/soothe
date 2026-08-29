@@ -66,63 +66,6 @@ def _strip_decompose_tool(tools: list[Any]) -> list[Any]:
     return [t for t in tools if getattr(t, "name", None) != "decompose_task"]
 
 
-# Tools that gather evidence (search / inspection). Counting these per step
-# thread lets the decompose tool handler reject proposals issued with zero
-# prior grounding (d15f hallucination defense, scheme 2d). Mirrors the
-# executor's search-call classification (executor.py search_calls_total).
-_GROUNDING_TOOL_NAMES = frozenset({"ls", "glob", "grep", "read_file", "file_info"})
-
-
-def _is_grounding_call(tool_name: str, tool_call: dict[str, Any]) -> bool:
-    """True when this tool call gathers evidence (search/inspection)."""
-    if tool_name in _GROUNDING_TOOL_NAMES:
-        return True
-    if tool_name == "run_command":
-        command = str((tool_call.get("args") or {}).get("command") or "").lower()
-        return any(
-            marker in command
-            for marker in ("grep", "rg ", "rg\n", "find ", "find\t", "ls ", "ls\n", "ls\t")
-        )
-    return False
-
-
-def _extract_result_text(result: Any) -> str:
-    """Best-effort extraction of a tool result's text for the evidence corpus.
-
-    Handles `ToolMessage` (str or list content) and `Command` (with
-    messages). Defensive — never raises; returns "" on any failure so the
-    tool call itself is never broken by evidence capture.
-    """
-    try:
-        content = getattr(result, "content", None)
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            parts: list[str] = []
-            for block in content:
-                if isinstance(block, str):
-                    parts.append(block)
-                elif isinstance(block, dict):
-                    text = block.get("text")
-                    if isinstance(text, str):
-                        parts.append(text)
-            return " ".join(parts)
-        # Command with messages: pull the last ToolMessage.
-        messages = getattr(result, "messages", None) or getattr(result, "update", None)
-        if isinstance(messages, dict):
-            messages = messages.get("messages")
-        if isinstance(messages, list) and messages:
-            last = messages[-1]
-            last_content = getattr(last, "content", None)
-            if isinstance(last_content, str):
-                return last_content
-            if isinstance(last_content, list):
-                return _extract_result_text(type("X", (), {"content": last_content})())
-        return ""
-    except Exception:
-        return ""
-
-
 class DecomposeTaskMiddleware(AgentMiddleware):
     """Inject `decompose_task` + THREAD policy on step threads.
 
@@ -166,15 +109,7 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
-            result = await handler(request)
-            # Count evidence-gathering calls (zero-evidence gate) and capture
-            # their outputs (LLM grounding critic evidence corpus).
-            if _is_grounding_call(tool_name, tool_call):
-                _decompose_runtime.record_evidence_call()
-                text = _extract_result_text(result)
-                if text:
-                    _decompose_runtime.record_evidence_output(text)
-            return result
+            return await handler(request)
         conf = _decompose_runtime.langgraph_configurable()
         mode = self._active_mode(conf)
         if mode is None:
@@ -214,15 +149,7 @@ class DecomposeTaskMiddleware(AgentMiddleware):
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
         if tool_name != "decompose_task":
-            result = handler(request)
-            # Count evidence-gathering calls (zero-evidence gate) and capture
-            # their outputs (LLM grounding critic evidence corpus).
-            if _is_grounding_call(tool_name, tool_call):
-                _decompose_runtime.record_evidence_call()
-                text = _extract_result_text(result)
-                if text:
-                    _decompose_runtime.record_evidence_output(text)
-            return result
+            return handler(request)
         conf = _decompose_runtime.langgraph_configurable()
         mode = self._active_mode(conf)
         if mode is None:

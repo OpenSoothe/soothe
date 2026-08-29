@@ -46,7 +46,6 @@ ASK_MODE_ADDENDUM = _read_xml_body("decompose/ask_mode_addendum.xml")
 PLAN_MODE_ADDENDUM = _read_xml_body("decompose/plan_mode_addendum.xml")
 PARALLEL_NUDGE_ADDENDUM = _read_xml_body("decompose/parallel_nudge_addendum.xml")
 WESTWORLD_FANOUT_ADDENDUM = _read_xml_body("decompose/westworld_fanout_addendum.xml")
-WESTWORLD_ESCALATION_ADDENDUM = _read_xml_body("decompose/westworld_escalation_addendum.xml")
 
 
 __all__ = [
@@ -63,7 +62,6 @@ __all__ = [
     "THREAD_POLICY_SYSTEM_ADDENDUM",
     "THREAD_USER_HINT_CHILD_FRAGMENT",
     "THREAD_USER_HINT_ROOT_FRAGMENT",
-    "WESTWORLD_ESCALATION_ADDENDUM",
     "WESTWORLD_FANOUT_ADDENDUM",
     "WRITE_TODOS_TOOL_DESCRIPTION",
 ]

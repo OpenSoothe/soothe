@@ -2074,16 +2074,11 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
-            # RFC-904: FAST model + config for the decompose grounding critic
-            # (grounding_guard.check_proposal_grounded). The critic judges
-            # whether a proposal's claims are backed by gathered evidence
-            # instead of checking the filesystem (sandbox-compatible).
-            if self._fast_model is not None:
-                configurable["fast_model"] = self._fast_model
+            # soothe_config is read by the nano filesystem middleware
+            # (soothe_nano/middleware/filesystem.py) for virtual-mode and
+            # max-file-size configuration on the step thread.
             if self._config is not None:
                 configurable["soothe_config"] = self._config
-            if self._goal_trace is not None:
-                configurable["goal_trace"] = self._goal_trace
             from soothe.sloop.utils.config_keys import (
                 SOOTHE_DECOMPOSE_STEP_ID_KEY,
                 SOOTHE_EVAL_STEP_ID_KEY,

@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-08-19
 **Authors**: Soothe Team
-**Updated**: 2026-08-20
+**Updated**: 2026-08-29
 **Dependencies**: RFC-220, RFC-624, RFC-630, RFC-903, RFC-622, RFC-219, RFC-803
 **Revises**: RFC-220 §Loop Graph Topology (plan/eval/execute stations); RFC-201 §Plan-Execute structure (upfront plan waves); RFC-213 (per-iteration assess+generate pair); RFC-624 §StepDAG / Step Anchor Registry; RFC-630 §Pass 2 scope classification and complexity-tiered planning routes
 **Related**: RFC-207, RFC-214, RFC-625 (goal-level decompose remains separate), RFC-206, RFC-905
@@ -276,6 +276,17 @@ and return a terminal result. Executor **MUST** map that to
 `step_outcome=decompose` and end the thread. The tool **MUST NOT** commit the
 StepDAG directly.
 
+The tool body **MUST** be a pure validation-and-enqueue step: it accepts
+explicit `subtasks` from the main model, enforces the branch cap, and queues
+the proposal. The tool **MUST NOT** make LLM calls (no auto-generation, no
+grounding critic) and **MUST NOT** track or collect evidence (no evidence
+counter, no evidence corpus). Grounding is guided by THREAD system prompts
+(self-hygiene: look before you split) but not enforced by a gate; the executor's
+`read_only_streak_limit` hard stop is the sole stuck-gathering backstop. See
+the simplification design draft
+(`docs/drafts/2026-08-29-decompose-task-simplification-design.md`) for the
+removed apparatus and its rationale.
+
 Optional thin **sloop** turn-guard (at-most-one decompose; reject same-turn
 conflicts) **MAY** ship later; P1 **SHOULD** rely on envelope + tool
 description first.
@@ -295,14 +306,18 @@ description first.
 | Root | 5 | `agent.loop.decompose.max_branch_root` |
 | Inner | 3 | `agent.loop.decompose.max_branch_inner` |
 
-Over-cap → reject proposal; structured `branch_cap_exceeded` (no silent truncate).
+Over-cap → **truncate** to the cap and queue the prefix (the return message
+reflects the post-truncation count). Rejecting the whole proposal wastes a
+queued turn and forces the model to re-propose; truncation is cheaper and the
+model sees the result immediately. (Prior design rejected; changed 2026-08-29
+per the simplification design.)
 
 ### Tool args
 
 ```text
 decompose_task(
   task: str,
-  subtasks: list[{
+  subtasks: list[{            # required — no auto-generation
     description, full_description, expected_output,
     execution_hint,  # tool | subagent | remote | auto
     depends_on_local: list[int] | None
@@ -310,7 +325,9 @@ decompose_task(
 )
 ```
 
-`depends_on_local` is in-proposal only. Cross-subtree edges are reconciler-only.
+`subtasks` is **required** — the tool makes no LLM calls and cannot
+auto-generate subtasks. `depends_on_local` is in-proposal only. Cross-subtree
+edges are reconciler-only.
 
 ### vs goal-directive decompose
 
@@ -521,3 +538,4 @@ formalization (historical reference; RFC-904 is normative).
 | 2026-08-19 | Documented deprecation/archive eligibility for related RFCs (partial supersession; no premature archive) |
 | 2026-08-19 | Intake planner Approve → DISPATCH root grounding (approved plan → root THREAD) |
 | 2026-08-19 | Added Partial Implementation Note: deletion portion landed via IG-752/IG-753; recursive decomposition topology remains Proposed |
+| 2026-08-29 | Simplify `decompose_task`: tool body is pure validation+enqueue (no LLM calls, no evidence collection). Branch cap: reject → truncate. `subtasks` required. Grounding guided by prompts, not enforced by gate. Per `docs/drafts/2026-08-29-decompose-task-simplification-design.md` |

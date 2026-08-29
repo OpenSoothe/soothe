@@ -31,10 +31,11 @@ def test_decompose_tool_description_leads_with_decision() -> None:
 
 
 def test_decompose_tool_description_requires_evidence() -> None:
-    """Tool description must warn against proposing unconfirmed paths (d15f)."""
+    """Tool description must recommend grounding subtasks in evidence before
+    proposing (self-hygiene: ungrounded proposals waste child-thread budget)."""
     desc = DECOMPOSE_TASK_TOOL_DESCRIPTION.lower()
     assert "evidence" in desc or "confirm" in desc
-    assert "non-existent" in desc or "do not exist" in desc or "unconfirmed" in desc
+    assert "have not verified" in desc or "have not confirmed" in desc
 
 
 def test_root_vs_child_instruction_lines() -> None:
