@@ -20,9 +20,7 @@ from soothe.sloop.utils.goal_text import resolve_user_request
 
 logger = logging.getLogger(__name__)
 
-# Read-only interaction modes never run the coverage Eval: no Eval StepNode
-# insertion and no eval-decision LLM call. `route_after_root_eval` still sends
-# plan mode to PLAN_REVIEW and ask mode to FINALIZE.
+# Read-only interaction modes skip the coverage Eval.
 _READONLY_MODES = frozenset({"plan", "ask"})
 
 
@@ -38,7 +36,6 @@ def _try_auto_to_manual_fallback(
     policy = getattr(ctx, "clarification_policy", None)
     if policy is None:
         return None
-    # Detect auto mode by checking for AutoClarificationPolicy.
     try:
         from soothe.sloop.clarification.auto import AutoClarificationPolicy
 
@@ -46,10 +43,8 @@ def _try_auto_to_manual_fallback(
             return None
     except ImportError:
         return None
-    # Only proceed when a human is attached (interactive_fallback wired).
     if getattr(policy, "_interactive_fallback", None) is None:
         return None
-    # Find and reset failed action steps.
     failed_steps = [node for node in goal.steps.nodes.values() if node.status == "failed"]
     if not failed_steps:
         return None

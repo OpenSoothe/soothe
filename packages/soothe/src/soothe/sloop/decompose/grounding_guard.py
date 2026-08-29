@@ -18,18 +18,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Cap the total evidence text fed to the critic / generation prompt.
 _EVIDENCE_PROMPT_CAP = 6000
-
-# Internal wall-clock budget for the grounding critic LLM call.  When this
-# elapses, the critic fails open (returns ``None`` → proposal is queued
-# without grounding verification).  This must be strictly less than the
-# ``decompose_task`` per-tool timeout (180 s) so the tool never gets
-# killed mid-retry by the outer middleware.
 _CRITIC_TIMEOUT_SECONDS = 45.0
-
-# Internal wall-clock budget for the fast-model subtask generation call.
-# Must also be < ``decompose_task`` per-tool timeout (180 s).
 _GENERATE_TIMEOUT_SECONDS = 60.0
 
 
@@ -278,12 +268,9 @@ async def check_proposal_grounded(
     Returns ``None`` on failure (fail-open: don't block the proposal).
     """
     if fast_model is None:
-        # No fast model resolved — fail open (don't block legitimate work).
         return None
     evidence = _render_evidence(evidence_corpus)
     if not evidence_corpus:
-        # No evidence text captured; the zero-evidence gate in tool.py
-        # should have caught this, but be defensive.
         return None
     proposal_text = _render_proposal(proposal)
     prompt = _CRITIC_PROMPT.format(evidence=evidence, proposal=proposal_text, step_id=step_id)
@@ -301,15 +288,10 @@ async def check_proposal_grounded(
                 component="sloop.decompose.grounding_guard",
                 phase="execute_step",
                 goal_trace=goal_trace,
-                # Prefer json_schema over function_calling: the GroundingVerdict
-                # schema has a nested list of objects, which many FAST models
-                # fail to emit correctly under function_calling strict mode
-                # (observed: every attempt fails validation → repair retry →
-                # fallback, wasting 20-40s).  json_schema handles nested
-                # structures better and avoids the retry cycle.
+                # json_schema handles nested objects better than
+                # function_calling strict mode (which triggers repair
+                # retries on FAST models).
                 methods=("json_schema", "json_mode", "function_calling", None),
-                # strict=False skips post-validation repair retries; we
-                # validate via Pydantic below instead.
                 strict=False,
             ),
             timeout=_CRITIC_TIMEOUT_SECONDS,

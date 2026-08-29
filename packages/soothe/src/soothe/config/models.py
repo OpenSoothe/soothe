@@ -958,11 +958,7 @@ class StrangeLoopRulesConfig(BaseModel):
 
 
 class DecomposeLoopConfig(BaseModel):
-    """Recursive step decomposition budgets.
-
-    Decomposition is always on for StrangeLoop step THREADS; this object only
-    holds budgets and reconcile model role.
-    """
+    """Recursive step decomposition budgets."""
 
     max_depth: int = Field(
         default=3,
