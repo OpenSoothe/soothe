@@ -6,7 +6,7 @@ import os
 from types import SimpleNamespace
 from typing import Any
 
-import soothe_cli.tui.app._module_init as source_module
+import soothe_cli.tui.app._entrypoints as source_module
 from soothe_cli.tui import app as app_module
 
 

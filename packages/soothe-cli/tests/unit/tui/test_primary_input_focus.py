@@ -173,3 +173,49 @@ def test_focus_primary_input_targets_approve_for_tool_approval() -> None:
 
     app.set_focus.assert_called_once_with(approve)
     app._chat_input.focus_input.assert_not_called()
+
+
+def test_has_active_qa_widget_true_when_unsubmitted() -> None:
+    """An unsubmitted QA card in the adapter marks the app as having an active widget."""
+    qa_widget = MagicMock()
+    qa_widget._submitted = False
+
+    app = _FocusAppStub()
+    app._ui_adapter = MagicMock()
+    app._ui_adapter._clarification_input_by_step = {"step-1": qa_widget}
+
+    assert app._has_active_qa_widget() is True
+
+
+def test_has_active_qa_widget_false_when_submitted() -> None:
+    """A submitted QA card does not count as active."""
+    qa_widget = MagicMock()
+    qa_widget._submitted = True
+
+    app = _FocusAppStub()
+    app._ui_adapter = MagicMock()
+    app._ui_adapter._clarification_input_by_step = {"step-1": qa_widget}
+
+    assert app._has_active_qa_widget() is False
+
+
+def test_has_active_qa_widget_false_without_adapter() -> None:
+    """No adapter → no active QA widget."""
+    app = _FocusAppStub()
+    app._ui_adapter = None
+
+    assert app._has_active_qa_widget() is False
+
+
+def test_on_app_focus_skips_when_qa_widget_active() -> None:
+    """on_app_focus should not steal focus to chat input while a QA card is active."""
+    qa_widget = MagicMock()
+    qa_widget._submitted = False
+
+    app = _FocusAppStub()
+    app._ui_adapter = MagicMock()
+    app._ui_adapter._clarification_input_by_step = {"step-1": qa_widget}
+
+    app.on_app_focus()
+
+    app._chat_input.focus_input.assert_not_called()

@@ -267,6 +267,31 @@ async def test_plan_review_refine_with_comments() -> None:
         assert "narrow scope to auth" in app.submitted[0].answers[1]
 
 
+@pytest.mark.asyncio
+async def test_comment_input_inline_beside_refine_option() -> None:
+    """The HITL comment input is rendered inside a Horizontal beside the
+    Refine option, not as a standalone element below all options."""
+    from textual.containers import Horizontal
+
+    widget = _make_plan_review_widget(
+        body_markdown="# Plan",
+        id="clarify-inline-comment",
+    )
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        comment_input = w.query_one("#saq-comment-input")
+        # The parent of the comment input should be a Horizontal with the
+        # saq-option-with-comment class — it's inline beside the option.
+        parent = comment_input.parent
+        assert isinstance(parent, Horizontal)
+        assert parent.has_class("saq-option-with-comment")
+        # The option Static (saq-opt-1 = Refine) is a sibling in the same row.
+        opt_1 = w.query_one("#saq-opt-1")
+        assert opt_1.parent is parent
+
+
 # ---------------------------------------------------------------------------
 # Plan body rendering
 # ---------------------------------------------------------------------------

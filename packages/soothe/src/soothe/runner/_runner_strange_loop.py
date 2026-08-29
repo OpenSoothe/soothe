@@ -952,22 +952,14 @@ class StrangeLoopMixin:
                     increment_ai_message_count = True
 
                 elif event_type == "fatal_error":
-                    # Surface fatal loop errors (e.g. LLM auth failures) to
-                    # the TUI so the user sees the actual cause instead of a
-                    # generic "Stream ended unexpectedly" safety-net message.
+                    # Surface fatal loop errors (e.g. LLM auth failures) to the
+                    # TUI immediately. Don't emit StrangeLoopCompleted here —
+                    # the graph continues to ROOT_EVAL → FINALIZE, which emits
+                    # ``completed`` with a proper completion report. If the
+                    # graph never reaches FINALIZE (e.g. crash), the TUI's
+                    # stream-end safety net surfaces the error instead.
                     error_msg = str(event_data.get("error") or "Fatal error")
                     yield custom_event({"type": ERROR, "error": error_msg})
-                    yield custom_event(
-                        StrangeLoopCompletedEvent(
-                            thread_id=tid,
-                            status="fatal",
-                            goal_progress="none",
-                            evidence_summary=error_msg[:500],
-                            goal=display_goal,
-                            completion_summary=error_msg[:240],
-                            total_steps=0,
-                        ).to_dict()
-                    )
                     logger.error(
                         "[Runner] Fatal error surfaced to TUI: %s (loop=%s)",
                         error_msg,

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock
 import pytest
 
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
-from soothe_cli.tui.app._module_init import QueuedMessage
+from soothe_cli.tui.app._types import QueuedMessage
 
 
 def test_ctrl_c_idle_clears_input_and_arms_double_press_exit() -> None:

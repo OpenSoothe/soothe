@@ -33,7 +33,9 @@ def test_route_after_execute_short_circuits_on_pending_clarification() -> None:
 
 def test_route_after_execute_preserved_when_no_pending() -> None:
     assert route_after_execute({}) == "record_progress"
-    assert route_after_execute({"last_outcome": "fatal"}) == END
+    # Fatal no longer short-circuits to END — route through RECORD_PROGRESS →
+    # RECONCILE → ROOT_EVAL for auto-recovery and completion report.
+    assert route_after_execute({"last_outcome": "fatal"}) == "record_progress"
 
 
 def test_route_after_clarification_returns_to_origin_node() -> None:

@@ -30,16 +30,10 @@ def _try_auto_to_manual_fallback(
     ctx: LoopRuntimeContext,
     goal: Any,
 ) -> NodeResult | None:
-    """Attempt to downgrade from auto to manual when all steps failed.
+    """Reset failed steps and switch to manual clarification when possible.
 
-    When the loop is in auto clarification mode and a human is attached
-    (interactive_fallback is wired), switch to manual mode, reset failed
-    steps so they can be re-dispatched, and route to dispatch instead of
-    fatal. This gives the human a chance to approve/reject the tool calls
-    that veritas auto-answered incorrectly.
-
-    Returns a `NodeResult` to route to dispatch, or `None` when the
-    fallback is not applicable (manual mode, no human, or no failed steps).
+    Only fires when auto-clarification mode is active with a human attached.
+    Returns a NodeResult routing to dispatch, or None when not applicable.
     """
     policy = getattr(ctx, "clarification_policy", None)
     if policy is None:

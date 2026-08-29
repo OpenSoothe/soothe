@@ -279,3 +279,26 @@ async def test_generate_subtasks_returns_none_on_timeout() -> None:
             step_id="SUZ-01",
         )
     assert result is None
+
+
+# ── GroundingVerdict coercion ────────────────────────────────────────────────
+
+
+def test_verdict_coerces_string_claims() -> None:
+    """LLM returns plain strings instead of UngroundedClaim dicts."""
+    v = GroundingVerdict.model_validate(
+        {"grounded": False, "ungrounded_claims": ["bad path", "missing module"]}
+    )
+    assert v.grounded is False
+    assert len(v.ungrounded_claims) == 2
+    assert all(isinstance(c, UngroundedClaim) for c in v.ungrounded_claims)
+    assert v.ungrounded_claims[0].claim == "bad path"
+
+
+def test_verdict_infers_grounded_when_missing() -> None:
+    """``grounded`` field omitted → inferred from ungrounded_claims."""
+    v = GroundingVerdict.model_validate({"ungrounded_claims": []})
+    assert v.grounded is True
+
+    v2 = GroundingVerdict.model_validate({"ungrounded_claims": ["x"]})
+    assert v2.grounded is False

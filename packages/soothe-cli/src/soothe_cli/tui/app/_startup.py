@@ -20,7 +20,7 @@ from textual.containers import VerticalScroll
 from textual.css.query import NoMatches
 
 from soothe_cli._version import CHANGELOG_URL
-from soothe_cli.tui.app._module_init import (
+from soothe_cli.tui.app._types import (
     TextualSessionState,
 )
 from soothe_cli.tui.widgets.chat_input import ChatInput

@@ -11,7 +11,7 @@ import pytest
 
 from soothe_cli.runtime.state.session_stats import SessionStats
 from soothe_cli.tui.app._execution import _ExecutionMixin
-from soothe_cli.tui.app._module_init import QueuedMessage
+from soothe_cli.tui.app._types import QueuedMessage
 
 
 def _execution_app(

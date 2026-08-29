@@ -151,7 +151,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             RECORD_PROGRESS: RECORD_PROGRESS,
             AWAIT_USER: AWAIT_USER,
-            END: END,
         },
     )
     graph.add_conditional_edges(
@@ -160,7 +159,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             RECONCILE: RECONCILE,
             FINALIZE: FINALIZE,
-            END: END,
         },
     )
     graph.add_conditional_edges(
@@ -178,7 +176,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             FINALIZE: FINALIZE,
             PLAN_REVIEW: PLAN_REVIEW,
             DISPATCH: DISPATCH,
-            END: END,
         },
     )
     # Plan review → FINALIZE (approve/reject), AWAIT_USER (fresh review or

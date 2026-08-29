@@ -300,17 +300,14 @@ class DecomposeTaskMiddleware(AgentMiddleware):
 
         # Build system-prompt addendum.
         addendum = THREAD_POLICY_SYSTEM_ADDENDUM
-        # Inject the live max-branch-root limit so the LLM stays under cap.
+        # Inject the branch cap so the LLM stays under the limit.
         max_branch_root = conf.get(SOOTHE_MAX_BRANCH_ROOT_KEY)
         if isinstance(max_branch_root, int) and max_branch_root > 0:
             addendum = (
                 f"{addendum}\n\n"
                 f"## decompose_task subtask limit\n\n"
                 f"Propose at most {max_branch_root} child subtasks per "
-                f"decompose_task call. If the work needs more, group related "
-                f"items into fewer broader subtasks (each can decompose "
-                f"further in its own thread). Exceeding {max_branch_root} "
-                f"subtasks causes the proposal to be rejected."
+                f"decompose_task call. Excess subtasks are truncated."
             )
         if mode == "ask":
             addendum = f"{addendum}\n\n{ASK_MODE_ADDENDUM}"

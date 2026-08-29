@@ -11,7 +11,7 @@ from soothe_sdk.display import card_binder as _binder
 from soothe_sdk.display.transcript_types import MessageData
 from textual.content import Content
 
-from soothe_cli.tui.app._module_init import _LoopHistoryPayload
+from soothe_cli.tui.app._types import _LoopHistoryPayload
 from soothe_cli.tui.widgets.messages import AppMessage
 
 logger = logging.getLogger(__name__)

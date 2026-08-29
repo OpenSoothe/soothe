@@ -73,12 +73,16 @@ def route_after_reconcile(state: dict[str, Any]) -> str:
 
 
 def route_after_root_eval(state: dict[str, Any]) -> str:
-    """ROOT_EVAL → FINALIZE | PLAN_REVIEW | DISPATCH | END."""
+    """ROOT_EVAL → FINALIZE | PLAN_REVIEW | DISPATCH.
+
+    Fatal outcomes route to FINALIZE so the goal produces a completion
+    report from finished steps instead of silently ending the stream.
+    """
     if state.get("root_eval_route") == "fatal" or state.get("last_outcome") == "fatal":
-        return END
+        logger.debug("[routing] route_after_root_eval → finalize (root_eval fatal)")
+        return FINALIZE
     if state.get("root_eval_route") == "dispatch":
         return DISPATCH
-    # Plan mode: route to plan review instead of goal completion.
     if state.get("interaction_mode") == "plan":
         logger.debug("[routing] route_after_root_eval → plan_review (plan mode)")
         return PLAN_REVIEW
@@ -98,13 +102,16 @@ def route_after_wired_subagent(state: dict[str, Any]) -> str:
 
 
 def route_after_execute(state: dict[str, Any]) -> str:
-    """Stop on execute fatal; otherwise record progress then reconcile."""
+    """EXECUTE → RECORD_PROGRESS | AWAIT_USER.
+
+    Fatal step errors route through RECORD_PROGRESS so the graph reaches
+    ROOT_EVAL, where ``_try_auto_to_manual_fallback`` can attempt recovery.
+    If recovery fails, root_eval fatal → FINALIZE produces a completion
+    report instead of silently ending the stream.
+    """
     if _pending_clarification(state):
         logger.debug("[routing] route_after_execute → await_user")
         return AWAIT_USER
-    if state.get("last_outcome") == "fatal":
-        logger.debug("[routing] route_after_execute → END (fatal)")
-        return END
     logger.debug("[routing] route_after_execute → record_progress")
     return RECORD_PROGRESS
 
@@ -114,8 +121,6 @@ def route_after_record_iteration(state: dict[str, Any]) -> str:
     after = state.get("after_record_route")
     if after in ("goal_completion", FINALIZE):
         return FINALIZE
-    if state.get("last_outcome") == "fatal":
-        return END
     return RECONCILE
 
 

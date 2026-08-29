@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe_cli.tui.app import SootheApp
-from soothe_cli.tui.app._module_init import _LoopHistoryPayload
+from soothe_cli.tui.app._types import _LoopHistoryPayload
 from soothe_cli.tui.widgets.message_store import MessageData, MessageStore, MessageType
 
 

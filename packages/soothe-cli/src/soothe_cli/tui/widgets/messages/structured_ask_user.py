@@ -147,7 +147,7 @@ class StructuredAskUserWidget(Vertical):
         height: auto;
         color: $text;
         padding: 0;
-        margin: 0 0 1 0;
+        margin: 0 0 0 0;
     }
 
     StructuredAskUserWidget .saq-option-row {
@@ -168,12 +168,16 @@ class StructuredAskUserWidget(Vertical):
         text-style: bold;
     }
 
-    /* Long description rendered directly below each option label. */
+    /* ── Option list ─────────────────────────────────────────────── */
+
+    /* Long description rendered directly below each option label.
+    Tight (zero) bottom margin packs options tightly — no blank lines
+    between option rows, matching the Claude Code AskUserQuestion style. */
     StructuredAskUserWidget .saq-option-desc {
         height: auto;
         width: 1fr;
         padding: 0;
-        margin: 0 0 1 0;
+        margin: 0 0 0 0;
         color: $text-muted;
     }
 
@@ -221,6 +225,8 @@ class StructuredAskUserWidget(Vertical):
         margin: 0 1 0 0;
         color: $text-muted;
     }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
 
     /* Keyboard hint shown next to the count once every question is answered. */
     StructuredAskUserWidget .saq-enter-hint {
@@ -279,6 +285,8 @@ class StructuredAskUserWidget(Vertical):
         margin: 0;
         color: $text;
     }
+
+    /* ── Separator ──────────────────────────────────────────────── */
 
     /* Horizontal rule separating the QA widget from surrounding transcript. */
     StructuredAskUserWidget .saq-separator {
@@ -363,13 +371,21 @@ class StructuredAskUserWidget(Vertical):
         text-style: italic;
     }
 
-    /* ── HITL: comment input for Refine/Edit ───────────────────────── */
+    /* ── HITL: inline comment input for Refine/Edit ─────────────────── */
 
-    StructuredAskUserWidget .saq-comment-row {
+    /* Horizontal wrapper: option label on the left, comment input on the
+    right.  The input sits beside the option, not below all options. */
+    StructuredAskUserWidget .saq-option-with-comment {
         height: auto;
         width: 1fr;
         padding: 0;
-        margin: 0 0 0 2;
+        margin: 0;
+    }
+
+    /* The option label inside the comment row takes only the space it needs. */
+    StructuredAskUserWidget .saq-option-with-comment .saq-option-row {
+        width: auto;
+        min-width: 0;
     }
 
     StructuredAskUserWidget .saq-comment-input {
@@ -383,14 +399,6 @@ class StructuredAskUserWidget(Vertical):
 
     StructuredAskUserWidget .saq-comment-input:disabled {
         opacity: 0.5;
-    }
-
-    StructuredAskUserWidget .saq-comment-hint {
-        height: auto;
-        padding: 0;
-        margin: 0 0 0 2;
-        color: $text-muted;
-        text-style: italic;
     }
 
     /* ── HITL: expand/collapse plan body in answered view ──────────── */
@@ -472,9 +480,7 @@ class StructuredAskUserWidget(Vertical):
         self._plan_body_widget: Static | None = None
         self._plan_body_text: str = ""
 
-    # ------------------------------------------------------------------
-    # Properties
-    # ------------------------------------------------------------------
+    # ── Properties ───────────────────────────────────────────────────
 
     @property
     def _is_structured(self) -> bool:
@@ -559,9 +565,7 @@ class StructuredAskUserWidget(Vertical):
                     answers[1] = self._hitl_comment_label()
         return answers
 
-    # ------------------------------------------------------------------
-    # Title content
-    # ------------------------------------------------------------------
+    # ── Title content ───────────────────────────────────────────────
 
     def _title_content(self) -> Content:
         if self._is_plan_review:
@@ -613,9 +617,7 @@ class StructuredAskUserWidget(Vertical):
         except Exception:  # noqa: BLE001
             pass
 
-    # ------------------------------------------------------------------
-    # Compose
-    # ------------------------------------------------------------------
+    # ── Compose ─────────────────────────────────────────────────────
 
     def compose(self) -> Any:
         yield Static(self._title_content(), classes="saq-title", markup=False)
@@ -721,12 +723,38 @@ class StructuredAskUserWidget(Vertical):
                 self._rendered_opt_count = len(options) if _has_renderable_opts else 0
                 for j, opt in enumerate(options if _has_renderable_opts else []):
                     label = opt.get("label", "") if isinstance(opt, dict) else ""
-                    yield Static(
-                        f"  {j + 1}. {label}",
-                        id=f"saq-opt-{j}",
-                        classes="saq-option-row",
-                        markup=False,
-                    )
+                    # HITL: the Refine/Edit option renders its comment input
+                    # inline to the right of the label (inside a Horizontal),
+                    # not below all options.
+                    if (
+                        self._is_hitl
+                        and self._comment_option_index is not None
+                        and j == self._comment_option_index
+                    ):
+                        with Horizontal(classes="saq-option-with-comment"):
+                            yield Static(
+                                f"  {j + 1}. {label}",
+                                id=f"saq-opt-{j}",
+                                classes="saq-option-row",
+                                markup=False,
+                            )
+                            comment_placeholder = (
+                                "Revised args…" if self._is_tool_approval else "Comments…"
+                            )
+                            self._comment_input = Input(
+                                placeholder=comment_placeholder,
+                                id="saq-comment-input",
+                                classes="saq-comment-input",
+                                disabled=True,
+                            )
+                            yield self._comment_input
+                    else:
+                        yield Static(
+                            f"  {j + 1}. {label}",
+                            id=f"saq-opt-{j}",
+                            classes="saq-option-row",
+                            markup=False,
+                        )
                     # Long description directly below the label (muted).
                     desc = opt.get("description", "") if isinstance(opt, dict) else ""
                     yield Static(
@@ -755,16 +783,6 @@ class StructuredAskUserWidget(Vertical):
                     # so the user can start typing immediately.
                     if not _has_renderable_opts:
                         self._highlighted = 0  # point at "Other"
-                # HITL comment input: shown when the Refine/Edit option is selected.
-                if self._is_hitl and self._comment_option_index is not None:
-                    comment_placeholder = "Revised args…" if self._is_tool_approval else "Comments…"
-                    self._comment_input = Input(
-                        placeholder=comment_placeholder,
-                        id="saq-comment-input",
-                        classes="saq-comment-input",
-                        disabled=True,
-                    )
-                    yield self._comment_input
             # Inline hint shown when custom row is highlighted but text is empty.
             if self._allow_custom:
                 yield Static(
@@ -785,7 +803,7 @@ class StructuredAskUserWidget(Vertical):
                 markup=False,
             )
             yield Static(
-                "Enter to submit",
+                "← Enter to submit",
                 classes="saq-enter-hint",
                 id="saq-enter-hint",
                 markup=False,
@@ -858,9 +876,7 @@ class StructuredAskUserWidget(Vertical):
             prefix = f"{g.checkmark} " if idx == self._current_q else f"{g.checkmark} "
         return f"{prefix}{self._question_header(idx)}"
 
-    # ------------------------------------------------------------------
-    # on_mount
-    # ------------------------------------------------------------------
+    # ── on_mount ────────────────────────────────────────────────────
 
     def on_mount(self) -> None:
         if self._submitted:
@@ -915,12 +931,11 @@ class StructuredAskUserWidget(Vertical):
             body_widget.update(text)
 
     def _start_focus_guard(self) -> None:
-        """Begin a recurring timer that recaptures focus from the chat input.
+        """Poll every 200 ms and recapture focus if it drifted from the widget.
 
-        The TUI's chat input is the default focus target — the screen's
-        post-mount layout, click handlers, and other lifecycle events all
-        re-focus it. While the QA widget is waiting for an answer we
-        need keyboard input to reach the widget, not the chat prompt.
+        Scrollbar clicks, hydration re-layouts, and lifecycle events can
+        move focus to the chat input, the scroll container, or ``None``.
+        Stopped on submit/abandon.
         """
 
         def _tick() -> None:
@@ -930,8 +945,11 @@ class StructuredAskUserWidget(Vertical):
                 focused = self.app.focused
             except Exception:  # noqa: BLE001
                 return
-            # Only recapture if focus has drifted to the chat input.
-            if not self._focus_is_on_chat(focused):
+            # Recapture whenever focus has left the widget and its
+            # descendants.  The chat input is the most common culprit, but
+            # scrollbar clicks, hydration re-layouts, and other events can
+            # also move focus to None or the scroll container.
+            if not self._focus_drifted(focused):
                 return
             try:
                 self.app.set_focus(self)
@@ -954,35 +972,19 @@ class StructuredAskUserWidget(Vertical):
             self._focus_guard_timer = None
 
     def _schedule_robust_focus(self) -> None:
-        """Keep focus pinned to the widget for a brief window after mount.
+        """Pin focus to the widget for ~600 ms after mount.
 
-        Textual's post-mount layout can move focus to the chat input or
-        another child after `call_after_refresh` fires. Repeated
-        focused attempts at increasing intervals ensure the widget
-        retains keyboard navigation so arrow keys / Enter work
-        immediately on appear.
+        Textual's post-mount layout can re-focus the chat input after
+        `call_after_refresh` fires; staggered re-focus calls win that race
+        so arrow keys / Enter work immediately on appear.
         """
 
         def _refocus() -> None:
             try:
                 if self._submitted:
                     return
-                # Only recapture focus if something stole it from us.  The
-                # chat input is the usual culprit (its post-mount
-                # ``set_app_focus`` can re-focus the text area).  Skip
-                # when another interactive widget already owns focus.
                 focused = self.app.focused
-                if focused is self:
-                    return
-                # If focus is on a descendant of ours, treat it as ours.
-                if focused is not None:
-                    try:
-                        if self in focused.ancestors_with_self:
-                            return
-                    except Exception:  # noqa: BLE001
-                        pass
-                # Detect chat-input focus (covers the TextArea child too).
-                if not self._focus_is_on_chat(focused):
+                if not self._focus_drifted(focused):
                     return
             except Exception:  # noqa: BLE001
                 pass
@@ -999,23 +1001,27 @@ class StructuredAskUserWidget(Vertical):
         except Exception:  # noqa: BLE001
             pass
 
-    def _focus_is_on_chat(self, focused: Any) -> bool:
-        """Return True if `focused` is the chat input (or its TextArea child)."""
-        if focused is None:
-            return False
-        if focused.id == "chat-input":
-            return True
-        chat_input = getattr(self.app, "_chat_input", None)
-        if chat_input is None:
-            return False
-        try:
-            return focused in chat_input.walk_children()
-        except Exception:  # noqa: BLE001
-            return False
+    def _focus_drifted(self, focused: Any) -> bool:
+        """Return True if focus left the widget and its descendants.
 
-    # ------------------------------------------------------------------
-    # HITL: plan body expand/collapse + comment focus guard
-    # ------------------------------------------------------------------
+        Covers the chat input, scroll container, ``None``, and any foreign
+        widget. Returns False for the widget itself or its descendants
+        (e.g. the comment input, footer buttons).
+        """
+        if focused is self:
+            return False
+        if focused is None:
+            return True
+        # Allow focus on a descendant (e.g. the comment input or a
+        # footer button) — the user deliberately moved it there.
+        try:
+            if self in focused.ancestors_with_self:
+                return False
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+
+    # ── HITL: plan body expand/collapse + comment focus guard ──────
 
     def _toggle_body_expanded(self) -> None:
         """Expand or collapse the plan body in the answered view."""
@@ -1051,9 +1057,7 @@ class StructuredAskUserWidget(Vertical):
             if sel != self._comment_option_index:
                 self.screen.set_focus(self)
 
-    # ------------------------------------------------------------------
-    # Rendering updates
-    # ------------------------------------------------------------------
+    # ── Rendering updates ──────────────────────────────────────────
 
     def _update_question_display(self) -> None:
         """Re-render the question body when switching tabs."""
@@ -1082,8 +1086,10 @@ class StructuredAskUserWidget(Vertical):
             except Exception:  # noqa: BLE001
                 desc_w = None
             if j < num_opts:
-                label = options[j].get("label", "") if isinstance(options[j], dict) else ""
-                opt_w.update(f"  {j + 1}. {label}")
+                # Use _option_label so the ❯ marker is applied consistently.
+                opt_w.update(
+                    self._option_label(self._current_q, j, highlighted=(j == self._highlighted))
+                )
                 opt_w.remove_class("is-hidden")
                 if desc_w is not None:
                     opt_desc = (
@@ -1102,20 +1108,28 @@ class StructuredAskUserWidget(Vertical):
         self._update_option_highlight()
         self._update_tab_highlight()
 
-    # Suffix appended to the selected option's label text so the user sees
-    # an inline "Enter to submit." hint right next to their chosen answer.
-    _SELECTED_HINT = "  ← Enter to submit."
+    def _option_label(self, q_idx: int, opt_idx: int, *, highlighted: bool = False) -> str:
+        """Build the display text for an option row.
 
-    def _option_label(self, q_idx: int, opt_idx: int) -> str:
-        """Build the display text for an option row (without hint)."""
+        When *highlighted* is true, prefix with ``❯`` to match the
+        Claude Code AskUserQuestion style; otherwise use a plain indent.
+        """
         options = self._question_options(q_idx)
         if opt_idx < len(options):
             label = options[opt_idx].get("label", "") if isinstance(options[opt_idx], dict) else ""
-            return f"  {opt_idx + 1}. {label}"
+            marker = "❯ " if highlighted else "  "
+            return f"{marker}{opt_idx + 1}. {label}"
         return ""
 
     def _update_option_highlight(self) -> None:
-        """Update which option row is highlighted."""
+        """Update which option row is highlighted.
+
+        Applies CSS classes (``is-highlighted`` / ``is-selected``) and
+        refreshes each option row's text.  The highlighted row gets a ``❯``
+        marker; selected (but not highlighted) rows keep their plain prefix.
+        No inline "Enter to submit" suffix — the footer hint is the single
+        source of truth.
+        """
         num_opts = len(self._question_options(self._current_q))
         custom_idx = num_opts  # Custom row is always at index == num_opts
         for j in range(num_opts):
@@ -1131,74 +1145,82 @@ class StructuredAskUserWidget(Vertical):
                         opt_w.add_class("is-selected")
                     else:
                         opt_w.remove_class("is-selected")
-                # Append the inline hint to the selected option's text so the
-                # user knows they can press Enter to submit their choice.
-                base_text = self._option_label(self._current_q, j)
-                sel = self._selected.get(self._current_q)
-                if sel is not None and sel == j and j != self._highlighted:
-                    opt_w.update(f"{base_text}{self._SELECTED_HINT}")
-                else:
-                    opt_w.update(base_text)
+                # Refresh the label text (with ❯ marker when highlighted).
+                opt_w.update(
+                    self._option_label(
+                        self._current_q,
+                        j,
+                        highlighted=(j == self._highlighted),
+                    )
+                )
             except Exception:  # noqa: BLE001
                 pass
         # Custom row (only when allow_custom)
         if self._allow_custom:
-            try:
-                custom_w = self.query_one("#saq-opt-custom", Static)
-                if self._highlighted == custom_idx:
-                    custom_w.add_class("is-highlighted")
-                    custom_w.remove_class("is-selected")
-                else:
-                    custom_w.remove_class("is-highlighted")
-                    sel = self._selected.get(self._current_q)
-                    if sel is not None and sel == custom_idx:
-                        custom_w.add_class("is-selected")
-                    else:
-                        custom_w.remove_class("is-selected")
-                # Inline hint for a selected custom answer.
-                sel = self._selected.get(self._current_q)
-                custom_text = (
-                    str(self._custom_input.value or "").strip()
-                    if self._custom_input is not None
-                    else ""
-                )
-                if (
-                    sel is not None
-                    and sel == custom_idx
-                    and custom_idx != self._highlighted
-                    and custom_text
-                ):
-                    custom_w.update(f"  Other: {custom_text}{self._SELECTED_HINT}")
-                elif sel is not None and sel == custom_idx and custom_idx != self._highlighted:
-                    custom_w.update(f"  Other:{self._SELECTED_HINT}")
-                else:
-                    custom_w.update("  Other:")
-            except Exception:  # noqa: BLE001
-                pass
+            self._update_custom_row_highlight(custom_idx)
         # Enable custom input only when custom row is highlighted
         if self._custom_input is not None:
             self._custom_input.disabled = self._highlighted != custom_idx
         # Show the custom-empty hint when the custom row is highlighted but
-        # the input has no text (§9c.7).
+        # the input has no text.
         if self._allow_custom:
-            try:
-                hint = self.query_one("#saq-custom-hint", Static)
-                custom_text = (
-                    str(self._custom_input.value or "").strip()
-                    if self._custom_input is not None
-                    else ""
-                )
-                if self._highlighted == custom_idx and not custom_text:
-                    hint.add_class("is-visible")
-                else:
-                    hint.remove_class("is-visible")
-            except Exception:  # noqa: BLE001
-                pass
+            self._update_custom_hint(custom_idx)
         # HITL: enable/disable comment input based on the selected option.
         if self._comment_input is not None and self._comment_option_index is not None:
+            self._update_comment_input_state()
+
+    def _update_custom_row_highlight(self, custom_idx: int) -> None:
+        """Apply highlight/selected classes and refresh the custom-row text."""
+        try:
+            custom_w = self.query_one("#saq-opt-custom", Static)
+            if self._highlighted == custom_idx:
+                custom_w.add_class("is-highlighted")
+                custom_w.remove_class("is-selected")
+            else:
+                custom_w.remove_class("is-highlighted")
+                sel = self._selected.get(self._current_q)
+                if sel is not None and sel == custom_idx:
+                    custom_w.add_class("is-selected")
+                else:
+                    custom_w.remove_class("is-selected")
+            # Build the custom-row text: "❯ Other: <text>" or "  Other:"
             sel = self._selected.get(self._current_q)
-            should_enable = sel is not None and sel == self._comment_option_index
-            self._comment_input.disabled = not should_enable
+            custom_text = (
+                str(self._custom_input.value or "").strip()
+                if self._custom_input is not None
+                else ""
+            )
+            marker = "❯ " if self._highlighted == custom_idx else "  "
+            if custom_text:
+                custom_w.update(f"{marker}Other: {custom_text}")
+            else:
+                custom_w.update(f"{marker}Other:")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _update_custom_hint(self, custom_idx: int) -> None:
+        """Show/hide the custom-empty hint."""
+        try:
+            hint = self.query_one("#saq-custom-hint", Static)
+            custom_text = (
+                str(self._custom_input.value or "").strip()
+                if self._custom_input is not None
+                else ""
+            )
+            if self._highlighted == custom_idx and not custom_text:
+                hint.add_class("is-visible")
+            else:
+                hint.remove_class("is-visible")
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _update_comment_input_state(self) -> None:
+        """Enable/disable the HITL comment input based on the selected option."""
+        if self._comment_input is None or self._comment_option_index is None:
+            return
+        sel = self._selected.get(self._current_q)
+        should_enable = sel is not None and sel == self._comment_option_index
+        self._comment_input.disabled = not should_enable
 
     def _update_tab_highlight(self) -> None:
         """Update tab labels to reflect current question and answered state."""
@@ -1290,9 +1312,7 @@ class StructuredAskUserWidget(Vertical):
         except Exception:  # noqa: BLE001
             pass
 
-    # ------------------------------------------------------------------
-    # Submit recap
-    # ------------------------------------------------------------------
+    # ── Submit recap ───────────────────────────────────────────────
 
     def _open_submit_review(self) -> None:
         """Render the recap block above the footer."""
@@ -1328,9 +1348,7 @@ class StructuredAskUserWidget(Vertical):
         except Exception:  # noqa: BLE001
             pass
 
-    # ------------------------------------------------------------------
-    # Finalize
-    # ------------------------------------------------------------------
+    # ── Finalize ──────────────────────────────────────────────────
 
     def _finalize(self) -> None:
         """Collect answers and post Submitted."""
@@ -1372,9 +1390,7 @@ class StructuredAskUserWidget(Vertical):
             )
         )
 
-    # ------------------------------------------------------------------
-    # Keybinding actions
-    # ------------------------------------------------------------------
+    # ── Keybinding actions ─────────────────────────────────────────
 
     def action_prev_question(self) -> None:
         if self._degraded or self._submitted or self._submit_review_open:
@@ -1493,9 +1509,7 @@ class StructuredAskUserWidget(Vertical):
             self._footer_focused = True
             self._schedule_focus(self._submit_btn)
 
-    # ------------------------------------------------------------------
-    # Focus management
-    # ------------------------------------------------------------------
+    # ── Focus management ───────────────────────────────────────────
 
     def _schedule_focus(self, widget: Any) -> None:
         app = self.app
@@ -1514,9 +1528,7 @@ class StructuredAskUserWidget(Vertical):
         except Exception:  # noqa: BLE001
             _focus()
 
-    # ------------------------------------------------------------------
-    # Event handlers
-    # ------------------------------------------------------------------
+    # ── Event handlers ─────────────────────────────────────────────
 
     @on(Button.Pressed)
     def _on_button_pressed(self, event: Button.Pressed) -> None:

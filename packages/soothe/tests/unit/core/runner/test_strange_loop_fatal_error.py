@@ -1,9 +1,9 @@
 """Fatal loop errors must surface to the TUI via wire-visible events.
 
 When the execute engine emits a ``fatal_error`` event (e.g. LLM API 403),
-the runner must translate it into a ``soothe.error.general.failed`` custom
-event and a ``StrangeLoopCompletedEvent`` with ``status="fatal"`` so the
-TUI shows the actual error instead of a generic "Stream ended unexpectedly".
+the runner must emit a ``soothe.error.general.failed`` custom event so the
+TUI shows the actual error. The graph then continues to ROOT_EVAL → FINALIZE,
+which emits ``strange_loop.completed`` with a completion report.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.events import ERROR, STRANGE_LOOP_COMPLETED
+from soothe.events import ERROR
 from soothe.runner._runner_strange_loop import StrangeLoopMixin
 
 
@@ -57,8 +57,14 @@ def _extract_custom_data(chunks: list[tuple]) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
-async def test_fatal_error_surfaces_error_and_completion_events() -> None:
-    """The runner must emit a soothe.error event and a fatal completion event."""
+async def test_fatal_error_surfaces_error_event() -> None:
+    """The runner must emit a soothe.error event for fatal errors.
+
+    StrangeLoopCompleted is no longer emitted from the fatal_error handler —
+    the graph continues to ROOT_EVAL → FINALIZE, which emits ``completed``
+    with a proper completion report. When the graph ends immediately after
+    fatal_error (as in this mock), only the ERROR event is emitted.
+    """
     mixin = _BareStrangeLoopMixin()
     heartbeat = MagicMock()
     heartbeat.stop = AsyncMock()
@@ -92,11 +98,4 @@ async def test_fatal_error_surfaces_error_and_completion_events() -> None:
     assert error_events, "Expected a soothe.error.general.failed event in output"
     assert error_events[0]["error"] == "Permission/authentication error", (
         f"Expected error text, got: {error_events[0].get('error')}"
-    )
-
-    # A strange_loop.completed event must be present with status="fatal".
-    completed_events = [d for d in custom_data if d.get("type") == STRANGE_LOOP_COMPLETED]
-    assert completed_events, "Expected a strange_loop.completed event in output"
-    assert completed_events[0]["status"] == "fatal", (
-        f"Expected status='fatal', got: {completed_events[0].get('status')}"
     )

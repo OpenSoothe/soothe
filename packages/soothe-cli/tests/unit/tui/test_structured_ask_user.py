@@ -169,6 +169,31 @@ async def test_visual_separators_above_and_below() -> None:
 
 
 @pytest.mark.asyncio
+async def test_option_desc_has_zero_bottom_margin() -> None:
+    """Option descriptions pack tightly — zero bottom margin (no blank lines)."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        desc = w.query_one(".saq-option-desc")
+        # The CSS margin for option-desc is 0 0 0 0 — verify it's in the styles.
+        styles = desc.styles
+        assert styles.margin.bottom == 0
+
+
+@pytest.mark.asyncio
+async def test_description_has_zero_bottom_margin() -> None:
+    """The question description also has zero bottom margin for compactness."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        desc = w.query_one("#saq-desc")
+        styles = desc.styles
+        assert styles.margin.bottom == 0
+
+
+@pytest.mark.asyncio
 async def test_separators_hidden_after_submit() -> None:
     """After submit the separators are hidden — the widget collapses to a compact summary."""
     app = _WidgetApp(_make_widget())
@@ -206,8 +231,12 @@ async def test_enter_hint_hidden_until_all_answered() -> None:
 
 
 @pytest.mark.asyncio
-async def test_inline_hint_shown_on_selected_option() -> None:
-    """A selected (but not highlighted) option shows an inline "Enter to submit" hint."""
+async def test_no_inline_hint_on_selected_option() -> None:
+    """Selected options do NOT show an inline "Enter to submit" suffix.
+
+    The footer hint is the single source of truth — no trailing hint on
+    the option row itself.
+    """
     app = _WidgetApp(_make_widget(questions=_questions(2)))
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -222,20 +251,22 @@ async def test_inline_hint_shown_on_selected_option() -> None:
         await pilot.pause()
         opt_0 = w.query_one("#saq-opt-0")
         rendered = str(opt_0.render())
-        assert "Enter to submit" in rendered
+        assert "Enter to submit" not in rendered
 
 
 @pytest.mark.asyncio
-async def test_inline_hint_not_on_unselected_options() -> None:
-    """Unselected options do not show the inline hint."""
+async def test_highlighted_option_has_marker() -> None:
+    """The highlighted option row shows the ❯ marker prefix."""
     app = _WidgetApp(_make_widget(questions=_questions(1)))
     async with app.run_test() as pilot:
         await pilot.pause()
         w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
-        # Nothing selected yet — no hint on any option.
-        for j in range(3):
-            opt = w.query_one(f"#saq-opt-{j}")
-            assert "Enter to submit" not in str(opt.render())
+        # Option 0 is highlighted by default on mount.
+        opt_0 = w.query_one("#saq-opt-0")
+        assert "❯" in str(opt_0.render())
+        # Non-highlighted options don't have the marker.
+        opt_1 = w.query_one("#saq-opt-1")
+        assert "❯" not in str(opt_1.render())
 
 
 @pytest.mark.asyncio
@@ -266,6 +297,36 @@ async def test_focus_guard_runs_while_active() -> None:
         w._finalize()
         await pilot.pause()
         assert w._focus_guard_timer is None
+
+
+@pytest.mark.asyncio
+async def test_focus_drifted_returns_false_for_widget_and_descendants() -> None:
+    """_focus_drifted is False when focus is on the widget or its descendants."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Focus on the widget itself → not drifted.
+        assert w._focus_drifted(w) is False
+        # Focus on a descendant (a Static child) → not drifted.
+        child = w.query_one("#saq-opt-0")
+        assert w._focus_drifted(child) is False
+
+
+@pytest.mark.asyncio
+async def test_focus_drifted_returns_true_for_none_and_foreign_widgets() -> None:
+    """_focus_drifted is True for None, the chat input, or any foreign widget."""
+    app = _WidgetApp(_make_widget())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one("#test-widget", StructuredAskUserWidget)
+        # Focus is None (nothing focused) → drifted.
+        assert w._focus_drifted(None) is True
+        # A foreign widget that is not a descendant → drifted.
+        from textual.widgets import Static
+
+        stranger = Static("stranger")
+        assert w._focus_drifted(stranger) is True
 
 
 @pytest.mark.asyncio

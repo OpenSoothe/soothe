@@ -17,9 +17,9 @@ from textual.css.query import NoMatches
 from textual.theme import Theme
 
 from soothe_cli.display import theme
-from soothe_cli.tui.app._module_init import (
+from soothe_cli.tui.app._theme_prefs import save_theme_preference
+from soothe_cli.tui.app._types import (
     DeferredAction,
-    save_theme_preference,
 )
 from soothe_cli.tui.widgets.messages import AppMessage, ErrorMessage
 from soothe_cli.tui.widgets.welcome import WelcomeBanner

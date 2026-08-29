@@ -30,13 +30,13 @@ from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._history import _HistoryMixin
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
 from soothe_cli.tui.app._model import _ModelMixin
-from soothe_cli.tui.app._module_init import (
+from soothe_cli.tui.app._startup import _StartupMixin
+from soothe_cli.tui.app._theme_prefs import _load_theme_preference
+from soothe_cli.tui.app._types import (
     DeferredAction,
     QueuedMessage,
     TextualSessionState,
-    _load_theme_preference,
 )
-from soothe_cli.tui.app._startup import _StartupMixin
 from soothe_cli.tui.app._ui import _UIMixin
 from soothe_cli.tui.composer_mode import normalize_composer_mode
 from soothe_cli.tui.widgets.chat_input import ChatInput

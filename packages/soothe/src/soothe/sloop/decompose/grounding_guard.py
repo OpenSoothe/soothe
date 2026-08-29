@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from soothe.context.decomposition import DecompositionProposal, ProposedSubtask
 
@@ -45,16 +45,31 @@ class GroundingVerdict(BaseModel):
     """Structured verdict from the FAST grounding critic."""
 
     grounded: bool = Field(
-        description=(
-            "True when every concrete claim in the proposal is supported by "
-            "the evidence (paths, modules, functions, quantities, behavioral "
-            "assertions appear or are close-variant in the evidence)."
-        )
+        description="True when every concrete claim is supported by the evidence."
     )
     ungrounded_claims: list[UngroundedClaim] = Field(
         default_factory=list,
-        description="Claims NOT supported by the evidence (empty if grounded)",
+        description="Claims NOT supported by the evidence (empty if grounded).",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, data: Any) -> Any:
+        """Coerce common LLM output mistakes (strings instead of dicts)."""
+        if not isinstance(data, dict):
+            return data
+        claims = data.get("ungrounded_claims")
+        if isinstance(claims, list):
+            coerced: list[Any] = []
+            for c in claims:
+                if isinstance(c, str):
+                    coerced.append({"subtask": 0, "claim": c, "reason": ""})
+                else:
+                    coerced.append(c)
+            data["ungrounded_claims"] = coerced
+        if "grounded" not in data:
+            data["grounded"] = not bool(data.get("ungrounded_claims"))
+        return data
 
 
 # ── Fast-model subtask generation ───────────────────────────────────────────
@@ -260,12 +275,7 @@ async def check_proposal_grounded(
 ) -> GroundingVerdict | None:
     """Run the FAST grounding critic on a decompose proposal.
 
-    Returns a :class:`GroundingVerdict`, or `None` on failure (fail-open: \
-    the caller should not block the proposal when the critic itself errors).
-
-    An internal timeout (:data:`_CRITIC_TIMEOUT_SECONDS`) ensures the critic \
-    fails open well before the outer ``decompose_task`` tool timeout fires, \
-    so the tool is never killed mid-retry by the middleware.
+    Returns ``None`` on failure (fail-open: don't block the proposal).
     """
     if fast_model is None:
         # No fast model resolved — fail open (don't block legitimate work).

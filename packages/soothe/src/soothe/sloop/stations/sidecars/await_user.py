@@ -41,6 +41,10 @@ async def node_await_clarification(
         request = request_from_state(pending)
     except ValueError:
         logger.exception("[await_clarification] malformed pending_clarification")
+        await ctx.emit(
+            "fatal_error",
+            {"error": "Malformed pending clarification state", "step_id": ""},
+        )
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,

@@ -17,11 +17,13 @@ from textual.app import App
 from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
 
-from soothe_cli.tui.app._module_init import (
+from soothe_cli.tui.app._terminal import (
     _ITERM_CURSOR_GUIDE_ON,
+    _write_iterm_escape,
+)
+from soothe_cli.tui.app._types import (
     DeferredAction,
     _LoopHistoryPayload,
-    _write_iterm_escape,
 )
 from soothe_cli.tui.widgets.file_change_preview import FileChangePreviewWidget
 from soothe_cli.tui.widgets.messages import (
@@ -1212,14 +1214,14 @@ class _MessagesMixin:
     def on_app_focus(self) -> None:
         """Restore primary input focus when the terminal regains OS focus.
 
-        When the user opens a link via `webbrowser.open`, OS focus shifts to
-        the browser. On returning to the terminal, Textual fires `AppFocus`
-        (requires a terminal that supports FocusIn events). Re-focusing the
-        primary input keeps it ready for typing — but only when no other
-        focusable widget (e.g., a step card control) currently owns focus, so
-        the user does not lose an in-progress answer to a tab-out and back.
+        Fires when focus returns from an external program (e.g. a browser
+        link). Re-focuses the primary input unless a modal is open, another
+        focusable widget owns focus, or an unsubmitted QA card is active
+        (its own focus guard handles recapture).
         """
         if self.screen.is_modal:
+            return
+        if self._has_active_qa_widget():
             return
         focused = self.focused
         primary = self._primary_text_input()
@@ -1235,15 +1237,12 @@ class _MessagesMixin:
         self._chat_input.focus_input()
 
     def on_click(self, _event: Click) -> None:
-        """Focus the chat input when the click landed on non-focusable chrome.
+        """Focus the chat input when a click lands on non-focusable chrome.
 
-        Original intent: clicking the dead transcript area should drop the
-        caret back in the prompt. But this handler bubbles for *every* click,
-        so an unconditional refocus also steals focus from inline focusable
-        widgets (e.g., the StructuredAskUserWidget answer field) on the same
-        click that Textual just used to focus them. Skip the refocus whenever
-        the click landed on a focusable widget — Textual's default focus
-        handling already does the right thing there.
+        Bubbles for every click, so an unconditional refocus would steal
+        focus from inline focusable widgets. Skip when the click target is
+        focusable, a text selection is active, or an unsubmitted QA card is
+        on screen (scrolling to review a plan must not yank focus).
         """
         if not self._chat_input:
             return
@@ -1253,6 +1252,8 @@ class _MessagesMixin:
         if screen_has_text_selection(self.screen):
             return
         if self._click_landed_on_focusable(_event):
+            return
+        if self._has_active_qa_widget():
             return
         self.call_after_refresh(self.focus_primary_input)
 
@@ -1276,6 +1277,14 @@ class _MessagesMixin:
                 pass
             node = getattr(node, "parent", None)
         return False
+
+    def _has_active_qa_widget(self) -> bool:
+        """Return True when an unsubmitted StructuredAskUserWidget is mounted."""
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None:
+            return False
+        by_step = getattr(adapter, "_clarification_input_by_step", None) or {}
+        return any(not getattr(w, "_submitted", False) for w in by_step.values())
 
     def on_text_selected(self, _event: TextSelected) -> None:
         """Copy selected transcript text on mouse release.
