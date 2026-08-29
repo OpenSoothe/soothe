@@ -45,6 +45,32 @@ _HITL_ORIGINS: frozenset[str] = frozenset({_ORIGIN_PLAN_MODE_REVIEW, _ORIGIN_TOO
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n?", re.DOTALL)
 
+# Max chars of the tool arg (e.g. shell command) shown in the approval card
+# title. Long commands are truncated to a brief preview with an ellipsis so
+# the card header stays readable. The CLI truncates defensively — it cannot
+# assume the host's upstream truncation has already shortened the value.
+_TOOL_ARG_PREVIEW_MAX = 80
+
+
+def _truncate_tool_arg(body: str) -> str:
+    """Truncate the parenthesized arg portion of a tool-approval body.
+
+    The body is shaped ``"<name> (<arg>)"`` (the leading ``"Approve "`` and
+    trailing ``"?"`` already stripped). Only the ``<arg>`` inside the final
+    parenthesized group is shortened; the tool name and the wrapping parens
+    are preserved. Bodies without a parenthesized arg pass through unchanged.
+    """
+    if not body:
+        return body
+    open_idx = body.rfind("(")
+    if open_idx < 0 or not body.endswith(")"):
+        return body
+    arg = body[open_idx + 1 : -1]
+    if len(arg) <= _TOOL_ARG_PREVIEW_MAX:
+        return body
+    preview = arg[: _TOOL_ARG_PREVIEW_MAX - 1].rstrip() + "…"
+    return f"{body[: open_idx + 1]}{preview})"
+
 
 def _strip_plan_frontmatter(markdown: str) -> str:
     """Remove YAML frontmatter from a plan artifact for display."""
@@ -586,8 +612,10 @@ class StructuredAskUserWidget(Vertical):
 
         Each HITL question for tool_approval is shaped as a ``QuestionSpec``
         with ``header`` = ``"Approve <name> (<arg>)"``. The card title
-        re-shapes it to ``"Approve tool: <name> (<arg>)"``. Multiple
-        pending tool calls collapse into one title.
+        re-shapes it to ``"Approve tool: <name> (<arg>)"``. Long command
+        args are truncated to a brief preview (see ``_truncate_tool_arg``)
+        so the header stays readable. Multiple pending tool calls collapse
+        into one title.
         """
         if not self._questions:
             return "Approve tool"
@@ -600,6 +628,7 @@ class StructuredAskUserWidget(Vertical):
             body = body[len("Approve ") :]
         if body.endswith("?"):
             body = body[:-1]
+        body = _truncate_tool_arg(body)
         more = len(self._questions) - 1
         if more > 0:
             return f"Approve {more + 1} tools: {body} (+{more} more)"

@@ -14,6 +14,7 @@ from soothe_cli.commands.binding import message_from_widget
 from soothe_cli.tui.widgets.messages.structured_ask_user import (
     StructuredAskUserWidget,
     _strip_plan_frontmatter,
+    _truncate_tool_arg,
 )
 
 # ---------------------------------------------------------------------------
@@ -383,6 +384,182 @@ async def test_tool_approval_title() -> None:
         title = w._tool_approval_title()
         assert "read_file" in title
         assert "Approve tool" in title
+
+
+# ---------------------------------------------------------------------------
+# Tool approval title — command arg truncation
+# ---------------------------------------------------------------------------
+
+
+def test_truncate_tool_arg_passthrough_when_short() -> None:
+    """Short args are returned unchanged."""
+    body = "read_file (path=/tmp/x)"
+    assert _truncate_tool_arg(body) == body
+
+
+def test_truncate_tool_arg_no_parens_unchanged() -> None:
+    """Bodies without a parenthesized arg pass through unchanged."""
+    assert _truncate_tool_arg("read_file") == "read_file"
+    assert _truncate_tool_arg("") == ""
+
+
+def test_truncate_tool_arg_truncates_long_command() -> None:
+    """Long command args are shortened to a preview with ellipsis."""
+    long_cmd = (
+        "cd /var/lib/soothe/workspaces/Workspace/soothe "
+        "&& git status && git diff --stat && git log --oneline -5 "
+        "&& echo 'all done here'"
+    )
+    # Longer than the preview cap.
+    assert len(long_cmd) > 80
+    body = f"run_command (command={long_cmd})"
+    out = _truncate_tool_arg(body)
+    # Tool name preserved.
+    assert out.startswith("run_command (command=")
+    # Wrapped in parens and ends with an ellipsis preview.
+    assert out.endswith(")")
+    assert out.endswith("…)")
+    assert long_cmd not in out
+    # Preview arg (between the last "(" and the final ")") stays within cap.
+    arg = out[out.rfind("(") + 1 : -1]
+    assert len(arg) <= 80
+
+
+def test_truncate_tool_arg_preserves_multi_paren_arg() -> None:
+    """Only the final parenthesized group is treated as the arg wrapper.
+
+    A command that itself contains parens (e.g. ``$(...)``) is truncated as a
+    whole — the outermost wrapping parens are what matter.
+    """
+    inner = "x" * 100  # long
+    body = f"run_command (command=echo $(date) {inner})"
+    out = _truncate_tool_arg(body)
+    assert out.startswith("run_command (")
+    assert out.endswith("…)")
+    assert len(out) < len(body)
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_title_truncates_long_command() -> None:
+    """The full title truncates a long command arg to a brief preview."""
+    long_cmd = (
+        "cd /var/lib/soothe/workspaces/Workspace/soothe "
+        "&& git status && git diff --stat && git log --oneline -5 "
+        "&& echo 'all done here'"
+    )
+    q = {
+        "question": f"Approve run_command (command={long_cmd})?",
+        "header": f"Approve run_command (command={long_cmd})",
+        "options": [
+            {"label": "Approve", "description": "Allow this tool call."},
+            {"label": "Edit", "description": "Revise the tool args."},
+            {"label": "Reject", "description": "Deny this tool call."},
+        ],
+    }
+    widget = _make_tool_approval_widget(id="clarify-tool-long", questions=[q])
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        title = w._tool_approval_title()
+        assert title.startswith("Approve tool: run_command (command=")
+        assert title.endswith("…)")
+        # The full command must not appear verbatim in the title.
+        assert long_cmd not in title
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_title_truncates_in_multi_tool_case() -> None:
+    """The multi-tool title also truncates the first tool's long command arg."""
+    long_cmd = (
+        "cd /var/lib/soothe/workspaces/Workspace/soothe "
+        "&& git status && git diff --stat && git log --oneline -5 "
+        "&& echo 'all done here'"
+    )
+    q0 = {
+        "question": f"Approve run_command (command={long_cmd})?",
+        "header": f"Approve run_command (command={long_cmd})",
+        "options": [
+            {"label": "Approve", "description": "Allow this tool call."},
+            {"label": "Edit", "description": "Revise the tool args."},
+            {"label": "Reject", "description": "Deny this tool call."},
+        ],
+    }
+    q1 = {
+        "question": "Approve read_file (path=/tmp/y)?",
+        "header": "Approve read_file (path=/tmp/y)",
+        "options": [
+            {"label": "Approve", "description": "Allow this tool call."},
+            {"label": "Edit", "description": "Revise the tool args."},
+            {"label": "Reject", "description": "Deny this tool call."},
+        ],
+    }
+    widget = _make_tool_approval_widget(id="clarify-tool-multi", questions=[q0, q1])
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        title = w._tool_approval_title()
+        # Multi-tool prefix and the "(+1 more)" suffix.
+        assert title.startswith("Approve 2 tools: run_command (command=")
+        assert title.endswith("…) (+1 more)")
+        # The full command must not appear verbatim in the title.
+        assert long_cmd not in title
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_title_short_command_not_truncated() -> None:
+    """A short command arg is shown in full — no spurious ellipsis."""
+    q = {
+        "question": "Approve run_command (command=git status)?",
+        "header": "Approve run_command (command=git status)",
+        "options": [
+            {"label": "Approve", "description": "Allow this tool call."},
+            {"label": "Edit", "description": "Revise the tool args."},
+            {"label": "Reject", "description": "Deny this tool call."},
+        ],
+    }
+    widget = _make_tool_approval_widget(id="clarify-tool-short", questions=[q])
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        title = w._tool_approval_title()
+        assert title == "Approve tool: run_command (command=git status)"
+        assert "…" not in title
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_title_multi_tool_truncates_first() -> None:
+    """Multi-tool title truncates the first tool's long arg consistently."""
+    long_cmd = "cd /tmp && " + "x" * 100
+    q0 = {
+        "question": f"Approve run_command (command={long_cmd})?",
+        "header": f"Approve run_command (command={long_cmd})",
+        "options": [
+            {"label": "Approve", "description": "Allow this tool call."},
+            {"label": "Edit", "description": "Revise the tool args."},
+            {"label": "Reject", "description": "Deny this tool call."},
+        ],
+    }
+    q1 = {
+        "question": "Approve read_file (path=/tmp/y)?",
+        "header": "Approve read_file (path=/tmp/y)",
+        "options": [
+            {"label": "Approve", "description": "Allow this tool call."},
+            {"label": "Edit", "description": "Revise the tool args."},
+            {"label": "Reject", "description": "Deny this tool call."},
+        ],
+    }
+    widget = _make_tool_approval_widget(id="clarify-tool-multi", questions=[q0, q1])
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(StructuredAskUserWidget)
+        title = w._tool_approval_title()
+        assert title.startswith("Approve 2 tools: run_command (command=")
+        assert title.endswith("…) (+1 more)")
+        assert long_cmd not in title
 
 
 @pytest.mark.asyncio
