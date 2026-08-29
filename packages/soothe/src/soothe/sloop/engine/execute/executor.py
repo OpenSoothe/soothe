@@ -671,6 +671,7 @@ class Executor:
         origin_node: ClarificationOrigin,
         step_id: str | None = None,
         step_description: str | None = None,
+        step_start_perf: float | None = None,
     ) -> _PendingInterruptFetch:
         """Read pending LangGraph interrupts from `aget_state` after a stream ends.
 
@@ -740,6 +741,10 @@ class Executor:
                             ticket.step_id = step_id
                         if step_description and not ticket.step_description:
                             ticket.step_description = step_description
+                        if step_start_perf is not None and not ticket.prior_duration_ms:
+                            ticket.prior_duration_ms = int(
+                                (time.perf_counter() - step_start_perf) * 1000
+                            )
                         capture.resume_ticket = ticket
                 else:
                     uncapturable_ask_user = True
@@ -765,6 +770,7 @@ class Executor:
         resume_answer_payload: dict[str, Any] | None = None,
         step_id: str | None = None,  # for heartbeat correlation + capture
         step_description: str | None = None,  # captured for resume identity
+        step_start_perf: float | None = None,  # perf_counter baseline for prior_duration_ms
     ) -> AsyncGenerator[Any, None]:
         """Run `CoreAgent.astream` with interrupt handling.
 
@@ -783,6 +789,9 @@ class Executor:
         - Heartbeat sentinels are yielded during long waits to keep
           the stream alive and prevent client disconnects during slow tool
           execution (browser_use, long searches).
+        - When `step_start_perf` is set, the elapsed wall-clock at interrupt
+          time is recorded on ``capture.resume_ticket.prior_duration_ms`` so
+          the resume pass can accumulate it into the final ``duration_ms``.
         """
         interrupt_iterations = 0
         current_input: dict[str, Any] | Command = (
@@ -869,6 +878,10 @@ class Executor:
                             ticket.step_id = step_id
                         if step_description:
                             ticket.step_description = step_description
+                        if step_start_perf is not None:
+                            ticket.prior_duration_ms = int(
+                                (time.perf_counter() - step_start_perf) * 1000
+                            )
                         capture.resume_ticket = ticket
                         logger.info(
                             "[executor] stored resume thread_id=%s for step %s",
@@ -888,6 +901,7 @@ class Executor:
                 origin_node=origin_node,
                 step_id=step_id,
                 step_description=step_description,
+                step_start_perf=step_start_perf,
             )
             if fetch.captured_clarification:
                 return
@@ -2027,6 +2041,13 @@ class Executor:
             Collected execute-step stream result (events, step outcome, messages, delegate text).
         """
         start = time.perf_counter()
+        # Accumulate pre-interrupt elapsed time (carried on resume_ticket)
+        # into the final duration_ms so step time spans the full execution.
+        prior_duration_ms = 0
+        if loop_state is not None and self._clarification_resume_answer_payload is not None:
+            resume_ticket = getattr(loop_state, "resume_ticket", None)
+            if resume_ticket is not None:
+                prior_duration_ms = int(getattr(resume_ticket, "prior_duration_ms", 0) or 0)
         events: list[StreamEvent] = []
         output = ""  # Still collect for Layer 1 final report
         budget = _ActStreamBudget(
@@ -2210,6 +2231,7 @@ class Executor:
                     resume_answer_payload=self._clarification_resume_answer_payload,
                     step_id=step.id,  # for heartbeat correlation + capture
                     step_description=step.full_description or step.description,
+                    step_start_perf=start,
                 )
 
                 pass_output = ""
@@ -2318,7 +2340,7 @@ class Executor:
                     )
                 ]
 
-            duration_ms = int((time.perf_counter() - start) * 1000)
+            duration_ms = int((time.perf_counter() - start) * 1000) + prior_duration_ms
 
             human_core_agent_message_id: str | None = envelope_human_id
             ai_core_agent_message_id: str | None = None
@@ -2514,7 +2536,7 @@ class Executor:
             )
 
         except asyncio.CancelledError:
-            duration_ms = int((time.perf_counter() - start) * 1000)
+            duration_ms = int((time.perf_counter() - start) * 1000) + prior_duration_ms
             logger.info(
                 "Step %s cancelled after %dms",
                 step.id,
@@ -2522,7 +2544,7 @@ class Executor:
             )
             raise
         except Exception as e:
-            duration_ms = int((time.perf_counter() - start) * 1000)
+            duration_ms = int((time.perf_counter() - start) * 1000) + prior_duration_ms
             if isinstance(e, GraphRecursionError):
                 warning_text = _graph_recursion_warning_text(e)
                 logger.warning(

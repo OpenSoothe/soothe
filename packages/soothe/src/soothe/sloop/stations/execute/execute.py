@@ -62,6 +62,7 @@ def _coerce_resume_ticket(raw: Any) -> ResumeTicket | None:
             thread_id=raw.get("thread_id"),
             step_id=raw.get("step_id"),
             step_description=raw.get("step_description"),
+            prior_duration_ms=int(raw.get("prior_duration_ms") or 0),
         )
     return None
 

@@ -14,11 +14,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ResumeTicket:
-    """Interrupt-resume identity carried on one graph channel."""
+    """Interrupt-resume identity carried on one graph channel.
+
+    Attributes:
+        thread_id: CoreAgent fork thread hosting the pending interrupt.
+        step_id: Originating step id (for step_started re-emit on resume).
+        step_description: Originating step description (for TUI card title).
+        prior_duration_ms: Pre-interrupt elapsed time (ms) accumulated into
+            the final ``duration_ms`` on resume.
+    """
 
     thread_id: str | None = None
     step_id: str | None = None
     step_description: str | None = None
+    prior_duration_ms: int = 0
 
 
 @dataclass
