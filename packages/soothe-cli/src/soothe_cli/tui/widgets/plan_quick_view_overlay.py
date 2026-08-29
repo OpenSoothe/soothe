@@ -135,7 +135,7 @@ class PlanQuickViewOverlay(Vertical):
 
     Auto-shows while a goal is executing (`_loop_executing()`) when the
     preferred visibility is on (`CLIConfig.plan_panel_default_visible`,
-    default False). Auto-hides once the loop reaches a terminal footer
+    default True). Auto-hides once the loop reaches a terminal footer
     (`set_loop_finished` / `set_interrupted`). Toggle with `Ctrl+t`.
     Mounted as a Screen sibling between `#chat` and
     `#bottom-app-container` so expanding it shrinks the transcript
@@ -191,7 +191,7 @@ class PlanQuickViewOverlay(Vertical):
     }
     """
 
-    def __init__(self, *, default_visible: bool = False, **kwargs: Any) -> None:
+    def __init__(self, *, default_visible: bool = True, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._preferred_visible: bool = default_visible
         # True when the user explicitly opened the panel (Ctrl+t). Suppresses

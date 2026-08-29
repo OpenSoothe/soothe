@@ -31,8 +31,7 @@ def test_build_keyboard_shortcut_rows_cover_core_bindings() -> None:
     assert rows["Ctrl+D"] == "Type exit, quit, or /quit to exit the TUI"
     assert rows["Ctrl+C"] == "Clear input or interrupt running agent/shell"
     assert (
-        rows["Ctrl+T"]
-        == "Toggle plan panel (hidden by default; --plan-panel auto-shows while active)"
+        rows["Ctrl+T"] == "Toggle plan panel (shown by default; --no-plan-panel disables auto-show)"
     )
     assert rows["Shift+Tab"] == "Cycle composer mode (Auto → Manual → Plan → Ask)"
     assert "Ctrl+Tab" not in rows
