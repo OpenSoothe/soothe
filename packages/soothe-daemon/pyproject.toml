@@ -11,7 +11,7 @@ license = { text = "MIT" }
 requires-python = ">=3.11,<3.14"
 keywords = ["soothe", "daemon", "server", "websocket", "agent", "ai", "llm"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -24,8 +24,8 @@ classifiers = [
 dependencies = [
     # First-party: soothe pulls nano; do not re-pin nano (avoids Docker co-install drift).
     # Wire/events via soothe-sdk (PyPI) only — never soothe-client-python (client sits above daemon).
-    "soothe>=0.9.15,<1.0.0",
-    "soothe-autopilot>=0.9.15,<1.0.0",
+    "soothe>=1.0.0,<2.0.0",
+    "soothe-autopilot>=1.0.0,<2.0.0",
     "soothe-sdk>=1.0.12,<2.0.0",
     # Daemon process surface
     "aiohttp>=3.9.0,<4.0.0",

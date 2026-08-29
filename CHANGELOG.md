@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.0] - 2026-08-29
+
+### Changed
+- **Major version release (1.0.0)** — Soothe reaches its first stable release. All monorepo-owned packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`) bump to 1.0.0 and mark `Development Status :: 5 - Production/Stable`. The `soothe-sdk` package remains on its independent 1.x version line (currently 1.0.12).
+- Raise upper bounds on first-party dependencies from `<1.0.0` to `<2.0.0` (`soothe`, `soothe-autopilot`) so downstream packages resolve the new 1.0.0 release.
+
+### Added
+- StrangeLoop now carries pre-interrupt elapsed time into the resume step duration, so paused-then-resumed steps report accurate wall-clock timing.
+
+### Fixed
+- Harden fatal-error routing and the grounding critic in the TUI: the app module is split for clarity, and legacy docstrings/dead comments are cleansed from routing, grounding, and decomposition paths.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.11.0...v1.0.0
+
 ## [v0.11.0] - 2026-08-29
 
 ### Changed
