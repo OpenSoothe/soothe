@@ -8,6 +8,7 @@ from soothe.config.constants import (
     VISION_BRIEF_IMAGE_FACTS_MAX_CHARS,
     VISION_CONTEXT_MAX_CHARS,
 )
+from soothe.utils.text import truncate_text
 
 # Must match soothe_daemon.services.image_understanding.enrich_user_text_with_vision.
 VISION_SUMMARY_HEADER = "--- Vision summary ---"
@@ -22,15 +23,6 @@ _VISION_INSTRUCTION_LINES: tuple[str, ...] = (
     "- Use VISION CONTEXT facts (text, labels, layout) instead of inventing image content",
     "- Do not expand work to cover the entire original user request",
 )
-
-
-def _truncate(text: str, *, max_chars: int) -> str:
-    cleaned = (text or "").strip()
-    if max_chars <= 0 or len(cleaned) <= max_chars:
-        return cleaned
-    if max_chars <= 1:
-        return "…"
-    return cleaned[: max_chars - 1].rstrip() + "…"
 
 
 def extract_vision_summary(
@@ -50,7 +42,7 @@ def extract_vision_summary(
     match = _VISION_BLOCK_RE.search(text or "")
     if match is None:
         return None
-    body = _truncate(match.group("body"), max_chars=max_chars)
+    body = truncate_text(match.group("body"), limit=max_chars)
     return body or None
 
 
@@ -69,7 +61,7 @@ def format_image_facts_for_brief(
     max_chars: int = VISION_BRIEF_IMAGE_FACTS_MAX_CHARS,
 ) -> str:
     """Compact `Image facts: …` suffix for synthesized step `full_description`."""
-    body = _truncate(vision_summary, max_chars=max_chars)
+    body = truncate_text(vision_summary, limit=max_chars)
     if not body:
         return ""
     return f"Image facts: {body}"

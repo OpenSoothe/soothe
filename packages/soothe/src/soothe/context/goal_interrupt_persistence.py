@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.utils.messages import extract_text_from_message_content
+
 logger = logging.getLogger(__name__)
 
 _MAX_EXCERPT_CHARS = 240
@@ -30,17 +32,7 @@ def _entry_phase(entry: dict[str, Any]) -> str:
 
 def _entry_content_text(entry: dict[str, Any]) -> str:
     content = entry.get("content")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, dict) and isinstance(block.get("text"), str):
-                parts.append(block["text"])
-            elif isinstance(block, str):
-                parts.append(block)
-        return "".join(parts)
-    return ""
+    return extract_text_from_message_content(content).replace("\n", "")
 
 
 def _build_cancelled_digest(ledger: list[dict[str, Any]], *, reason: str) -> str:

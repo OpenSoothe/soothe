@@ -138,7 +138,7 @@ class GraphPromptWrapper:
         if budget > 0:
             # Single-pass O(N): precompute fixed costs and per-message lengths,
             # then find the cut index without re-summing on each iteration.
-            from soothe.sloop.utils.stream_normalize import (
+            from soothe.utils.messages import (
                 extract_text_from_message_content,
             )
 

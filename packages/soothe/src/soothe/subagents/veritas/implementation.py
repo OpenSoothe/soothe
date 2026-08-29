@@ -21,6 +21,7 @@ from soothe.subagents.veritas.schemas import (
     build_veritas_response_schema,
     coerce_veritas_response,
 )
+from soothe.utils.text import truncate_text
 
 if TYPE_CHECKING:
     from soothe.config.models import SootheConfig
@@ -80,7 +81,9 @@ async def answer(
         len(system_prompt),
         len(user_prompt),
     )
-    logger.debug("[veritas] user prompt preview: %s", _truncate(user_prompt, _PROMPT_PREVIEW_CHARS))
+    logger.debug(
+        "[veritas] user prompt preview: %s", truncate_text(user_prompt, limit=_PROMPT_PREVIEW_CHARS)
+    )
 
     trace_name = (
         (soothe_config.observability.langfuse.trace_name or "").strip()
@@ -182,7 +185,7 @@ async def answer(
         result.defer,
         result.confidence,
         len(result.answers),
-        _truncate(result.rationale, _QUESTION_PREVIEW_CHARS),
+        truncate_text(result.rationale, limit=_QUESTION_PREVIEW_CHARS),
     )
     _log_call_stat(
         model_name=model_name,
@@ -198,7 +201,8 @@ async def answer(
     )
     if result.reasoning:
         logger.debug(
-            "[veritas] reasoning: %s", _truncate(result.reasoning, _QUESTION_PREVIEW_CHARS)
+            "[veritas] reasoning: %s",
+            truncate_text(result.reasoning, limit=_QUESTION_PREVIEW_CHARS),
         )
 
     if not result.defer and _any_answer_is_a_question(result.answers, result.answer_is_question):
@@ -233,7 +237,9 @@ def _any_answer_is_a_question(
 
 def _preview_questions(questions: tuple) -> str:
     # RFC-622 §9c: questions may be QuestionSpec.model_dump() dicts, not just strings.
-    return " | ".join(_truncate(_question_text(q), _QUESTION_PREVIEW_CHARS) for q in questions)
+    return " | ".join(
+        truncate_text(_question_text(q), limit=_QUESTION_PREVIEW_CHARS) for q in questions
+    )
 
 
 def _question_text(question: Any) -> str:
@@ -241,13 +247,6 @@ def _question_text(question: Any) -> str:
     if isinstance(question, dict):
         return str(question.get("question") or question.get("header") or "")
     return str(question)
-
-
-def _truncate(text: str, limit: int) -> str:
-    s = text.strip()
-    if len(s) <= limit:
-        return s
-    return s[: limit - 1] + "…"
 
 
 def _log_call_stat(

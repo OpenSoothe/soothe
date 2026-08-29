@@ -11,6 +11,7 @@ from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
 )
+from soothe.utils.text import truncate_text
 
 # Tool-call arg keys whose values are most informative for surfacing an
 # approval prompt (path, command). Ordered by priority.
@@ -179,13 +180,13 @@ class ClarificationDetector:
             for key in _INFORMATIVE_ARG_KEYS:
                 val = args.get(key)
                 if isinstance(val, str) and val.strip():
-                    detail = f" ({key}={ClarificationDetector._truncate(val.strip())})"
+                    detail = f" ({key}={truncate_text(val.strip(), limit=ClarificationDetector._MAX_ARG_PREVIEW, marker='…', strip=False)})"
                     break
             if not detail and args:
                 # Fall back to the first arg value for non-path tools
                 first_val = next(iter(args.values()), None)
                 if isinstance(first_val, str) and first_val.strip():
-                    detail = f" ({ClarificationDetector._truncate(first_val.strip())})"
+                    detail = f" ({truncate_text(first_val.strip(), limit=ClarificationDetector._MAX_ARG_PREVIEW, marker='…', strip=False)})"
         header = f"Approve {name}{detail}?"
         question = f"Approve {name}{detail}?"
         return {
@@ -206,11 +207,3 @@ class ClarificationDetector:
                 },
             ],
         }
-
-    @staticmethod
-    def _truncate(val: str) -> str:
-        """Truncate a long arg value to `_MAX_ARG_PREVIEW` chars with ellipsis."""
-        max_len = ClarificationDetector._MAX_ARG_PREVIEW
-        if len(val) <= max_len:
-            return val
-        return val[:max_len] + "…"

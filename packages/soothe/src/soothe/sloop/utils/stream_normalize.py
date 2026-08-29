@@ -12,26 +12,6 @@ _MSG_TUPLE_LEN = 2
 _LIST_MIN_LEN = 2
 
 
-def join_text_fragments(parts: list[str]) -> str:
-    """Join text fragments with newline separators between content blocks."""
-    return "\n".join(parts) if parts else ""
-
-
-def extract_text_from_message_content(content: Any) -> str:
-    """Flatten LangChain message `content` (str or block list) to plain text."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and "text" in block:
-                parts.append(str(block["text"]))
-        return join_text_fragments(parts)
-    return ""
-
-
 def parse_tuple_stream_chunk(chunk: Any) -> tuple[Any, str, Any] | None:
     """Parse stream tuple into `(namespace, mode, data)` if applicable.
 
@@ -163,11 +143,9 @@ from soothe.utils.goal_completion_stream import (  # noqa: E402
 
 __all__ = [
     "GoalCompletionAccumState",
-    "extract_text_from_message_content",
     "iter_messages_for_act_aggregation",
     "iter_messages_for_delegate_task_scan",
     "iter_namespaced_tool_messages",
-    "join_text_fragments",
     "parse_tuple_stream_chunk",
     "resolve_goal_completion_text",
     "update_goal_completion_from_message",

@@ -3,23 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 
-
-def _extract_text_from_message_content(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and "text" in block:
-                parts.append(str(block["text"]))
-        return "\n".join(parts) if parts else ""
-    return ""
+from soothe.utils.messages import extract_text_from_message_content
 
 
 @dataclass
@@ -37,7 +24,7 @@ def update_goal_completion_from_message(state: GoalCompletionAccumState, msg: Ba
         return
 
     state.ai_msg_count += 1
-    extracted = _extract_text_from_message_content(msg.content)
+    extracted = extract_text_from_message_content(msg.content)
 
     if isinstance(msg, AIMessageChunk):
         if extracted:

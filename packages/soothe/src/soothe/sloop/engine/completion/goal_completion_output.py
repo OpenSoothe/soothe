@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.utils.messages import extract_text_from_message_content
 
 
 def _numeric_tokens(text: str) -> set[str]:

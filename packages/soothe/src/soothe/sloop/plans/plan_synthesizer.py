@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.prompts.graph_wrapper import GraphPromptWrapper
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.utils.messages import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -149,20 +150,7 @@ def _extract_text(response: Any) -> str:
     if isinstance(response, str):
         return response
     content = getattr(response, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        # Multimodal response — extract text blocks.
-        texts: list[str] = []
-        for block in content:
-            if isinstance(block, dict):
-                text = block.get("text")
-                if isinstance(text, str):
-                    texts.append(text)
-            elif isinstance(block, str):
-                texts.append(block)
-        return "\n".join(texts)
-    return str(content)
+    return extract_text_from_message_content(content)
 
 
 def _build_refinement_trigger(comments: str | None, prior_plan: str | None) -> str:

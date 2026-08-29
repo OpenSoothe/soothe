@@ -145,7 +145,7 @@ def _last_tool_result_block(messages: list[BaseMessage]) -> str:
     non-empty text content and emits a CDATA-wrapped head so plan-assess sees
     the actual tool output (counts, listings, paths) in the ledger.
     """
-    from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+    from soothe.utils.messages import extract_text_from_message_content
 
     for msg in reversed(messages):
         if not isinstance(msg, ToolMessage):
@@ -174,7 +174,7 @@ def _full_tool_output_text(messages: list[BaseMessage]) -> str:
     Returns:
         Full text content of the most recent ToolMessage, or "" if none.
     """
-    from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+    from soothe.utils.messages import extract_text_from_message_content
 
     for msg in reversed(messages):
         if not isinstance(msg, ToolMessage):

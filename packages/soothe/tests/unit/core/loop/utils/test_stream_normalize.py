@@ -7,14 +7,16 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe.coreagent.core_agent import _normalize_layer1_input
 from soothe.sloop.utils.stream_normalize import (
     GoalCompletionAccumState,
-    extract_text_from_message_content,
     iter_messages_for_act_aggregation,
     iter_messages_for_delegate_task_scan,
     iter_namespaced_tool_messages,
-    join_text_fragments,
     parse_tuple_stream_chunk,
     resolve_goal_completion_text,
     update_goal_completion_from_message,
+)
+from soothe.utils.messages import (
+    extract_text_from_message_content,
+    join_text_fragments,
 )
 
 

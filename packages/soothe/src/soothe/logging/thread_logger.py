@@ -17,6 +17,7 @@ from soothe.sloop.checkpoints.directory_manager import (
     THREADS_DATA_DIR,
     PersistenceDirectoryManager,
 )
+from soothe.utils.text import truncate_text
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +25,6 @@ _LOG_CONTENT_LIMIT = 2000
 _MESSAGE_TUPLE_LENGTH = 2
 _BUFFER_FLUSH_THRESHOLD = 100
 _BUFFER_FLUSH_INTERVAL_SECONDS = 1.0
-
-
-def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
-    if len(text) <= limit:
-        return text
-    return text[:limit] + "..."
 
 
 class ThreadLogger:
@@ -135,7 +130,9 @@ class ThreadLogger:
                         "kind": "tool_result",
                         "namespace": list(namespace),
                         "tool_name": getattr(msg, "name", "unknown"),
-                        "content": _truncate_for_log(content),
+                        "content": truncate_text(
+                            content, limit=_LOG_CONTENT_LIMIT, marker="...", strip=False
+                        ),
                     }
                 )
             elif isinstance(msg, AIMessageChunk):
@@ -171,7 +168,9 @@ class ThreadLogger:
                                 "kind": "tool_call",
                                 "namespace": list(namespace),
                                 "tool_name": tc["name"],
-                                "args_preview": _truncate_for_log(str(tc.get("args", {})), 500),
+                                "args_preview": truncate_text(
+                                    str(tc.get("args", {})), limit=500, marker="...", strip=False
+                                ),
                             }
                         )
 

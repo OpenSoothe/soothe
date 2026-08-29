@@ -59,7 +59,7 @@ async def _collect_execute_evidence_excerpts(state: LoopState) -> list[str]:
     the event loop via `asyncio.to_thread` — critical for large ledgers where
     a synchronous scan would block the loop.
     """
-    from soothe.sloop.utils.stream_normalize import (
+    from soothe.utils.messages import (
         extract_text_from_message_content,
     )
 

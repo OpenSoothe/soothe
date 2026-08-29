@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
 
 from soothe.config.models import ScenarioRulesConfig
+from soothe.utils.messages import extract_text_from_message_content
 
 logger = logging.getLogger(__name__)
 
@@ -201,19 +202,8 @@ def _coerce_response_text(content: object) -> str:
     """Normalize model response content into a parseable text payload."""
     if isinstance(content, str):
         return content
-
     if isinstance(content, list):
-        chunks: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                chunks.append(block)
-            elif isinstance(block, dict):
-                text = block.get("text")
-                if isinstance(text, str):
-                    chunks.append(text)
-        if chunks:
-            return "".join(chunks)
-
+        return extract_text_from_message_content(content).replace("\n", "")
     return str(content)
 
 

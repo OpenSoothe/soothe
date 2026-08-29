@@ -16,7 +16,7 @@ from soothe.sloop.orchestrator.stations import (
     PHASE_GOAL_INTERRUPTED,
     PLANNING_LEDGER_PHASES,
 )
-from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.utils.messages import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from soothe.config.models import ExecutePromptLedgerConfig, PlanPromptLedgerConfig

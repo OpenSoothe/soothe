@@ -19,7 +19,7 @@ from soothe.sloop.state.schemas import LoopState
 from soothe.sloop.utils.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 from soothe.sloop.utils.messages import tag_messages_stream_chunk_for_goal_completion
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
-from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.utils.messages import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

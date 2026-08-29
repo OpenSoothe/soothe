@@ -16,7 +16,7 @@ from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.sloop.plans.wired_subagent_plan import build_wired_subagent_plan
 from soothe.sloop.utils.goal_text import resolve_user_request
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.utils.messages import extract_text_from_message_content
 
 logger = logging.getLogger(__name__)
 

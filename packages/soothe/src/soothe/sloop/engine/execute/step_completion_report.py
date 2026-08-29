@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe.utils.messages import extract_text_from_message_content
+
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -92,15 +94,7 @@ async def summarize_step_completion_report(
         )
         content = getattr(response, "content", response)
         if isinstance(content, list):
-            parts: list[str] = []
-            for block in content:
-                if isinstance(block, dict):
-                    text = block.get("text")
-                    if isinstance(text, str):
-                        parts.append(text)
-                elif isinstance(block, str):
-                    parts.append(block)
-            content = " ".join(parts)
+            content = extract_text_from_message_content(content).replace("\n", " ")
         raw = str(content or "").strip()
     except Exception:
         logger.warning("Step completion report LLM call failed", exc_info=True)

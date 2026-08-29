@@ -133,6 +133,10 @@ from soothe.sloop.utils.network_errors import (
     is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
 )
 from soothe.sloop.utils.vision_context import extract_vision_summary
+from soothe.utils.messages import (
+    extract_text_from_message_content,
+    join_text_fragments,
+)
 
 if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
@@ -1146,17 +1150,7 @@ class Executor:
             if not isinstance(msg, (AIMessage, AIMessageChunk)):
                 continue
             content = msg.content
-            extracted_text = ""
-            if isinstance(content, str):
-                extracted_text = content
-            elif isinstance(content, list):
-                parts: list[str] = []
-                for block in content:
-                    if isinstance(block, dict) and "text" in block:
-                        parts.append(block["text"])
-                    elif isinstance(block, str):
-                        parts.append(block)
-                extracted_text = "".join(parts)
+            extracted_text = extract_text_from_message_content(content).replace("\n", "")
 
             if isinstance(msg, AIMessageChunk) and extracted_text:
                 accumulated_chunks += extracted_text
@@ -1468,8 +1462,6 @@ class Executor:
         self, step_messages: list[BaseMessage]
     ) -> str:
         """Return final assistant text from the last CoreAgent hop only."""
-        from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
-
         turn_messages = self._messages_for_last_assistant_turn(step_messages)
         ai_messages = [m for m in turn_messages if isinstance(m, AIMessage)]
         ai_chunks = [m for m in turn_messages if isinstance(m, AIMessageChunk)]
@@ -1674,10 +1666,6 @@ class Executor:
                 final_ai = ai_messages[-1] if ai_messages else None
                 excerpt_src = ""
                 if final_ai is not None:
-                    from soothe.sloop.utils.stream_normalize import (
-                        extract_text_from_message_content,
-                    )
-
                     excerpt_src = extract_text_from_message_content(
                         getattr(final_ai, "content", None)
                     ).strip()
@@ -2667,11 +2655,9 @@ class Executor:
             generate_outcome_metadata,
         )
         from soothe.sloop.utils.stream_normalize import (
-            extract_text_from_message_content,
             iter_messages_for_act_aggregation,
             iter_messages_for_delegate_task_scan,
             iter_namespaced_tool_messages,
-            join_text_fragments,
         )
 
         chunks: list[str] = []

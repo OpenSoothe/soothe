@@ -46,7 +46,7 @@ from soothe.sloop.utils.messages import (
     loop_message_assistant_output_phase,
 )
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
-from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.utils.messages import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
