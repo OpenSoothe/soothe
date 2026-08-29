@@ -73,3 +73,32 @@ def test_normalize_strips_enriched_goal_history_fields() -> None:
     ]
     checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
     assert checkpoint.goal_history[0].goal_id == "g1"
+
+
+def test_normalize_repairs_orphaned_running_loop_with_string_goal_index() -> None:
+    """A JSONB-deserialized checkpoint may carry current_goal_index as a
+    string (the d15f incident). ``_repair_orphaned_running_loop`` must coerce
+    it to int before the ``0 <= idx`` comparison or it raises
+    ``TypeError: '<=' not supported between instances of 'str' and 'int'``.
+    """
+    normalized = normalize_checkpoint_data(
+        {
+            "loop_id": "loop-c",
+            "thread_ids": ["t1"],
+            "current_thread_id": "t1",
+            "status": "running",
+            "goal_history": [
+                {"goal_id": "g1", "thread_id": "t1", "status": "running"},
+            ],
+            "current_goal_index": "0",  # string, as from JSON/DB serialization
+        },
+        loop_id="loop-c",
+    )
+    # The repair demotes to idle and marks the goal cancelled.
+    assert normalized["status"] == "idle"
+    assert normalized["current_goal_index"] == -1
+    assert normalized["goal_history"][0]["status"] == "cancelled"
+    # Must not raise on model validation.
+    checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
+    assert checkpoint.status == "idle"
+    assert checkpoint.current_goal_index == -1

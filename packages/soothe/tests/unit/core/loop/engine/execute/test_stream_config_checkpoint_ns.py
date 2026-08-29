@@ -23,6 +23,7 @@ def test_strip_parent_checkpoint_coordinates() -> None:
             "checkpoint_ns": "execute:abc123",
             "checkpoint_id": "ck-1",
             "checkpoint_map": {"a": 1},
+            "__pregel_scratchpad": object(),  # parent Pregel loop state
             "__pregel_checkpointer": checkpointer,
             "soothe_step_expected_output": "x",
         },
@@ -35,6 +36,10 @@ def test_strip_parent_checkpoint_coordinates() -> None:
     assert "checkpoint_ns" not in conf
     assert "checkpoint_id" not in conf
     assert "checkpoint_map" not in conf
+    # The parent scratchpad must be dropped: it carries atomic counters whose
+    # subgraph_counter() would make AsyncPregelLoop.__init__ hard-access
+    # checkpoint_ns (KeyError when stripped). See loops c982 / 7a90.
+    assert "__pregel_scratchpad" not in conf
     # The checkpointer must survive: the execution twin has none compiled.
     assert conf["__pregel_checkpointer"] is checkpointer
     # Tracing callbacks are untouched.

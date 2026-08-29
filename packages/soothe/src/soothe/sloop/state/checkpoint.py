@@ -306,6 +306,16 @@ def _repair_orphaned_running_loop(out: dict[str, Any]) -> None:
     idx = out.get("current_goal_index", -1)
     repaired = False
 
+    # Coerce to int: deserialized checkpoints may carry current_goal_index as a
+    # string (JSON/DB serialization), which would raise
+    # ``TypeError: '<=' not supported between instances of 'str' and 'int'``
+    # in the comparison below (the d15f incident).
+    if isinstance(idx, str):
+        try:
+            idx = int(idx)
+        except ValueError:
+            idx = -1
+
     if idx is not None and 0 <= idx < len(goal_history):
         goal = goal_history[idx]
         if isinstance(goal, dict):

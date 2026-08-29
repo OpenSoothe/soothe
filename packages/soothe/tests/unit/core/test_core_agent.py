@@ -250,6 +250,7 @@ class TestCoreAgentStateRetrieval:
             CONFIG_KEY_CHECKPOINT_MAP,
             CONFIG_KEY_CHECKPOINT_NS,
             CONFIG_KEY_CHECKPOINTER,
+            CONFIG_KEY_SCRATCHPAD,
         )
         from langgraph.checkpoint.memory import MemorySaver
 
@@ -268,6 +269,7 @@ class TestCoreAgentStateRetrieval:
                 CONFIG_KEY_CHECKPOINT_NS: "execute:task-abc",
                 CONFIG_KEY_CHECKPOINT_ID: "cp-parent",
                 CONFIG_KEY_CHECKPOINT_MAP: {"execute": "cp-parent"},
+                CONFIG_KEY_SCRATCHPAD: object(),  # parent Pregel loop state
             },
         }
 
@@ -280,6 +282,7 @@ class TestCoreAgentStateRetrieval:
         assert CONFIG_KEY_CHECKPOINT_NS not in conf
         assert CONFIG_KEY_CHECKPOINT_ID not in conf
         assert CONFIG_KEY_CHECKPOINT_MAP not in conf
+        assert CONFIG_KEY_SCRATCHPAD not in conf
         assert conf.get("thread_id") == "t1"
 
     @pytest.mark.asyncio
