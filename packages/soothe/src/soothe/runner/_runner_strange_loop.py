@@ -1,4 +1,4 @@
-"""Layer 2 StrangeLoop Runner."""
+"""StrangeLoop runner mixin."""
 
 from __future__ import annotations
 
@@ -408,7 +408,7 @@ def _step_completed_ui_summary(event_data: dict[str, Any]) -> str:
 def _clip_sloop_step_description(
     description: str, *, max_len: int = _AGENTIC_STEP_DESC_UI_MAX
 ) -> str:
-    """Shorten Layer-2 step descriptions for progress events (TUI one-line template)."""
+    """Shorten StrangeLoop step descriptions for progress events (TUI one-line template)."""
     text = (description or "").strip().replace("\n", " ")
     if len(text) <= max_len:
         return text
@@ -416,7 +416,7 @@ def _clip_sloop_step_description(
 
 
 class StrangeLoopMixin:
-    """Layer 2 StrangeLoop integration.
+    """StrangeLoop integration mixin.
 
     Mixed into SootheRunner -- all self.* attributes are defined
     on the concrete class.
@@ -438,7 +438,7 @@ class StrangeLoopMixin:
         resume_interrupted: bool = False,
         approved_plan_path: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Run Layer 2: StrangeLoop goal execution.
+        """Run StrangeLoop goal execution.
 
         Implements Reason → Act via StrangeLoop with progress events.
 

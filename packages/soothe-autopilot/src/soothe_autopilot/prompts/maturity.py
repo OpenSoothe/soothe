@@ -1,4 +1,4 @@
-"""Job maturity assessment prompt assembly (IG-736)."""
+"""Job maturity assessment prompt assembly."""
 
 from __future__ import annotations
 

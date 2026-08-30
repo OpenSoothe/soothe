@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 def _pending_clarification(state: dict[str, Any]) -> bool:
     """True when a clarification request is pending and unanswered.
 
-    Checks both ``pending_clarification`` (the head) and the
-    ``clarification_queue`` channel. When the queue still has entries after
+    Checks both `pending_clarification` (the head) and the
+    `clarification_queue` channel. When the queue still has entries after
     the head is answered, the next entry surfaces here so routing continues
-    to ``AWAIT_USER`` until the queue drains.
+    to `AWAIT_USER` until the queue drains.
     """
     pending = state.get("pending_clarification")
     answer = state.get("pending_clarification_answer")

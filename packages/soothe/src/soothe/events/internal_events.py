@@ -26,7 +26,7 @@ class InternalGoalCompletedEvent(SootheEvent):
 class InternalGoalFailedEvent(SootheEvent):
     """Goal failed by StrangeLoop.
 
-    Emitted by AL when goal execution fails. Received by ContextEngine
+    Emitted by StrangeLoop when goal execution fails. Received by ContextEngine
     for backoff reasoning and DAG restructuring.
     """
 
@@ -55,7 +55,7 @@ class InternalGoalReportCommittedEvent(SootheEvent):
 class InternalGoalProgressEvent(SootheEvent):
     """Goal progress update from StrangeLoop.
 
-    Emitted periodically by AL during execution. Used by AP
+    Emitted periodically by StrangeLoop during execution. Used by AutopilotService
     for loop health monitoring and progress tracking.
     """
 
@@ -70,7 +70,7 @@ class InternalGoalProgressEvent(SootheEvent):
 class InternalGoalStateChangedEvent(SootheEvent):
     """Goal state changed by ContextEngine.
 
-    Emitted by GE when goal status transitions. Received by AP
+    Emitted by ContextEngine when goal status transitions. Received by AutopilotService
     to re-evaluate scheduling and emit job lifecycle notify.
     """
 
@@ -86,8 +86,8 @@ class InternalGoalStateChangedEvent(SootheEvent):
 class InternalGoalsReadyEvent(SootheEvent):
     """Goals ready for scheduling.
 
-    Emitted by GE when new goals become ready (deps satisfied, no conflicts).
-    Received by AP to trigger scheduling loop.
+    Emitted by ContextEngine when new goals become ready (deps satisfied, no conflicts).
+    Received by AutopilotService to trigger scheduling loop.
     """
 
     type: str = "soothe.internal.goal.ready"
@@ -115,7 +115,7 @@ class InternalGoalUnblockedEvent(SootheEvent):
 class InternalLoopAssignedEvent(SootheEvent):
     """Loop assigned to goal.
 
-    Emitted by AP when loop is assigned to a goal. Used for
+    Emitted by AutopilotService when loop is assigned to a goal. Used for
     lineage tracking and context preservation.
     """
 
@@ -130,7 +130,7 @@ class InternalLoopAssignedEvent(SootheEvent):
 class InternalLoopIdleEvent(SootheEvent):
     """Loop became idle.
 
-    Emitted by AP when loop finishes goal and waits for assignment.
+    Emitted by AutopilotService when loop finishes goal and waits for assignment.
     Used for idle timeout tracking and loop release.
     """
 
@@ -144,7 +144,7 @@ class InternalLoopIdleEvent(SootheEvent):
 class InternalLoopReleasedEvent(SootheEvent):
     """Loop released (destroyed).
 
-    Emitted by AP when loop is released after idle timeout or shutdown.
+    Emitted by AutopilotService when loop is released after idle timeout or shutdown.
     """
 
     type: str = "soothe.internal.loop.released"
@@ -157,7 +157,7 @@ class InternalLoopReleasedEvent(SootheEvent):
 class InternalLoopSpawnedEvent(SootheEvent):
     """New loop spawned.
 
-    Emitted by AP when new loop is created for goal execution.
+    Emitted by AutopilotService when new loop is created for goal execution.
     """
 
     type: str = "soothe.internal.loop.spawned"
@@ -174,7 +174,7 @@ class InternalFileLockedEvent(SootheEvent):
     """File locked by StrangeLoop.
 
     Emitted by FileLockMiddleware when file operation is intercepted.
-    Received by GE to update file lock registry.
+    Received by ContextEngine to update file lock registry.
     """
 
     type: str = "soothe.internal.file.locked"
@@ -188,7 +188,7 @@ class InternalFileLockedEvent(SootheEvent):
 class InternalFileReleasedEvent(SootheEvent):
     """File lock released.
 
-    Emitted by GE when goal completes and locks are released.
+    Emitted by ContextEngine when goal completes and locks are released.
     """
 
     type: str = "soothe.internal.file.released"
@@ -202,7 +202,7 @@ class InternalFileConflictEvent(SootheEvent):
     """File conflict detected.
 
     Emitted by FileLockMiddleware when conflicting file operation
-    is attempted. AL should handle replan or wait.
+    is attempted. StrangeLoop should handle replan or wait.
     """
 
     type: str = "soothe.internal.file.conflict"
@@ -247,7 +247,7 @@ class InternalAutopilotStoppedEvent(SootheEvent):
 class InternalLoopPoolChangedEvent(SootheEvent):
     """Loop pool state changed.
 
-    Emitted by AP when loop pool composition changes.
+    Emitted by AutopilotService when loop pool composition changes.
     """
 
     type: str = "soothe.internal.autopilot.pool_changed"
@@ -262,7 +262,7 @@ class InternalLoopPoolChangedEvent(SootheEvent):
 class InternalAutopilotDreamingEvent(SootheEvent):
     """Autopilot entered dreaming mode.
 
-    Emitted by AP when no goals active and dreaming enabled.
+    Emitted by AutopilotService when no goals active and dreaming enabled.
     """
 
     type: str = "soothe.internal.autopilot.dreaming"
@@ -273,7 +273,7 @@ class InternalAutopilotDreamingEvent(SootheEvent):
 class InternalAutopilotAwakeEvent(SootheEvent):
     """Autopilot woke from dreaming.
 
-    Emitted by AP when exiting dreaming mode.
+    Emitted by AutopilotService when exiting dreaming mode.
     """
 
     type: str = "soothe.internal.autopilot.awake"

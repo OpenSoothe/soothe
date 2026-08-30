@@ -39,8 +39,8 @@ _RECENT_STEP_OUTPUTS_CAP = 8
 
 PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
 """Sentinel prefix marking a clarification request that came from a planner-emitted
-``kind="ask_user"`` step rather than a real CoreAgent ``ask_user`` interrupt.
-On answer arrival, ``node_execute`` synthesizes a ``StepExecutionRecord`` for the matching
+`kind="ask_user"` step rather than a real CoreAgent `ask_user` interrupt.
+On answer arrival, `node_execute` synthesizes a `StepExecutionRecord` for the matching
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
 
 

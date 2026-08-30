@@ -1,8 +1,8 @@
-"""AutopilotMonitor - proactive DAG monitoring submodule (RFC-625).
+"""AutopilotMonitor - proactive DAG monitoring submodule.
 
 Monitors ContextEngine goal DAG, handles:
 - Goal intake (fast create; LLM placement refine runs async)
-- Background DAG verification (dynamic health LLM gating — IG-743)
+- Background DAG verification (dynamic health LLM gating)
 - Post-completion verification (decomposition)
 - Backoff reasoning on goal failure
 - Dreaming coordination (multi-mode distillation)
@@ -115,7 +115,7 @@ class AutopilotMonitor:
 
         When bound, the backoff reasoner projects the ancestor (user, ai)
         transcript via the same path the dispatch worker uses, so the backoff
-        LLM sees the same context (RFC-222 §Goal-Report-Pair).
+        LLM sees the same context.
         """
         self._context_projector = projector
 
@@ -154,8 +154,8 @@ class AutopilotMonitor:
     ) -> GoalIntakeResult:
         """Create a goal immediately; schedule LLM placement refine in the background.
 
-        Submit RPCs return ``goal_id`` without waiting on placement. While the
-        goal is still ``pending``, refine may adjust priority / depends_on /
+        Submit RPCs return `goal_id` without waiting on placement. While the
+        goal is still `pending`, refine may adjust priority / depends_on /
         informs from the placement LLM.
 
         Args:
@@ -365,8 +365,8 @@ class AutopilotMonitor:
     async def _apply_backoff_decision(self, decision: Any, *, failed_goal_id: str) -> None:
         """Apply backoff decision to the CE DAG (P1-2).
 
-        Prefer retrying the failed goal while ``retry_count < max_retries``.
-        Never transition ``failed → suspended`` (illegal in CE). When retry
+        Prefer retrying the failed goal while `retry_count < max_retries`.
+        Never transition `failed → suspended` (illegal in CE). When retry
         budget is exhausted, leave the goal failed for engine deadlock
         recovery on the next health cycle.
         """
@@ -407,7 +407,7 @@ class AutopilotMonitor:
     # ── Background Loops ────────────────────────────────────────────────────────
 
     def _autopilot_cfg(self) -> Any:
-        """Resolved ``agent.autopilot`` config (with safe defaults)."""
+        """Resolved `agent.autopilot` config (with safe defaults)."""
         return getattr(getattr(self._config, "agent", None), "autopilot", None)
 
     def _periodic_verify_enabled(self) -> bool:
@@ -477,9 +477,9 @@ class AutopilotMonitor:
     async def _run_health_tick_if_enabled(self) -> bool:
         """Run one DAG health tick when the periodic master switch is on.
 
-        Returns ``True`` when the tick ran, ``False`` when skipped because
-        ``verify_periodic_enabled`` is ``False``. The watchdog tick is
-        independent of this gate (see ``_verification_loop``).
+        Returns `True` when the tick ran, `False` when skipped because
+        `verify_periodic_enabled` is `False`. The watchdog tick is
+        independent of this gate (see `_verification_loop`).
         """
         if not self._periodic_verify_enabled():
             logger.debug("Periodic DAG verification disabled; skipping health tick")
@@ -542,10 +542,10 @@ class AutopilotMonitor:
         await self._run_gc_scan_if_due()
 
     async def _run_gc_scan_if_due(self) -> None:
-        """Run the goal-GC scan when ``gc_interval_seconds`` has elapsed.
+        """Run the goal-GC scan when `gc_interval_seconds` has elapsed.
 
         The watchdog tick fires every verify_interval/verify_idle_interval;
-        the GC scan is rate-limited to ``gc_interval_seconds`` so a short
+        the GC scan is rate-limited to `gc_interval_seconds` so a short
         verify cadence does not make GC thrash.
         """
         if self._gc_scan is None:
@@ -570,7 +570,7 @@ class AutopilotMonitor:
     async def _verification_loop(self) -> None:
         """Background DAG health verification with dynamic LLM gating.
 
-        When ``verify_periodic_enabled`` is ``False`` (default), the periodic
+        When `verify_periodic_enabled` is `False` (default), the periodic
         health tick is skipped — no structural heuristics, no LLM — while the
         watchdog tick (suspend-notify scan + resource reconcile) keeps running
         on the same cadence so orphaned runtime resources are still drained.
@@ -611,8 +611,8 @@ class AutopilotMonitor:
 
         The GC scan cancels non-terminal goals whose job root is already
         terminal (completed/cancelled/failed). Rate-limited by
-        ``gc_interval_seconds`` so the watchdog's verify cadence does not
-        make it thrash. Gated by ``gc_enabled``.
+        `gc_interval_seconds` so the watchdog's verify cadence does not
+        make it thrash. Gated by `gc_enabled`.
         """
         self._gc_scan = scan_fn
 

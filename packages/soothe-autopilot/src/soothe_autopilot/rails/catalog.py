@@ -80,18 +80,18 @@ class RailDefinition:
         flow: NL-first event hooks (list of mappings).
         rules: Explicit rule list (list of mappings).
         fanout: Optional rail-declared fan-out policy. Keys may include
-            ``require_plan``, ``scout_count``, ``max_waves``. WavePlan slices
-            come from the architecture goal completion report; ``artifact`` is
+            `require_plan`, `scout_count`, `max_waves`. WavePlan slices
+            come from the architecture goal completion report; `artifact` is
             rejected. Engine must not invent fan-out — it lives in rail YAML.
         worktrees: Optional rail-declared worktree lifecycle policy. Keys:
-            ``enabled`` (bool, default True), ``recycle_on_merge`` (bool,
-            default True), ``recycle_on_complete`` (bool, default True).
+            `enabled` (bool, default True), `recycle_on_merge` (bool,
+            default True), `recycle_on_complete` (bool, default True).
             Declares whether slice worktrees are created for makers and when
             they are recycled — keeps worktree lifecycle a rail concern.
-        verbs: Optional catalog-verb body overrides (RFC-231 M2). Keys are
-            CE builtin names; values may include ``brief``, ``tags``, ``role``.
+        verbs: Optional catalog-verb body overrides. Keys are
+            CE builtin names; values may include `brief`, `tags`, `role`.
         auto_pick: When False, omit from LLM auto-pick candidates (still
-            selectable via explicit ``rail_id`` / ``--rail``). Default True.
+            selectable via explicit `rail_id` / `--rail`). Default True.
         source_path: Absolute path to the YAML file that won resolution.
         integrity_hash: SHA-256 of the raw YAML text.
     """
@@ -112,7 +112,7 @@ class RailDefinition:
 
 
 def _normalize_worktrees(raw: Any, *, path: Path) -> dict[str, Any]:
-    """Validate optional ``worktrees:`` mapping from rail YAML.
+    """Validate optional `worktrees:` mapping from rail YAML.
 
     Declares per-rail worktree lifecycle policy so worktree creation and
     recycling are a rail-level concern, not scattered imperative hooks.
@@ -148,7 +148,7 @@ def _normalize_worktrees(raw: Any, *, path: Path) -> dict[str, Any]:
 
 
 def _normalize_fanout(raw: Any, *, path: Path) -> dict[str, Any]:
-    """Validate optional ``fanout:`` mapping from rail YAML."""
+    """Validate optional `fanout:` mapping from rail YAML."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
@@ -192,7 +192,7 @@ _VERB_BODY_KEYS = frozenset({"brief", "tags", "role", "do"})
 
 
 def _normalize_auto_pick(raw: Any, *, path: Path) -> bool:
-    """Validate optional ``auto_pick:`` flag (default True)."""
+    """Validate optional `auto_pick:` flag (default True)."""
     if raw is None:
         return True
     if not isinstance(raw, bool):
@@ -201,7 +201,7 @@ def _normalize_auto_pick(raw: Any, *, path: Path) -> bool:
 
 
 def _normalize_verbs(raw: Any, *, path: Path) -> dict[str, dict[str, Any]]:
-    """Validate optional ``verbs:`` catalog-verb body overrides (RFC-231 M2/M3)."""
+    """Validate optional `verbs:` catalog-verb body overrides."""
     from soothe_autopilot.rails.l0_schema import normalize_do_steps
 
     if raw is None:
@@ -285,8 +285,8 @@ def _normalize_list_of_maps(raw: Any, *, field_name: str, path: Path) -> list[di
 def _normalize_flow_entry_keys(entry: dict[str, Any]) -> dict[str, Any]:
     """Normalize flow/rule keys.
 
-    Canonical trigger field is ``event``. Legacy ``on`` (and YAML 1.1 boolean
-    ``True`` from bare ``on:``) is rewritten to ``event``.
+    Canonical trigger field is `event`. Legacy `on` (and YAML 1.1 boolean
+    `True` from bare `on:`) is rewritten to `event`.
     """
     fixed: dict[str, Any] = {}
     for key, value in entry.items():
@@ -304,7 +304,7 @@ def _normalize_flow_entry_keys(entry: dict[str, Any]) -> dict[str, Any]:
 def _collect_then_verbs(
     flow: list[dict[str, Any]], rules: list[dict[str, Any]], *, path: Path
 ) -> list[str]:
-    """Collect ``then:`` verb strings; reject list forms (interpreter is str-only)."""
+    """Collect `then:` verb strings; reject list forms (interpreter is str-only)."""
     verbs: list[str] = []
     for section, entries in (("flow", flow), ("rules", rules)):
         for i, entry in enumerate(entries):
@@ -327,10 +327,10 @@ def load_rail_file(path: Path) -> RailDefinition:
     """Parse and validate a single rail YAML file.
 
     Args:
-        path: Path to ``<rail-id>.yml``.
+        path: Path to `<rail-id>.yml`.
 
     Returns:
-        Validated ``RailDefinition``.
+        Validated `RailDefinition`.
 
     Raises:
         RailCatalogError: On parse or schema errors.
@@ -400,7 +400,7 @@ class LoopRailCatalog:
         """Bind catalog roots for a workspace (or daemon-wide only).
 
         Args:
-            workspace: Optional project workspace for ``.soothe/rails/``.
+            workspace: Optional project workspace for `.soothe/rails/`.
         """
         self._workspace = workspace
 
@@ -416,10 +416,10 @@ class LoopRailCatalog:
         """Load a rail by id; higher-precedence tiers override lower ones.
 
         Args:
-            rail_id: Rail identifier (filename stem / ``id`` field).
+            rail_id: Rail identifier (filename stem / `id` field).
 
         Returns:
-            Parsed ``RailDefinition`` from the winning tier.
+            Parsed `RailDefinition` from the winning tier.
 
         Raises:
             RailCatalogError: If the rail is not found or fails validation.
@@ -461,7 +461,7 @@ class LoopRailCatalog:
         return {rail_id: load_rail_file(path) for rail_id, path in self._index().items()}
 
     def _index(self) -> dict[str, Path]:
-        """Build last-wins map of rail_id → YAML path (skips ``drafts/``)."""
+        """Build last-wins map of rail_id → YAML path (skips `drafts/`)."""
         by_id: dict[str, Path] = {}
         for root in self.roots():
             for path in sorted(root.glob("*.yml")):

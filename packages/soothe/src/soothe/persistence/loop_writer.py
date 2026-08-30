@@ -51,6 +51,8 @@ class PersistResult:
 
 @dataclass
 class _PendingEntry:
+    """A coalesced checkpoint write pending flush for one loop."""
+
     checkpoint: StrangeLoopCheckpoint
     durable: bool = False
     write_mode: PersistWriteMode = PersistWriteMode.INDEX_ONLY

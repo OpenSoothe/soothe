@@ -43,7 +43,7 @@ def _coerce_goal_progress(value: Any) -> str:
 
 
 GoalProgress = Annotated[GoalProgressLiteral, BeforeValidator(_coerce_goal_progress)]
-"""Descriptive progress level; invalid wire values coerce to ``none``."""
+"""Descriptive progress level; invalid wire values coerce to `none`."""
 
 
 class EvidenceEntry(BaseModel):
@@ -55,7 +55,7 @@ class EvidenceEntry(BaseModel):
 
 
 StepKind = Literal["action", "ask_user", "eval"]
-"""Step kind. ``action`` runs through CoreAgent; ``ask_user`` short-circuits
+"""Step kind. `action` runs through CoreAgent; `ask_user` short-circuits
 into the clarification relay."""
 
 
@@ -366,9 +366,9 @@ class PlanResult(BaseModel):
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
     terminal_after_execute: bool = Field(default=False)
-    """ : when True, the plan asserts its single step IS the goal completion.
+    """When True, the plan asserts its single step IS the goal completion.
 
-    The Loop Graph routes from ``record_progress`` directly toward finalize /
+    The Loop Graph routes from `record_progress` directly toward finalize /
     goal completion when this flag is set (e.g. wired-subagent one-step plans).
     Default False elsewhere.
     """
@@ -377,10 +377,10 @@ class PlanResult(BaseModel):
         default=None,
         description=(
             "Plan-mode approve signal: enqueue a follow-on exec goal carrying "
-            "the approved plan. Keys: ``goal_prompt`` (goal text for the exec "
-            "goal) and ``plan_path`` (approved plan artifact path for DISPATCH "
+            "the approved plan. Keys: `goal_prompt` (goal text for the exec "
+            "goal) and `plan_path` (approved plan artifact path for DISPATCH "
             "grounding). Set only on plan-mode approve; None otherwise. Rides "
-            "the ``completed`` event to the runner/daemon, which enqueues the "
+            "the `completed` event to the runner/daemon, which enqueues the "
             "exec goal after the plan-mode goal terminates."
         ),
     )
@@ -687,7 +687,7 @@ class LoopState(BaseModel):
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance when enabled.
-        loop_messages: : Unified message ledger (CE-backed property when bound).
+        loop_messages: Unified message ledger (CE-backed property when bound).
         last_wave_answer_from_delegate_final: True when the latest execute wave answer came from `task` tool returns
             (`task_tool_aggregate` provenance), not root-graph assistant stream.
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps.

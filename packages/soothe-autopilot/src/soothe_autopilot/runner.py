@@ -1,24 +1,23 @@
-"""Autopilot runner — the worker-side of the RFC-222 goal dispatch contract.
+"""Autopilot runner — the worker-side of the goal dispatch contract.
 
 When the daemon's AutopilotService dispatches a goal, the per-loop worker
-subprocess runs ``AutopilotSootheRunner.astream(autopilot_job=...)``.
-``astream`` (defined on ``SootheRunner``) routes that case to the
-``_run_autopilot_job`` hook overridden here.
+subprocess runs `AutopilotSootheRunner.astream(autopilot_job=...)`.
+`astream` (defined on `SootheRunner`) routes that case to the
+`_run_autopilot_job` hook overridden here.
 
-This runner owns the **worker side** of the RFC-222 contract: take one
-``GoalDispatchEnvelope``, hydrate StrangeLoop, run it, emit exactly one
-``GoalCompletionChunk`` with a ``GoalDispatchContextContribution``, then a
-terminal ``done`` chunk. The runner never reaches into ``GoalEngine`` from
+This runner owns the **worker side** of the goal-dispatch contract: take one
+`GoalDispatchEnvelope`, hydrate StrangeLoop, run it, emit exactly one
+`GoalCompletionChunk` with a `GoalDispatchContextContribution`, then a
+terminal `done` chunk. The runner never reaches into `GoalEngine` from
 this path — autopilot owns DAG state on the daemon side.
 
-Wire ``evidence_summary`` feeds the host CE goal report commit
-(IG-726 / IG-710) — prefer evidence_summary → full_output → completed steps.
-When a flat WavePlan is present (structured ``PlanResult.wave_plan`` or
-JSON in those texts), a dedicated bare-JSON finding is attached as one
-host transfer form. Structured ``wave_plan`` / ``wave_plan_path`` are also
-forwarded on the contribution. ``PlanResult.effects`` are copied as
-domain-agnostic side-effect claims (IG-712); the host never infers effects
-from prose alone.
+Wire `evidence_summary` feeds the host CE goal report commit — prefer
+evidence_summary → full_output → completed steps. When a flat WavePlan is
+present (structured `PlanResult.wave_plan` or JSON in those texts), a
+dedicated bare-JSON finding is attached as one host transfer form.
+Structured `wave_plan` / `wave_plan_path` are also forwarded on the
+contribution. `PlanResult.effects` are copied as domain-agnostic
+side-effect claims; the host never infers effects from prose alone.
 """
 
 from __future__ import annotations
@@ -74,11 +73,11 @@ def _runner_grace_seconds(config: Any) -> float:
 
 
 class AutopilotSootheRunner(SootheRunner):
-    """``SootheRunner`` subclass that handles autopilot-dispatched jobs.
+    """`SootheRunner` subclass that handles autopilot-dispatched jobs.
 
-    The base ``SootheRunner`` is autopilot-agnostic; the daemon constructs this
-    subclass in autopilot worker loops so ``astream(autopilot_job=...)`` has a
-    real implementation for the RFC-222 goal-dispatch path.
+    The base `SootheRunner` is autopilot-agnostic; the daemon constructs this
+    subclass in autopilot worker loops so `astream(autopilot_job=...)` has a
+    real implementation for the goal-dispatch path.
     """
 
     async def _run_autopilot_job(
@@ -90,21 +89,21 @@ class AutopilotSootheRunner(SootheRunner):
         max_iterations: int,
         intake_scope: str | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Run one autopilot-dispatched goal end-to-end (RFC-222 revised).
+        """Run one autopilot-dispatched goal end-to-end.
 
         Args:
             job: GoalDispatchEnvelope carrying goal_id, goal_description, the
                 pre-merged GoalDispatchContextBundle, deadline, attempt, mission.
             thread_id: Thread id for this attempt (autopilot supplies
-                ``autopilot__goal_<id>__attempt_<N>``).
+                `autopilot__goal_<id>__attempt_<N>`).
             workspace: Resolved workspace path for StrangeLoop's CoreAgent.
             max_iterations: Upper bound for StrangeLoop iterations.
-            intake_scope: Optional forced scope (``minimal`` for evidence turns).
+            intake_scope: Optional forced scope (`minimal` for evidence turns).
 
         Yields:
             Stream chunks. The penultimate chunk is always a
-            ``GoalCompletionChunk`` carrying the outcome and a
-            ``GoalDispatchContextContribution`` synthesized from the run.
+            `GoalCompletionChunk` carrying the outcome and a
+            `GoalDispatchContextContribution` synthesized from the run.
         """
         tid = thread_id or f"autopilot__goal_{job.goal_id}__attempt_{job.attempt}"
         logger.info(
@@ -259,7 +258,7 @@ class AutopilotSootheRunner(SootheRunner):
 
     @staticmethod
     def _extract_plan_result(event_data: Any) -> PlanResult | None:
-        """Best-effort plan-result extraction from the ``completed`` event."""
+        """Best-effort plan-result extraction from the `completed` event."""
         if isinstance(event_data, PlanResult):
             return event_data
         if isinstance(event_data, dict):
@@ -272,12 +271,12 @@ class AutopilotSootheRunner(SootheRunner):
     def _derive_outcome(
         plan_result: PlanResult | None,
     ) -> str:
-        """Map ``PlanResult`` to the GoalCompletionChunk outcome enum.
+        """Map `PlanResult` to the GoalCompletionChunk outcome enum.
 
-        - PlanResult.is_done() True → ``completed``
-        - PlanResult status indicates retryable / incomplete → ``needs_replan``
-        - None (clarification exit / empty terminal) → ``needs_replan``
-        - Anything else → ``failed``
+        - PlanResult.is_done() True → `completed`
+        - PlanResult status indicates retryable / incomplete → `needs_replan`
+        - None (clarification exit / empty terminal) → `needs_replan`
+        - Anything else → `failed`
         """
         if plan_result is None:
             return "needs_replan"
@@ -297,14 +296,14 @@ class AutopilotSootheRunner(SootheRunner):
         *,
         goal_id: str = "",
     ) -> GoalDispatchContextContribution:
-        """Synthesize a contribution from the final ``PlanResult``.
+        """Synthesize a contribution from the final `PlanResult`.
 
         Extracts evidence summary as a finding, plan steps from
-        ``decision.steps``, and passes through StrangeLoop ``effects``
-        (IG-712). When a WavePlan is present in untruncated evidence /
-        full_output, also attaches a dedicated bare-JSON finding for host
-        fan-out ingest. Structured ``wave_plan`` / ``wave_plan_path`` on
-        PlanResult are forwarded on the contribution.
+        `decision.steps`, and passes through StrangeLoop `effects`. When a
+        WavePlan is present in untruncated evidence / full_output, also
+        attaches a dedicated bare-JSON finding for host fan-out ingest.
+        Structured `wave_plan` / `wave_plan_path` on PlanResult are forwarded
+        on the contribution.
         """
         if plan_result is None:
             return GoalDispatchContextContribution()
@@ -393,11 +392,12 @@ class AutopilotSootheRunner(SootheRunner):
         directives: list[GoalDirective] = [],
         error_text: str | None = None,
     ) -> StreamChunk:
-        """Build the single terminal ``GoalCompletionChunk`` for ``job``.
+        """Build the single terminal `GoalCompletionChunk` for `job`.
 
-        Wire format: custom chunk with ``type=soothe.internal.autopilot.goal_completion``
-        per RFC-403 internal naming. The daemon's stream consumer reacts to
-        this exact type string to advance the DAG.
+        Wire format: custom chunk with
+        `type=soothe.internal.autopilot.goal_completion` internal naming. The
+        daemon's stream consumer reacts to this exact type string to advance
+        the DAG.
         """
         contribution = self._build_contribution(
             plan_result,
@@ -472,10 +472,10 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
 def _goal_directive_text(job: GoalDispatchEnvelope) -> str:
     """Build the current goal directive, with operator guidance attached.
 
-    Prior-effects flattening was removed (RFC-222 §Goal-Report-Pair Projection):
-    ancestor context now flows as ``preamble_messages`` pairs seeded into the CE
-    ledger, not as ``## Prior effects`` prose on the goal string. Operator
-    guidance stays on the *current* (final) goal turn.
+    Prior-effects flattening was removed: ancestor context now flows as
+    `preamble_messages` pairs seeded into the CE ledger, not as
+    `## Prior effects` prose on the goal string. Operator guidance stays
+    on the *current* (final) goal turn.
     """
     base = job.goal_description
     guidance = list(getattr(job.merged_context, "operator_guidance", None) or [])
@@ -486,12 +486,12 @@ def _goal_directive_text(job: GoalDispatchEnvelope) -> str:
 
 
 def _extract_preamble_pairs(job: GoalDispatchEnvelope) -> list[Any]:
-    """Convert ``merged_context.preamble_messages`` into ledger-ready messages.
+    """Convert `merged_context.preamble_messages` into ledger-ready messages.
 
-    Returns a flattened ``list[BaseMessage]`` in pair order
-    ``[H₀, A₀, H₁, A₁, …]``: each ``GoalReportUserTurn`` →
-    ``LoopHumanMessage(phase="preamble")``; each ``GoalReportAITurn` →
-    ``LoopAIMessage(phase="preamble")``. Empty when no pairs were projected
+    Returns a flattened `list[BaseMessage]` in pair order
+    `[H₀, A₀, H₁, A₁, …]`: each `GoalReportUserTurn` →
+    `LoopHumanMessage(phase="preamble")`; each `GoalReportAITurn` →
+    `LoopAIMessage(phase="preamble")`. Empty when no pairs were projected
     (no ancestors with a stored contribution).
     """
     from soothe.goal_contracts import GoalReportAITurn, GoalReportUserTurn
@@ -517,10 +517,11 @@ def _extract_preamble_pairs(job: GoalDispatchEnvelope) -> list[Any]:
 
 
 def _render_ai_turn_text(turn: GoalReportAITurn) -> str:
-    """Render a ``GoalReportAITurn`` as readable ledger text.
+    """Render a `GoalReportAITurn` as readable ledger text.
 
-    The preamble AI half mirrors the committed CE goal report (IG-726 SoT).
-    Kept compact: outcome + summary, then top findings/effects as bullets.
+    The preamble AI half mirrors the committed CE goal report (source of
+    truth). Kept compact: outcome + summary, then top findings/effects as
+    bullets.
     """
     parts: list[str] = []
     summary = (turn.summary or "").strip()

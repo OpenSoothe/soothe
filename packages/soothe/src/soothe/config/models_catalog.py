@@ -40,7 +40,7 @@ def _provider_has_credentials(cfg: SootheConfig, provider_name: str) -> bool | N
 
 
 def build_models_list_payload(cfg: SootheConfig) -> dict[str, Any]:
-    """Return JSON-serializable model catalog for ``models_list_response``."""
+    """Return JSON-serializable model catalog for `models_list_response`."""
     rows: list[dict[str, Any]] = []
     for p in cfg.providers or []:
         has_creds = _provider_has_credentials(cfg, p.name)

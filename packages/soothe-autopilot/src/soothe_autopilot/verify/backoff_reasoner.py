@@ -1,9 +1,9 @@
 """GoalBackoffReasoner: LLM-driven backoff reasoning for goal DAG restructuring.
 
-RFC-200 §205-541, RFC-625: Implements LLM-based analysis for goal failure recovery,
+Implements LLM-based analysis for goal failure recovery,
 replacing hardcoded retry logic with reasoning-based backoff decisions.
 
-Migrated to monitor module per RFC-625. Works with GoalNode from ContextEngine.
+Works with GoalNode from ContextEngine.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class GoalBackoffReasoner:
 
     Analyzes goal context and evidence to decide WHERE to backoff in the goal
     DAG. Replaces hardcoded retry logic. Prompt text lives in
-    ``soothe_autopilot.prompts``.
+    `soothe_autopilot.prompts`.
 
     Args:
         config: SootheConfig with model provider settings.
@@ -65,8 +65,8 @@ class GoalBackoffReasoner:
             goal_id: Failed goal identifier.
             goals: Snapshot of all goals in current DAG (goal_id → GoalNode mapping).
             failed_evidence: Evidence from StrangeLoop execution.
-            projector: ``ContextProjector`` used to project the ancestor
-                (user, ai) pair transcript (RFC-222 §Goal-Report-Pair) into
+            projector: `ContextProjector` used to project the ancestor
+                (user, ai) pair transcript into
                 the dependency-chain slot, matching the context the executing
                 worker saw.
 

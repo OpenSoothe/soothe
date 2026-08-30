@@ -1,4 +1,4 @@
-"""AutopilotService orchestration (RFC-222, RFC-625).
+"""AutopilotService orchestration.
 
 Manages:
 - Loop pool (StrangeLoop worker creation, assignment, release)
@@ -8,7 +8,7 @@ Manages:
 
 Roles:
 - AutopilotService: Loop management, scheduling, job lifecycle notify
-- ContextEngine: Goal lifecycle, DAG (sole source of truth per RFC-625)
+- ContextEngine: Goal lifecycle, DAG (sole source of truth)
 - AutopilotMonitor: DAG verification, dreaming coordination
 
 Solo mode preserved — AutopilotService only active when autopilot.enabled
@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 
 class AutopilotService:
-    """Autopilot orchestration service (RFC-222, RFC-625).
+    """Autopilot orchestration service.
 
     Manages StrangeLoop worker pool and goal scheduling with
     lineage-aware loop reuse. Uses ContextEngine as the sole
@@ -71,12 +71,12 @@ class AutopilotService:
 
     NOT responsible for:
     - Single-goal execution logic (StrangeLoop owns this)
-    - Goal DAG management (ContextEngine owns this per RFC-625)
+    - Goal DAG management (ContextEngine owns this)
     - Tool/subagent execution (CoreAgent owns this)
 
     Args:
-        ce: ContextEngine instance for goal management (RFC-625).
-        config: AutopilotConfig (RFC-222 fields live in this unified config).
+        ce: ContextEngine instance for goal management.
+        config: AutopilotConfig (loop pool fields live in this unified config).
         internal_bus: Internal EventBus for coordination.
         monitor: Optional AutopilotMonitor for proactive DAG monitoring.
     """
@@ -99,40 +99,37 @@ class AutopilotService:
         """Initialize AutopilotService.
 
         Args:
-            ce: ContextEngine instance for goal management (RFC-625).
-            config: Project-level AutopilotConfig carrying RFC-222 loop pool
-                fields (``max_loops``, ``loop_idle_timeout``, ``poll_interval``,
-                ``dreaming_poll_interval``). StrangeLoop iteration budget lives
-                on ``agent.loop.max_iterations`` (not AutopilotConfig).
+            ce: ContextEngine instance for goal management.
+            config: Project-level AutopilotConfig carrying loop pool
+                fields (`max_loops`, `loop_idle_timeout`, `poll_interval`,
+                `dreaming_poll_interval`). StrangeLoop iteration budget lives
+                on `agent.loop.max_iterations` (not AutopilotConfig).
             internal_bus: Internal EventBus (uses singleton if None).
             monitor: Optional AutopilotMonitor for proactive DAG monitoring.
                 When provided (daemon mode), handles goal intake, verification,
                 and dreaming coordination.
             subscribe_to_bus: When True (default), subscribe handlers to the
-                bus immediately. RFC-222 (revised): the daemon constructs a
-                daemon-owned ``AutopilotService`` alongside the per-runner
-                one — they share the singleton bus, so the daemon instance
-                must pass ``subscribe_to_bus=False`` to avoid
-                double-handling every event.
-            runner_factory: ``LoopRunnerFactory``-shaped object exposing
-                ``create_runner(loop_id) -> LoopRunnerProtocol``. Required for
-                worker-pool dispatch (RFC-222 Phase C+).
-            workspace_reservation: Optional ``WorkspaceReservation`` gate.
+                bus immediately. The daemon constructs a daemon-owned
+                `AutopilotService` alongside the per-runner one — they share
+                the singleton bus, so the daemon instance must pass
+                `subscribe_to_bus=False` to avoid double-handling every event.
+            runner_factory: `LoopRunnerFactory`-shaped object exposing
+                `create_runner(loop_id) -> LoopRunnerProtocol`. Required for
+                worker-pool dispatch.
+            workspace_reservation: Optional `WorkspaceReservation` gate.
                 When provided, the scheduling loop refuses to dispatch a
                 goal whose workspace overlaps an active reservation. When
-                ``None``, no workspace gating is applied.
-            consensus_model: Optional LLM for RFC-204 report-commit judgment.
-                When ``None``, completed goals fail consensus (host recovery)
-                rather than parking for an operator (IG-707).
+                `None`, no workspace gating is applied.
+            consensus_model: Optional LLM for report-commit judgment.
+                When `None`, completed goals fail consensus (host recovery)
+                rather than parking for an operator.
             auto_pick_model: Optional LLM for LoopRail auto-pick when submit
-                omits ``rail_id`` (RFC-231 §10 / IG-728). Falls back to
-                ``consensus_model`` when unset.
-            goal_persist_store: Optional ``AsyncPersistStore`` for persisting
+                omits `rail_id`. Falls back to `consensus_model` when unset.
+            goal_persist_store: Optional `AsyncPersistStore` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
                 Also backs the job↔loop membership index.
-            soothe_config: Optional full ``SootheConfig`` for Veritas on rail
-                ``pause_for_user`` (IG-737). When unset, pause fails open to
-                CE suspend.
+            soothe_config: Optional full `SootheConfig` for Veritas on rail
+                `pause_for_user`. When unset, pause fails open to CE suspend.
         """
         if runner_factory is None:
             msg = "runner_factory is required"
@@ -232,15 +229,14 @@ class AutopilotService:
 
         The projector is assigned after service construction (daemon-side),
         so this setter also binds it to the monitor so the backoff reasoner
-        projects the ancestor transcript through the same path (RFC-222
-        §Goal-Report-Pair).
+        projects the ancestor transcript through the same path.
         """
         self._context_projector = projector
         if self._monitor is not None:
             self._monitor.bind_context_projector(projector)
 
     async def _maybe_notify_job_root(self, goal_id: str) -> None:
-        """Emit job.completed / job.failed when ``goal_id`` is a job root."""
+        """Emit job.completed / job.failed when `goal_id` is a job root."""
         router = self._notification_router
         if router is None:
             return
@@ -265,7 +261,7 @@ class AutopilotService:
             return None
 
     async def scan_notify_suspend_timeouts(self) -> None:
-        """Scan suspended job roots for notify.suspend_after_seconds (IG-713)."""
+        """Scan suspended job roots for notify.suspend_after_seconds."""
         router = self._notification_router
         if router is None:
             return
@@ -290,7 +286,7 @@ class AutopilotService:
             logger.debug("SLA overdue scan failed", exc_info=True)
 
     def _init_rail_interpreter(self) -> None:
-        """Construct LoopRail interpreter with job-scoped JSONL traces (IG-708)."""
+        """Construct LoopRail interpreter with job-scoped JSONL traces."""
         try:
             from pathlib import Path
 
@@ -577,16 +573,15 @@ class AutopilotService:
         rail_id: str | None = None,
         verification_rules: str | None = None,
     ) -> GoalNode:
-        """Create a goal in this service's ContextEngine (RFC-222 revised, RFC-625).
+        """Create a goal in this service's ContextEngine.
 
-        Public entry point for callers (HTTP ``/autopilot/submit`` and other
-        programmatic clients) to add a
-        new goal to the DAG. The scheduling loop will pick it up on its
-        next tick when ``self._running`` is True.
+        Public entry point for callers (HTTP `/autopilot/submit` and other
+        programmatic clients) to add a new goal to the DAG. The scheduling
+        loop will pick it up on its next tick when `self._running` is True.
 
         When a monitor is wired, intake creates the goal immediately and
         schedules LLM placement refine asynchronously (priority / deps may
-        update while the goal is still ``pending``).
+        update while the goal is still `pending`).
 
         Args:
             description: Goal description text.
@@ -599,13 +594,13 @@ class AutopilotService:
                 child can still run if they haven't completed yet.
             workspace: Optional client workspace path. When set, workers execute
                 in this directory and scheduling-time reservation uses it.
-            cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
-            rail_id: Optional LoopRail id (RFC-231 §10). When None,
-                resolved via LLM auto-pick then workspace/config defaults.
-            verification_rules: Optional operator criteria (RFC-228; stored on goal).
+            cron_job_id: Optional cron job ID for tracking recurring job goals.
+            rail_id: Optional LoopRail id. When None, resolved via LLM
+                auto-pick then workspace/config defaults.
+            verification_rules: Optional operator criteria (stored on goal).
 
         Returns:
-            The newly-created ``GoalNode``. Callers can read ``.id`` to track it.
+            The newly-created `GoalNode`. Callers can read `.id` to track it.
 
         Raises:
             ValueError: If goal depth limit would be exceeded or workspace invalid.
@@ -732,7 +727,7 @@ class AutopilotService:
     async def _bind_rail_for_job(self, goal: GoalNode) -> None:
         """Bind LoopRail for a root job; engine only injects spawn budget.
 
-        Fan-out slice lists / scout counts come from the rail YAML ``fanout:``
+        Fan-out slice lists / scout counts come from the rail YAML `fanout:`
         block and WavePlan applied from the architecture goal completion
         report (host ingest) — not from Autopilot submit fields, nano tools,
         filesystem plan files, or the project workspace tree.
@@ -770,7 +765,7 @@ class AutopilotService:
     def _is_architecture_planner_goal(goal: GoalNode) -> bool:
         """True when the goal is the rail architecture / planner deliverable.
 
-        Requires the ``architecture`` tag (not bare ``planning``) so scout/plan
+        Requires the `architecture` tag (not bare `planning`) so scout/plan
         rails are not mistaken for fan-out planners.
         """
         tags = list(goal.rail_tags or [])
@@ -792,11 +787,11 @@ class AutopilotService:
         Prefers structured contribution fields, then recommended dumps /
         findings. Nano/StrangeLoop never call Autopilot APIs —
         the host interprets opaque completion payloads and applies slices
-        into ``RailJobState``.
+        into `RailJobState`.
 
         Returns:
-            ``(ready, detail)`` — ready when a usable wave plan is applied;
-            ``detail`` is a parse/nesting reject reason when not ready.
+            `(ready, detail)` — ready when a usable wave plan is applied;
+            `detail` is a parse/nesting reject reason when not ready.
         """
         from soothe_autopilot.rails.wave_plan import diagnose_wave_plan_from_sources
 
@@ -866,7 +861,7 @@ class AutopilotService:
         return False, diagnosed.detail
 
     async def _ensure_rail_bound_for_job(self, job_id: str) -> bool:
-        """Rebind LoopRail for ``job_id`` when interpreter exists but job unbound.
+        """Rebind LoopRail for `job_id` when interpreter exists but job unbound.
 
         Returns:
             True when the job has rail state available after this call.
@@ -908,10 +903,10 @@ class AutopilotService:
         """Deterministic accept/send_back for require_plan architecture goals.
 
         Returns:
-            ``(decision, reasoning)`` when this goal is under the architecture
-            fan-out gate; ``None`` to fall through to LLM consensus.
+            `(decision, reasoning)` when this goal is under the architecture
+            fan-out gate; `None` to fall through to LLM consensus.
 
-        Fail closed: architecture planners on a rail job with ``require_plan``
+        Fail closed: architecture planners on a rail job with `require_plan`
         must never fall through to free-form LLM accept when the rail
         interpreter is missing or unbound (that completed architecture without
         applying WavePlan slices into rail state).
@@ -986,7 +981,7 @@ class AutopilotService:
         return goal.id if goal is not None else None
 
     async def _on_rail_pause_user_intervention(self, job_id: str) -> None:
-        """Fire ``user_intervention`` after Veritas auto-proceeds a pause gate."""
+        """Fire `user_intervention` after Veritas auto-proceeds a pause gate."""
         await self._notify_rail("user_intervention", job_id)
 
     async def _notify_rail(self, event_name: str, goal_id: str, **payload: Any) -> None:
@@ -1059,10 +1054,10 @@ class AutopilotService:
         return await self._ce.get_goal(goal_id)
 
     async def _cancel_goal_worker(self, goal: GoalNode) -> None:
-        """Stop the worker for an active goal (RFC-222 H8 revised).
+        """Stop the worker for an active goal.
 
-        Resolves the worker bound to ``goal.assigned_loop_id`` and delegates
-        to ``_escalate_cancel`` for the cooperative-cancel → idle-check →
+        Resolves the worker bound to `goal.assigned_loop_id` and delegates
+        to `_escalate_cancel` for the cooperative-cancel → idle-check →
         force-kill ladder.
         """
         if self._worker_pool is None or not goal.assigned_loop_id:
@@ -1073,19 +1068,19 @@ class AutopilotService:
         await self._escalate_cancel(worker, goal.id)
 
     async def _escalate_cancel(self, worker: Any, goal_id: str) -> None:
-        """Cooperative cancel → idle-check → force-kill (RFC-222 H8 revised).
+        """Cooperative cancel → idle-check → force-kill.
 
-        Requests cooperative cancellation first (``runner.cancel()``), then
-        polls ``runner.is_idle()`` with exponential backoff. If the worker
+        Requests cooperative cancellation first (`runner.cancel()`), then
+        polls `runner.is_idle()` with exponential backoff. If the worker
         does not go idle within the retry budget — the common failure when the
         goal is blocked mid-LLM-call or in sync code and the cooperative
-        ``cancel_event`` never lands at an await point — escalate to
-        ``runner.force_kill()`` so the worker subprocess is guaranteed
+        `cancel_event` never lands at an await point — escalate to
+        `runner.force_kill()` so the worker subprocess is guaranteed
         terminated. Without the force-kill backstop a cancelled goal's worker
         keeps executing the goal (the lifecycle-binding gap).
 
-        Shared by goal-cancel (``_cancel_goal_worker``) and the deadline
-        monitor (``_monitor_loop_health``).
+        Shared by goal-cancel (`_cancel_goal_worker`) and the deadline
+        monitor (`_monitor_loop_health`).
         """
         loop_id = worker.loop_id
         runner = worker.runner
@@ -1170,13 +1165,13 @@ class AutopilotService:
     async def _release_worker_after_cancel(self, goal_id: str, loop_id: str | None) -> None:
         """Cancel the dispatch consumer task after goal cancellation.
 
-        The stream consumer (``_consume_worker_stream``) normally drains and
-        releases the worker slot via ``_release_goal_runtime`` when the runner
+        The stream consumer (`_consume_worker_stream`) normally drains and
+        releases the worker slot via `_release_goal_runtime` when the runner
         stream terminates. But when a goal is cancelled externally
         (WebSocket/CLI), the consumer task may still be blocked on the
         stream. This method cancels that task so no dead consumer lingers.
-        Worker-slot release is owned by ``_release_goal_runtime`` (called
-        before this in ``_cancel_open_goal_node``).
+        Worker-slot release is owned by `_release_goal_runtime` (called
+        before this in `_cancel_open_goal_node`).
         """
         task = self._dispatch_tasks.pop(goal_id, None)
         if task is not None and not task.done():
@@ -1196,7 +1191,7 @@ class AutopilotService:
 
         Idempotent: a second call for an already-released goal is a no-op.
         Called at goal-completion time **before** the rail sees
-        ``goal_completed`` so the worker is drained before ``job_complete``
+        `goal_completed` so the worker is drained before `job_complete`
         can fire (lifecycle alignment). Also called on cancel / deadline.
         """
         if goal_id in self._released_goals:
@@ -1224,7 +1219,7 @@ class AutopilotService:
         """Cancel one non-terminal goal: stop worker, CE transition, release workspace.
 
         Ensures the worker slot is returned to idle and the dispatch consumer
-        task is cancelled so no dead workers remain after ``cancel_goal``.
+        task is cancelled so no dead workers remain after `cancel_goal`.
         Also drains the goal's spawned background processes via the runner's
         workspace-scoped drain so cancelled goals do not orphan run_background
         grandchildren.
@@ -1252,12 +1247,12 @@ class AutopilotService:
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
         """Cancel a goal and all non-terminal descendants.
 
-        RFC-222 H8: when a goal is currently dispatched, resolve the assigned
-        worker via ``WorkerPool`` and call ``worker.runner.cancel()`` to abort
-        the subprocess via RFC-221's cooperative cancellation.
+        When a goal is currently dispatched, resolve the assigned worker via
+        `WorkerPool` and call `worker.runner.cancel()` to abort the
+        subprocess via cooperative cancellation.
 
-        RFC-626 / RFC-228: job cancel is root-goal cancel with descendant
-        cascade. Already-terminal goals in the subtree are skipped so canceling
+        Job cancel is root-goal cancel with descendant cascade.
+        Already-terminal goals in the subtree are skipped so canceling
         a cancelled root still cleans pending children.
 
         Args:
@@ -1288,7 +1283,7 @@ class AutopilotService:
             reason: Logged with each cancellation for audit.
 
         Returns:
-            Dict with ``cancelled_count`` and ``goal_ids``.
+            Dict with `cancelled_count` and `goal_ids`.
         """
         cancelled_ids: list[str] = []
         for goal in await self.list_goals():
@@ -1303,7 +1298,7 @@ class AutopilotService:
     async def pause_job(self, job_id: str, *, reason: str = "user_pause") -> GoalNode | None:
         """Suspend a job root and all non-terminal descendants; stop workers.
 
-        P1-1: unlike a bare ``CE.suspend_goal`` on the root, this
+        P1-1: unlike a bare `CE.suspend_goal` on the root, this
         cancels in-flight child workers so pause actually stops work.
 
         Args:
@@ -1335,7 +1330,7 @@ class AutopilotService:
         return await self._ce.get_goal(job_id)
 
     async def resume_job(self, job_id: str) -> GoalNode | None:
-        """Reactivate a paused job and fire rail ``user_intervention`` (P2).
+        """Reactivate a paused job and fire rail `user_intervention` (P2).
 
         Reactivates the root and any suspended descendants paused with it.
         """
@@ -1439,7 +1434,7 @@ class AutopilotService:
                 await asyncio.sleep(poll_interval)
 
     async def _emit_dag_idle_for_idle_rail_jobs(self) -> None:
-        """Scan rail job roots and emit ``dag_idle`` when subtrees are idle."""
+        """Scan rail job roots and emit `dag_idle` when subtrees are idle."""
         for goal in list(self._ce._dag.goals.values()):
             if goal.parent_id is not None or not goal.rail_id:
                 continue
@@ -1448,16 +1443,16 @@ class AutopilotService:
             await self._maybe_emit_dag_idle(goal.id)
 
     async def _schedule_ready_goals(self) -> None:
-        """Schedule all ready goals via WorkerPool dispatch (RFC-222 Phase C+)."""
+        """Schedule all ready goals via WorkerPool dispatch."""
         await self._schedule_via_worker_pool()
 
     async def _schedule_via_worker_pool(self) -> None:
-        """RFC-222 Phase C: schedule via WorkerPool + real subprocess dispatch.
+        """Schedule via WorkerPool + real subprocess dispatch.
 
         For each ready goal under capacity, optionally check workspace
         reservation, claim the goal, and spawn a stream-consuming task
-        that drives ``worker.runner.run(LoopRunRequest)`` and reacts to
-        the worker's terminal ``GoalCompletionChunk``.
+        that drives `worker.runner.run(LoopRunRequest)` and reacts to
+        the worker's terminal `GoalCompletionChunk`.
         """
         if self._worker_pool is None:
             return
@@ -1606,9 +1601,9 @@ class AutopilotService:
         )
 
     async def _build_merged_context(self, goal: GoalNode) -> Any:
-        """Build the GoalDispatchContextBundle for ``goal``.
+        """Build the GoalDispatchContextBundle for `goal`.
 
-        Hooks the ``ContextProjector`` if one was wired, then attaches
+        Hooks the `ContextProjector` if one was wired, then attaches
         operator guidance accumulated on the goal (and job-scoped root).
         """
         from soothe.goal_contracts import GoalDispatchContextBundle
@@ -1682,9 +1677,9 @@ class AutopilotService:
         await self._maybe_notify_job_root(goal_id)
 
     async def _mirror_plan_decision(self, goal_id: str, payload: dict[str, Any]) -> None:
-        """Apply worker ``plan_decision`` steps onto the Autopilot CE goal.
+        """Apply worker `plan_decision` steps onto the Autopilot CE goal.
 
-        Worker StrangeLoop CEs are loop-scoped; ``autopilot top`` reads the daemon
+        Worker StrangeLoop CEs are loop-scoped; `autopilot top` reads the daemon
         Autopilot CE. Mirror planned StepDAG nodes so the live forest can list STEPs.
         """
         goal = self._ce.get_goal_sync(goal_id)
@@ -1737,7 +1732,7 @@ class AutopilotService:
             )
 
     async def _mirror_step_started(self, goal_id: str, payload: dict[str, Any]) -> None:
-        """Mark a step ``active`` on the Autopilot CE goal when execution begins."""
+        """Mark a step `active` on the Autopilot CE goal when execution begins."""
         sid = str(payload.get("step_id") or "").strip()
         if not sid:
             return
@@ -1751,11 +1746,11 @@ class AutopilotService:
         logger.debug("Step started mirrored goal_id=%s step_id=%s", goal_id, sid)
 
     def _step_token_delta(self, goal_id: str, payload: dict[str, Any]) -> int:
-        """Derive tokens for one mirrored step from worker progress (IG-701).
+        """Derive tokens for one mirrored step from worker progress.
 
-        Prefers an explicit non-negative ``tokens_used`` delta. Otherwise
-        diffs cumulative ``total_tokens_used`` against the per-goal cursor
-        (aligned with LoopState, reset on each attempt via ``goal_started``).
+        Prefers an explicit non-negative `tokens_used` delta. Otherwise
+        diffs cumulative `total_tokens_used` against the per-goal cursor
+        (aligned with LoopState, reset on each attempt via `goal_started`).
         """
         if "tokens_used" in payload and payload.get("tokens_used") is not None:
             try:
@@ -1789,7 +1784,7 @@ class AutopilotService:
         return delta
 
     async def _mirror_step_completed(self, goal_id: str, payload: dict[str, Any]) -> None:
-        """Apply worker ``step_completed`` onto the Autopilot CE goal."""
+        """Apply worker `step_completed` onto the Autopilot CE goal."""
         sid = str(payload.get("step_id") or "").strip()
         if not sid:
             return
@@ -1871,10 +1866,10 @@ class AutopilotService:
             )
 
     async def _consume_worker_stream(self, goal_id: str, worker: Any, request: Any) -> None:
-        """Drain a worker's stream and react to ``GoalCompletionChunk``.
+        """Drain a worker's stream and react to `GoalCompletionChunk`.
 
-        Progress events (``plan_decision``, ``step_started``, ``step_completed``)
-        are mirrored onto the Autopilot CE StepDAG so ``autopilot top`` can list
+        Progress events (`plan_decision`, `step_started`, `step_completed`)
+        are mirrored onto the Autopilot CE StepDAG so `autopilot top` can list
         STEPs with live status.
 
         On a successful completion: mark goal completed in ContextEngine,
@@ -2126,7 +2121,7 @@ class AutopilotService:
     ) -> None:
         """Send goal back for rework, or fail + notify when budget is exhausted.
 
-        IG-707: never suspend for operator resume on consensus / replan paths.
+        Never suspend for operator resume on consensus / replan paths.
         """
         updated = await self._ce.send_back_goal(goal_id, reason=reason)
         if updated.status == "failed":
@@ -2147,7 +2142,7 @@ class AutopilotService:
         summary: str,
         contribution: Any | None = None,
     ) -> int | None:
-        """Persist StrangeLoop loop-end report onto CE (IG-726)."""
+        """Persist StrangeLoop loop-end report onto CE."""
         from soothe_autopilot.verify.report_projection import build_goal_report
 
         findings = getattr(contribution, "findings", None) if contribution else None
@@ -2209,13 +2204,13 @@ class AutopilotService:
         contribution: Any | None = None,
         outcome: str = "completed",
     ) -> None:
-        """RFC-204 §1.3 / IG-726: commit CE report, then judge from projection.
+        """Commit CE report, then judge from projection.
 
         StrangeLoop Plan-Execute-Eval owns terminal done. Autopilot commits the
         ledger report to CE, projects it, and judges accept/send_back/fail —
-        never gates on host workspace probes. IG-725: no collect_evidence
+        never gates on host workspace probes. No collect_evidence
         re-dispatch. After accept, LoopRail / AutopilotMonitor react to CE.
-        Idempotent on ``(goal_id, report_revision)`` via ``judged_report_revision``.
+        Idempotent on `(goal_id, report_revision)` via `judged_report_revision`.
         """
         from soothe_autopilot.verify.consensus import evaluate_goal_completion
         from soothe_autopilot.verify.report_projection import project_goal_report_for_judge
@@ -2374,7 +2369,7 @@ class AutopilotService:
         *,
         qa_response: str | None = None,
     ) -> None:
-        """Run LLM job maturity assessor after verify-class goals (RFC-230)."""
+        """Run LLM job maturity assessor after verify-class goals."""
         from soothe_autopilot.intake import load_job_goal_md
         from soothe_autopilot.verify.job_maturity import (
             JobMaturityAssessor,
@@ -2439,7 +2434,7 @@ class AutopilotService:
             logger.exception("Job maturity assessment failed for job %s", job_id)
 
     async def _maybe_emit_dag_idle(self, goal_id: str) -> None:
-        """Emit rail ``dag_idle`` when a rail job subtree has no open work (RFC-230)."""
+        """Emit rail `dag_idle` when a rail job subtree has no open work."""
         job_id = self._job_id_for_goal(goal_id)
         if job_id is None:
             return
@@ -2466,7 +2461,7 @@ class AutopilotService:
         await self._notify_rail("dag_idle", job_id)
 
     def _is_descendant_of(self, goal_id: str, ancestor_id: str) -> bool:
-        """True if ``goal_id`` is under ``ancestor_id`` via parent_id chains."""
+        """True if `goal_id` is under `ancestor_id` via parent_id chains."""
         if goal_id == ancestor_id:
             return False
         seen: set[str] = set()
@@ -2482,7 +2477,7 @@ class AutopilotService:
 
     @staticmethod
     def _infer_workspace(goal: GoalNode) -> str:
-        """Workspace path for scheduling-time reservation (RFC-222).
+        """Workspace path for scheduling-time reservation.
 
         Uses the goal's client workspace when set; otherwise a per-goal sentinel
         so goals without an explicit workspace still get distinct reservation slots.
@@ -2507,11 +2502,11 @@ class AutopilotService:
             logger.warning("No worker capacity for goal %s", goal_id)
 
     async def _monitor_loop_health(self) -> None:
-        """Monitor active workers — enforce wall-clock deadlines (RFC-222 H5).
+        """Monitor active workers — enforce wall-clock deadlines.
 
-        For each active worker, if ``goal_deadline_seconds`` is configured and
+        For each active worker, if `goal_deadline_seconds` is configured and
         the worker has been busy longer than that, escalate cancellation via
-        ``_escalate_cancel`` (cooperative → idle-check → force-kill) and fail
+        `_escalate_cancel` (cooperative → idle-check → force-kill) and fail
         the goal with a deadline_exceeded evidence bundle. Force-kill
         guarantees a deadline-exceeded goal cannot keep running when the worker
         is blocked past the cancel_event's await points.
@@ -2593,9 +2588,9 @@ class AutopilotService:
         Scans goals in terminal or interrupted states and ensures their
         runtime resources are actually torn down:
         - Drains spawned background processes for goals whose workspace still
-          has a ``.soothe/background/`` dir (catches crash-then-restart or
+          has a `.soothe/background/` dir (catches crash-then-restart or
           silent lifecycle-hook failures).
-        - Recycles worktrees under ``.soothe/worktrees/`` for terminal job
+        - Recycles worktrees under `.soothe/worktrees/` for terminal job
           roots whose branch is merged (catches crash-then-restart).
 
         This is the belt-and-suspenders layer over the lifecycle hooks; the
@@ -2670,16 +2665,16 @@ class AutopilotService:
         """Release workspace reservations + ghost-active worker slots.
 
         Scans two leak sources that survive when a goal's
-        ``GoalCompletionChunk`` never reaches ``_consume_worker_stream`` (the
+        `GoalCompletionChunk` never reaches `_consume_worker_stream` (the
         runner crashed, the daemon's stale-loop reconciler demoted the loop
         without notifying Autopilot, etc.):
 
         - **WorkspaceReservation entries** held by goal_ids that are no
-          longer in an active/scheduled state. With ``strict_overlap=True``
+          longer in an active/scheduled state. With `strict_overlap=True`
           a single stale reservation blocks every goal sharing that
           workspace, so this is the silent killer.
-        - **WorkerPool slots** still ``active`` whose ``current_goal_id`` is
-          terminal or missing — the slot was never ``mark_idle``'d.
+        - **WorkerPool slots** still `active` whose `current_goal_id` is
+          terminal or missing — the slot was never `mark_idle`'d.
 
         Idempotent and safe to call from the watchdog or crash recovery.
         Returns the count of resources released.
@@ -2728,12 +2723,12 @@ class AutopilotService:
     async def reconcile_stale_worker(self, loop_id: str) -> int:
         """Release a worker slot + reservation for a stale loop.
 
-        Called by the daemon's stale-loop reconciler (``server/core.py``)
-        when it demotes a loop ``running → idle`` because no active runner
+        Called by the daemon's stale-loop reconciler (`server/core.py`)
+        when it demotes a loop `running → idle` because no active runner
         exists. That reconciler only updates the persistence-layer loop
         status; it does not touch AutopilotService's WorkerPool or
         WorkspaceReservation. This method closes that gap so a demoted loop
-        frees the worker slot and, if the goal is stranded ``active``,
+        frees the worker slot and, if the goal is stranded `active`,
         re-queues it (or cancels it when the job root is already terminal).
 
         Returns the count of resources released.
@@ -2766,8 +2761,8 @@ class AutopilotService:
         """Re-queue an active goal stranded by a stale loop, or cancel it.
 
         If the job root is terminal, the goal is an orphan → cancel it via
-        ``_cancel_open_goal_node`` so worker teardown + reservation release
-        happen correctly. Otherwise reset to ``pending`` so the scheduler
+        `_cancel_open_goal_node` so worker teardown + reservation release
+        happen correctly. Otherwise reset to `pending` so the scheduler
         re-dispatches on the next tick.
         """
         goal = await self._ce.get_goal(goal_id)
@@ -2802,15 +2797,15 @@ class AutopilotService:
         """Cancel non-terminal goals whose job root is already terminal.
 
         Periodic GC scan wired into the monitor watchdog tick. When a job
-        root reaches a terminal state (``completed``/``cancelled``/
-        ``failed``) while children are still ``pending``/``active``/
-        ``suspended``, those children are orphans — the scheduler keeps
+        root reaches a terminal state (`completed`/`cancelled`/
+        `failed`) while children are still `pending`/`active`/
+        `suspended`, those children are orphans — the scheduler keeps
         trying to dispatch them against a dead job, and (with strict
         workspace overlap) they may be blocked indefinitely by a sibling's
-        stale reservation. This cancels them via ``_cancel_open_goal_node``
+        stale reservation. This cancels them via `_cancel_open_goal_node`
         so worker teardown + reservation release happen correctly.
 
-        Gated by ``AutopilotConfig.gc_enabled``. Returns the count of
+        Gated by `AutopilotConfig.gc_enabled`. Returns the count of
         cancelled orphans.
         """
         if not getattr(self._config, "gc_enabled", True):
@@ -2933,9 +2928,9 @@ class AutopilotService:
         logger.info("Woke from dreaming mode - trigger: %s", trigger)
 
     async def force_dream(self) -> None:
-        """Force-enter dreaming mode (WS ``autopilot_dream`` / programmatic).
+        """Force-enter dreaming mode (WS `autopilot_dream` / programmatic).
 
-        Prefer ``agent.autopilot.dreaming_enabled`` and automatic DAG-complete
+        Prefer `agent.autopilot.dreaming_enabled` and automatic DAG-complete
         entry over manual force; this remains for wire/protocol callers.
         """
         if not self._config.dreaming_enabled:
@@ -3025,7 +3020,7 @@ class AutopilotService:
         return [e.model_dump(mode="json") for e in entries]
 
     async def subtree_total_tokens(self, root_goal_id: str) -> int:
-        """Sum ``GoalNode.total_tokens_used`` over the job ``parent_id`` subtree.
+        """Sum `GoalNode.total_tokens_used` over the job `parent_id` subtree.
 
         Args:
             root_goal_id: Root goal id (job id).
@@ -3058,18 +3053,17 @@ class AutopilotService:
     async def top_snapshot(self, *, include_terminal: bool = False) -> dict[str, Any]:
         """Build jobs → goals → loops snapshot for CLI top.
 
-        Filters use CE ``TERMINAL_STATES`` for goals (unless
-        ``include_terminal``) and ``status == "active"`` for JobLoopIndex
-        entries. StepDAG under kept goals is preserved for ``steps=on``.
-        See RFC-228 §autopilot_top.
+        Filters use CE `TERMINAL_STATES` for goals (unless
+        `include_terminal`) and `status == "active"` for JobLoopIndex
+        entries. StepDAG under kept goals is preserved for `steps=on`.
 
         Args:
-            include_terminal: When ``True``, keep completed/failed/cancelled
-                goals and fully terminal jobs (CLI ``a`` / ``--all``).
+            include_terminal: When `True`, keep completed/failed/cancelled
+                goals and fully terminal jobs (CLI `a` / `--all`).
 
         Returns:
-            Dict with ``running``, ``dreaming``, ``loop_pool``, ``generated_at``,
-            and ``jobs`` (each with filtered ``dag`` and active ``loops``).
+            Dict with `running`, `dreaming`, `loop_pool`, `generated_at`,
+            and `jobs` (each with filtered `dag` and active `loops`).
         """
         from soothe_autopilot.jobs.top_snapshot import build_top_job_entry, sort_top_jobs
         from soothe_autopilot.verify.job_maturity import maturity_wire_fields
@@ -3125,11 +3119,11 @@ class AutopilotService:
         return snapshot
 
     async def dag_snapshot(self, root_goal_id: str) -> dict[str, Any]:
-        """Export job subtree for visualization (RFC-228 / CLI top).
+        """Export job subtree for visualization (CLI top).
 
-        Membership is the ``parent_id`` subtree (same as cancel / rail
-        descendants). Tree ``edges`` are parent → child so CLI ``job`` /
-        ``top`` can nest internal goals. Per-node ``depends_on`` remains
+        Membership is the `parent_id` subtree (same as cancel / rail
+        descendants). Tree `edges` are parent → child so CLI `job` /
+        `top` can nest internal goals. Per-node `depends_on` remains
         scheduling metadata (do not invert it into tree edges — rail often
         makes the root depend on a child planner).
 
@@ -3137,11 +3131,11 @@ class AutopilotService:
             root_goal_id: Root goal ID (job_id) to traverse from.
 
         Returns:
-            Dict with ``nodes``, ``edges``, and ``root_id``.
+            Dict with `nodes`, `edges`, and `root_id`.
             Nodes contain: id, description, status, priority, depends_on,
             parent_id, assigned_loop_id, steps_completed, steps_total,
             tool_calls, total_tokens_used, created_at, started_at (null until
-            the goal first runs), updated_at, optional ``steps`` StepDAG,
+            the goal first runs), updated_at, optional `steps` StepDAG,
             summary/findings when completed.
             Edges contain: source=parent_id, target=child id.
         """
@@ -3241,8 +3235,8 @@ def _serialize_goal_steps(goal: GoalNode) -> dict[str, Any]:
     """Build planned StepDAG payload and live counts for dag/top snapshots.
 
     Returns:
-        Dict with ``steps_completed``, ``steps_total``, and optional ``steps``
-        (``nodes`` + ``edges``) when the goal has planned steps.
+        Dict with `steps_completed`, `steps_total`, and optional `steps`
+        (`nodes` + `edges`) when the goal has planned steps.
     """
     step_dag = getattr(goal, "steps", None)
     nodes_map = getattr(step_dag, "nodes", None) if step_dag is not None else None

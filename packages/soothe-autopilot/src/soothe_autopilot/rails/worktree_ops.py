@@ -1,4 +1,4 @@
-"""Host git helpers for job-branch merge / worktree refresh / land (IG-732)."""
+"""Host git helpers for job-branch merge / worktree refresh / land."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _ref_exists(repo: Path, ref: str) -> bool:
 
 
 def detect_base_branch(repo: Path) -> str:
-    """Return ``main`` or ``master`` (prefer main) when present."""
+    """Return `main` or `master` (prefer main) when present."""
     for name in ("main", "master"):
         if _ref_exists(repo, f"refs/heads/{name}"):
             return name
@@ -51,7 +51,7 @@ def detect_base_branch(repo: Path) -> str:
 
 
 def ensure_job_branch(repo: Path, *, job_branch: str, base_branch: str) -> GitOpResult:
-    """Create ``job_branch`` from the richest safe tip when missing."""
+    """Create `job_branch` from the richest safe tip when missing."""
     if _ref_exists(repo, f"refs/heads/{job_branch}"):
         return GitOpResult(ok=True, detail=f"job branch exists: {job_branch}")
 
@@ -92,7 +92,7 @@ def ensure_worktree(
     worktree_path: Path,
     start_point: str | None = None,
 ) -> Path | None:
-    """Create ``branch`` checked out at ``worktree_path`` from ``start_point``."""
+    """Create `branch` checked out at `worktree_path` from `start_point`."""
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
     if worktree_path.exists():
         return worktree_path
@@ -145,7 +145,7 @@ def ensure_source_branch_tip(
 ) -> GitOpResult:
     """Best-effort single materialize commit when source tip is missing or WT dirty.
 
-    Complex failures escalate with ``needs_agent=True`` (no multi-step recovery).
+    Complex failures escalate with `needs_agent=True` (no multi-step recovery).
     """
     tip_ok = _ref_exists(repo, f"refs/heads/{source_branch}")
     if maker_worktree is None or not maker_worktree.exists():
@@ -216,7 +216,7 @@ def ensure_source_branch_tip(
 
 
 def _ensure_merge_worktree(repo: Path, *, target_branch: str) -> GitOpResult:
-    """Return a clean worktree checked out to ``target_branch`` (never primary)."""
+    """Return a clean worktree checked out to `target_branch` (never primary)."""
     merge_wt = repo / _MERGE_WORKTREE_REL
     merge_wt.parent.mkdir(parents=True, exist_ok=True)
 
@@ -260,10 +260,10 @@ def merge_branch_into(
     maker_worktree: Path | str | None = None,
     base_branch: str | None = None,
 ) -> GitOpResult:
-    """Happy-path merge ``source_branch`` into ``target_branch`` via isolated merge WT.
+    """Happy-path merge `source_branch` into `target_branch` via isolated merge WT.
 
-    Never checks out ``target_branch`` in the dirty primary workspace. Complex
-    failures set ``needs_agent=True`` or ``conflict=True`` for StrangeLoop resolve.
+    Never checks out `target_branch` in the dirty primary workspace. Complex
+    failures set `needs_agent=True` or `conflict=True` for StrangeLoop resolve.
     """
     base = base_branch or detect_base_branch(repo)
     ensured = ensure_job_branch(repo, job_branch=target_branch, base_branch=base)
@@ -312,7 +312,7 @@ def refresh_worktree_onto(
     *,
     onto_branch: str,
 ) -> GitOpResult:
-    """Rebase current worktree branch onto ``onto_branch``."""
+    """Rebase current worktree branch onto `onto_branch`."""
     if not worktree.exists():
         return GitOpResult(ok=False, detail=f"worktree missing: {worktree}")
     fetch = _run_git(worktree, "fetch", "origin", onto_branch)
@@ -343,7 +343,7 @@ def land_job_branch(
     job_branch: str,
     base_branch: str,
 ) -> GitOpResult:
-    """Merge ``job_branch`` into ``base_branch`` (final land)."""
+    """Merge `job_branch` into `base_branch` (final land)."""
     return merge_branch_into(
         repo,
         target_branch=base_branch,
@@ -356,7 +356,7 @@ _WORKTREES_REL = Path(".soothe") / "worktrees"
 
 
 def _worktree_branch_for(repo: Path, worktree_path: Path) -> str | None:
-    """Best-effort branch name checked out in ``worktree_path``."""
+    """Best-effort branch name checked out in `worktree_path`."""
     cur = _run_git(worktree_path, "rev-parse", "--abbrev-ref", "HEAD")
     name = (cur.stdout or "").strip()
     if name and name != "HEAD" and _ref_exists(repo, f"refs/heads/{name}"):
@@ -367,12 +367,12 @@ def _worktree_branch_for(repo: Path, worktree_path: Path) -> str | None:
 def remove_worktree(repo: Path, worktree_path: Path) -> GitOpResult:
     """Remove a job/slice worktree and its branch (best-effort, force).
 
-    Only operates on paths under ``repo/.soothe/worktrees/`` — rejects
+    Only operates on paths under `repo/.soothe/worktrees/` — rejects
     anything else so the primary workspace or arbitrary dirs are never
     touched. Force-removes the linked worktree, then best-effort deletes
     its slice branch (merged branches delete cleanly; unmerged force-delete
     is safe because the caller only invokes this after a merge or on cancel).
-    Never raises; returns a ``GitOpResult``.
+    Never raises; returns a `GitOpResult`.
     """
     try:
         rel = worktree_path.relative_to((repo / _WORKTREES_REL).resolve())
@@ -412,7 +412,7 @@ def remove_worktree(repo: Path, worktree_path: Path) -> GitOpResult:
 
 
 def recycle_job_worktrees(repo: Path, *, job_id: str) -> int:
-    """Sweep all worktrees under ``repo/.soothe/worktrees/`` for ``job_id``.
+    """Sweep all worktrees under `repo/.soothe/worktrees/` for `job_id`.
 
     Removes slice worktrees whose branch is merged into the base branch and
     any leftover job worktree dirs after the job lands. Best-effort: logs

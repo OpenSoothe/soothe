@@ -1,4 +1,4 @@
-"""Autopilot intake — contract + guidance intake (IG-733).
+"""Autopilot intake — contract + guidance intake.
 
 Pipeline: GOAL.md / user guidance / channel guidance → intake → CE goals →
 dispatch → exec. Guidance never spawns goals; it only accumulates on CE nodes.

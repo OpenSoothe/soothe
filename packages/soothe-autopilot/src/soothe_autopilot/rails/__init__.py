@@ -1,21 +1,21 @@
-"""LoopRail: job-scoped workflow-pattern catalog + runtime (RFC-231).
+"""LoopRail: job-scoped workflow-pattern catalog + runtime.
 
 This package merges the former split:
 
-- ``soothe.rails``  — static catalog, path tiers, selector, L0 schema,
+- `soothe.rails`  — static catalog, path tiers, selector, L0 schema,
   verb defaults, and bundled builtin rail YAML.
-- ``soothe_autopilot.rails`` — runtime: interpreter, rail exec, guards,
+- `soothe_autopilot.rails` — runtime: interpreter, rail exec, guards,
   wave plan, trace store, recipes, worktree ops.
 
-Both now live here as one one-level subpackage under ``soothe_autopilot``
-(IG-705). The static/catalog layer (``catalog``, ``builtins``,
-``selector``, ``l0_schema``, ``verb_defaults``, ``builtin_rails/``) is the
-lower tier; the runtime layer (``interpreter``, ``builtins_exec``,
-``guards``, ``wave_plan``, ``recipe_exec``, ``trace_store``, ...) imports
+Both now live here as one one-level subpackage under `soothe_autopilot`.
+The static/catalog layer (`catalog`, `builtins`,
+`selector`, `l0_schema`, `verb_defaults`, `builtin_rails/`) is the
+lower tier; the runtime layer (`interpreter`, `builtins_exec`,
+`guards`, `wave_plan`, `recipe_exec`, `trace_store`, ...) imports
 from it, never the reverse.
 
-AutopilotService binds ``LoopRailInterpreter`` on job submit when a
-``rail_id`` is resolved (RFC-231 §4, §7).
+AutopilotService binds `LoopRailInterpreter` on job submit when a
+`rail_id` is resolved.
 """
 
 from __future__ import annotations

@@ -1,22 +1,22 @@
 """Structured wave fan-out plan for LoopRail.
 
-LoopRail owns fan-out *contract* (YAML ``fanout.require_plan`` / counters).
+LoopRail owns fan-out *contract* (YAML `fanout.require_plan` / counters).
 The **LLM** owns fan-out *policy* (flat leaf slice ids). Autopilot applies the
-plan into ``RailJobState`` (SoT: ``wave_slices`` / ``decompose_plan`` in
-``rail_state.json``).
+plan into `RailJobState` (SoT: `wave_slices` / `decompose_plan` in
+`rail_state.json`).
 
 Transfer forms (any may supply a flat WavePlan):
 
-- Structured completion fields (``wave_plan`` / ``wave_plan_path``)
-- Recommended dumps (optional convenience): ``$SOOTHE_DATA_DIR/jobs/{id}/wave-plan.json``
-  and ``<workspace>/.soothe/wave-plan.json``
+- Structured completion fields (`wave_plan` / `wave_plan_path`)
+- Recommended dumps (optional convenience): `$SOOTHE_DATA_DIR/jobs/{id}/wave-plan.json`
+  and `<workspace>/.soothe/wave-plan.json`
 - Completion findings / evidence JSON blob
 
-``wave_plan_path`` may point to any file under the workspace or jobs root.
+`wave_plan_path` may point to any file under the workspace or jobs root.
 Recommended dump paths are suggestions in planner briefs, not required.
 
-Nested waves/slices are forbidden (RFC-232): reject, do not flatten.
-Missing plan fails closed when ``require_plan`` is true.
+Nested waves/slices are forbidden: reject, do not flatten.
+Missing plan fails closed when `require_plan` is true.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ class WavePlanSlice(BaseModel):
     @field_validator("priority", mode="before")
     @classmethod
     def _coerce_priority(cls, value: Any) -> int | None:
-        """Accept int priorities; ignore non-numeric wire noise (IG-723)."""
+        """Accept int priorities; ignore non-numeric wire noise."""
         if value is None or value == "":
             return None
         if isinstance(value, bool):
@@ -129,7 +129,7 @@ class WavePlan(BaseModel):
 
     @model_validator(mode="after")
     def _validate_depends_on_graph(self) -> WavePlan:
-        """Reject unknown / self / cyclic slice depends_on (RFC-232)."""
+        """Reject unknown / self / cyclic slice depends_on."""
         if not self.slices:
             return self
         ids = {s.slice for s in self.slices}
@@ -160,13 +160,13 @@ class WavePlan(BaseModel):
         return self
 
     def resolved_slice_ids(self) -> list[str]:
-        """Prefer rich ``slices`` entries, else ``wave_slices``."""
+        """Prefer rich `slices` entries, else `wave_slices`."""
         if self.slices:
             return [s.slice for s in self.slices]
         return list(self.wave_slices)
 
     def expansion_budget(self) -> int | None:
-        """Preferred ``max_slices``, else legacy ``max_waves``."""
+        """Preferred `max_slices`, else legacy `max_waves`."""
         if self.max_slices is not None:
             return int(self.max_slices)
         if self.max_waves is not None:
@@ -174,7 +174,7 @@ class WavePlan(BaseModel):
         return None
 
     def as_decompose_plan(self) -> list[dict[str, Any]] | None:
-        """Map rich slices to ``RailJobState.decompose_plan`` shape."""
+        """Map rich slices to `RailJobState.decompose_plan` shape."""
         if not self.slices:
             return None
         out: list[dict[str, Any]] = []
@@ -203,7 +203,7 @@ class WavePlanIngestResult:
 
 
 class FanoutResolution(BaseModel):
-    """Result of resolving slices for ``spawn_wave_makers``."""
+    """Result of resolving slices for `spawn_wave_makers`."""
 
     slices: list[str]
     source: Literal[
@@ -244,7 +244,7 @@ def _entry_has_nested_children(item: dict[str, Any]) -> bool:
 
 
 def _nesting_reject_reason(raw: dict[str, Any], *, source: str) -> str | None:
-    """Return a reason if the payload uses nested waves/slices (RFC-232)."""
+    """Return a reason if the payload uses nested waves/slices."""
     if "waves" in raw and isinstance(raw.get("waves"), (list, dict)):
         return (
             f"nested waves forbidden (top-level waves); emit flat wave_slices "
@@ -363,9 +363,9 @@ def _validation_error_detail(exc: Exception, *, source: str) -> str:
 def diagnose_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlanIngestResult:
     """Parse and validate a WavePlan candidate; return plan or reject detail.
 
-    Unwraps a nested ``wave_plan`` object when the outer dict has no slices
+    Unwraps a nested `wave_plan` object when the outer dict has no slices
     (agents often wrap policy under that key). Nested waves/slices are
-    rejected without flattening (RFC-232).
+    rejected without flattening.
     """
     if isinstance(raw, str):
         text = raw.strip()
@@ -412,12 +412,12 @@ def diagnose_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan
 
 
 def parse_wave_plan_payload(raw: Any, *, source: str = "payload") -> WavePlan | None:
-    """Validate a dict (or JSON string) as ``WavePlan`` (slice schema only)."""
+    """Validate a dict (or JSON string) as `WavePlan` (slice schema only)."""
     return diagnose_wave_plan_payload(raw, source=source).plan
 
 
 def iter_embedded_json_objects(text: str) -> list[Any]:
-    """Yield top-level JSON values decoded from ``text`` via ``raw_decode``."""
+    """Yield top-level JSON values decoded from `text` via `raw_decode`."""
     if not text or not text.strip():
         return []
     decoder = json.JSONDecoder()
@@ -554,7 +554,7 @@ def wave_plan_to_findings_json(plan: WavePlan) -> str:
 
 
 def jobs_wave_plan_path(jobs_root: Path, job_id: str) -> Path | None:
-    """Recommended host dump: ``{jobs_root}/{job_id}/wave-plan.json``."""
+    """Recommended host dump: `{jobs_root}/{job_id}/wave-plan.json`."""
     safe = job_id.replace("/", "_").replace("\\", "_").strip()
     if not safe or ".." in safe:
         return None
@@ -562,12 +562,12 @@ def jobs_wave_plan_path(jobs_root: Path, job_id: str) -> Path | None:
 
 
 def workspace_wave_plan_path(workspace: Path) -> Path:
-    """Recommended workspace dump: ``<workspace>/.soothe/wave-plan.json``."""
+    """Recommended workspace dump: `<workspace>/.soothe/wave-plan.json`."""
     return Path(workspace).expanduser().resolve() / ".soothe" / WAVE_PLAN_FILENAME
 
 
 def dump_wave_plan(path: Path, plan: WavePlan) -> None:
-    """Write flat WavePlan JSON to ``path`` (best-effort caller handles errors)."""
+    """Write flat WavePlan JSON to `path` (best-effort caller handles errors)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -662,8 +662,8 @@ def diagnose_wave_plan_from_sources(
 ) -> WavePlanIngestResult:
     """Ingest WavePlan from structured wire, optional dumps, then findings.
 
-    Order: inline ``wave_plan`` → ``wave_plan_path`` → jobs dump → workspace
-    ``.soothe/wave-plan.json`` → findings/evidence blob.
+    Order: inline `wave_plan` → `wave_plan_path` → jobs dump → workspace
+    `.soothe/wave-plan.json` → findings/evidence blob.
     """
     best_detail = ""
     ws = Path(workspace).expanduser().resolve() if workspace else None
@@ -856,7 +856,7 @@ def build_wave_plan(
     max_slices: int | None = None,
     scout_count: int | None = None,
 ) -> WavePlan:
-    """Build a validated ``WavePlan`` from tool / API arguments."""
+    """Build a validated `WavePlan` from tool / API arguments."""
     rich: list[WavePlanSlice] = []
     if slices:
         for item in slices:

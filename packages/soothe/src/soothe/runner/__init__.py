@@ -43,7 +43,7 @@ class SootheRunner(
     StrangeLoopMixin,
     PhasesMixin,
 ):
-    """Protocol-orchestrated agent runner wrapping ``create_soothe_agent()``."""
+    """Protocol-orchestrated agent runner wrapping `create_soothe_agent()`."""
 
     def __init__(
         self,

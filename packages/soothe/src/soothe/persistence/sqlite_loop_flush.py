@@ -39,6 +39,8 @@ _coordinator_init_lock = threading.Lock()
 
 @dataclass
 class _PendingEntry:
+    """A coalesced checkpoint write pending flush for one loop."""
+
     checkpoint: StrangeLoopCheckpoint
     save_fn: SaveSyncFn
     durable: bool = False

@@ -1,21 +1,21 @@
-"""WorkspaceReservation — scheduling-time conflict gate (RFC-222 revised).
+"""WorkspaceReservation — scheduling-time conflict gate.
 
 Daemon-owned. Refuses to dispatch a new goal whose workspace prefix
 overlaps with any goal currently active. Replaces per-path
-``FileLockMiddleware`` for v1 (see RFC-222 Q1) — the registry is in the
+`FileLockMiddleware` for v1 — the registry is in the
 daemon, the check happens before dispatch, so no cross-process RPC is
 needed.
 
-Conflict semantics (when ``strict_overlap`` is True, the default):
-- ``/foo/bar`` conflicts with ``/foo/bar/baz`` (parent vs child)
-- ``/foo/bar/baz`` conflicts with ``/foo/bar`` (child vs parent)
-- ``/foo/bar`` does NOT conflict with ``/foo/barber`` (path component-aware)
-- ``/foo/bar`` does NOT conflict with ``/foo/qux`` (siblings)
+Conflict semantics (when `strict_overlap` is True, the default):
+- `/foo/bar` conflicts with `/foo/bar/baz` (parent vs child)
+- `/foo/bar/baz` conflicts with `/foo/bar` (child vs parent)
+- `/foo/bar` does NOT conflict with `/foo/barber` (path component-aware)
+- `/foo/bar` does NOT conflict with `/foo/qux` (siblings)
 - Identical paths conflict.
 
-When ``strict_overlap`` is False, only exact-path matches conflict.
+When `strict_overlap` is False, only exact-path matches conflict.
 
-Workspace paths are normalized (absolute, no trailing slash, no ``..``)
+Workspace paths are normalized (absolute, no trailing slash, no `..`)
 before comparison so equivalent paths compare equal regardless of input
 shape.
 """
@@ -36,8 +36,8 @@ def _normalize(workspace: str | Path) -> str:
     We use PurePosixPath for the component comparison even on macOS/Linux —
     we only care about path-prefix semantics, not filesystem case-sensitivity.
 
-    Avoids ``Path.absolute()`` / ``os.getcwd()`` when the process cwd has been
-    deleted (common for long-running daemons) — that raises ``FileNotFoundError``
+    Avoids `Path.absolute()` / `os.getcwd()` when the process cwd has been
+    deleted (common for long-running daemons) — that raises `FileNotFoundError`
     and would crash the scheduling loop.
     """
     p = Path(workspace).expanduser()
@@ -76,13 +76,13 @@ def _overlaps(a_norm: str, b_norm: str, *, strict: bool) -> bool:
 
 
 class WorkspaceReservation:
-    """Workspace-prefix conflict gate (RFC-222 revised).
+    """Workspace-prefix conflict gate.
 
     Args:
         strict_overlap: When True, any prefix overlap counts as a conflict.
             When False, only exact-path matches conflict.
-        enabled: When False, every ``acquire`` succeeds and
-            ``conflicts_with_active`` returns ``None``. Allows config-level
+        enabled: When False, every `acquire` succeeds and
+            `conflicts_with_active` returns `None`. Allows config-level
             opt-out for tests / single-tenant deployments.
     """
 
@@ -130,7 +130,7 @@ class WorkspaceReservation:
         return None
 
     def acquire(self, goal_id: str, workspace: str | Path) -> bool:
-        """Try to reserve ``workspace`` for ``goal_id``.
+        """Try to reserve `workspace` for `goal_id`.
 
         Returns:
             True on success. False if another active goal holds an
@@ -169,7 +169,7 @@ class WorkspaceReservation:
             return True
 
     def release(self, goal_id: str) -> bool:
-        """Release ``goal_id``'s reservation. Returns True if it existed."""
+        """Release `goal_id`'s reservation. Returns True if it existed."""
         with self._lock:
             return self._reservations.pop(goal_id, None) is not None
 

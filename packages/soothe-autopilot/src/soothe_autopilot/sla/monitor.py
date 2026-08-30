@@ -2,7 +2,7 @@
 
 Scans active (non-terminal) goals for unresolved gap items that have
 persisted past configured SLA thresholds. Each threshold crossing
-produces an ``SlaBreach`` which is dispatched as an ``sla.overdue``
+produces an `SlaBreach` which is dispatched as an `sla.overdue`
 notify intent through the existing NotificationRouter → daemon sink
 pipeline (email, webhook, Feishu).
 
@@ -68,9 +68,9 @@ def _extract_gap_items(goal: GoalNode) -> tuple[list[str], str | None, int]:
 def _goal_elapsed_seconds(goal: GoalNode, *, now: datetime) -> float:
     """Wall-clock seconds since the goal became active (current run).
 
-    Uses ``started_at`` when available (reset on retry/send-back/crash
+    Uses `started_at` when available (reset on retry/send-back/crash
     recovery so elapsed counts only the current run). Falls back to
-    ``created_at`` for goals that never started (pending/awaiting).
+    `created_at` for goals that never started (pending/awaiting).
     """
     base = goal.started_at or goal.created_at
     if base.tzinfo is None:
@@ -100,7 +100,7 @@ class SlaMonitor:
     """Overdue gap detection with tiered escalation alerts.
 
     The monitor scans active goals, classifies each against SLA thresholds,
-    and dispatches ``sla.overdue`` notify intents through the
+    and dispatches `sla.overdue` notify intents through the
     NotificationRouter. Dedup is handled at the router level (one alert
     per goal+tier per TTL window).
     """

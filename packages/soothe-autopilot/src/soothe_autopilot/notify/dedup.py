@@ -1,4 +1,4 @@
-"""Durable at-most-once keys for job notify intents (IG-713)."""
+"""Durable at-most-once keys for job notify intents."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ _DEDUP_PREFIX = "autopilot:notify_dedup:"
 
 
 class NotifyDedupStore:
-    """Remember delivered ``NotifyIntent.dedup_key`` values.
+    """Remember delivered `NotifyIntent.dedup_key` values.
 
-    Uses ``AsyncPersistStore`` when available; otherwise an in-memory set.
-    Keys expire after ``ttl_seconds`` (default 86400s = 24h) so that
+    Uses `AsyncPersistStore` when available; otherwise an in-memory set.
+    Keys expire after `ttl_seconds` (default 86400s = 24h) so that
     long-running jobs can re-notify when state changes after the TTL window.
-    Set ``ttl_seconds=0`` to disable expiry (keys persist indefinitely).
+    Set `ttl_seconds=0` to disable expiry (keys persist indefinitely).
     """
 
     def __init__(

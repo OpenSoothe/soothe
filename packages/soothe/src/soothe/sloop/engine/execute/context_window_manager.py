@@ -83,7 +83,7 @@ class ContextCompactionResult:
 class ContextWindowManager:
     """Manages automatic context window compaction for StrangeLoop threads.
 
-     : After execute waves, check estimated context size and trigger
+    After execute waves, check estimated context size and trigger
     in-place summarization when threshold exceeded.
 
     Args:
@@ -148,7 +148,7 @@ class ContextWindowManager:
         Used internally when checkpoint is already loaded, avoiding
         redundant async call.
 
-         : delegates to the unified `estimate_token_usage` API so
+        Delegates to the unified `estimate_token_usage` API so
         context-window estimation stays consistent with the executor's token
         accounting. The unified API prefers real `usage_metadata` on AI
         messages (no double-estimation of turns the provider already

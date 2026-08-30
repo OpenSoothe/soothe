@@ -1,10 +1,10 @@
 """Resolve which LoopRail (if any) applies to a job submit.
 
-Deterministic cascade: explicit → workspace ``.rail-default`` →
-config ``default_rail`` → None.
+Deterministic cascade: explicit → workspace `.rail-default` →
+config `default_rail` → None.
 
-LLM auto-pick (RFC-231 §10 / IG-728): when submit omits ``rail_id``, optionally
-match job description against merged catalog ``summary`` / ``applies_when`` via
+LLM auto-pick: when submit omits `rail_id`, optionally
+match job description against merged catalog `summary` / `applies_when` via
 structured light-LLM, then fall back to the deterministic ladder.
 """
 
@@ -112,7 +112,7 @@ def _deterministic_fallback(
     workspace: str | None,
     default_rail: str | None,
 ) -> tuple[str | None, Literal["workspace_default", "config_default", "none"]]:
-    """Workspace ``.rail-default`` → config ``default_rail`` → none."""
+    """Workspace `.rail-default` → config `default_rail` → none."""
     workspace_default = _read_workspace_rail_default(workspace)
     if workspace_default:
         return workspace_default, "workspace_default"
@@ -129,8 +129,8 @@ def resolve_rail_id(
 ) -> str | None:
     """Deterministic rail id only (no LLM, no catalog validation).
 
-    Prefer ``resolve_rail_for_job`` on Autopilot submit. Kept for tests and
-    sync callers that need the explicit → ``.rail-default`` → config ladder.
+    Prefer `resolve_rail_for_job` on Autopilot submit. Kept for tests and
+    sync callers that need the explicit → `.rail-default` → config ladder.
     """
     if explicit and explicit.strip():
         return explicit.strip()
@@ -224,7 +224,7 @@ class RailAutoPicker:
         *,
         max_field_chars: int = DEFAULT_MAX_FIELD_CHARS,
     ) -> RailAutoPickResponse:
-        """Invoke structured pick for ``description`` against ``candidates``."""
+        """Invoke structured pick for `description` against `candidates`."""
         from langchain_core.messages import HumanMessage, SystemMessage
         from soothe_nano.llm import ainvoke_structured_traced
 
@@ -265,25 +265,25 @@ async def resolve_rail_for_job(
     skip_llm_if_workspace_default: bool = False,
     abstain_overrides_defaults: bool = True,
 ) -> RailPickResult:
-    """Resolve rail id for a job submit (RFC-231 §10 cascade).
+    """Resolve rail id for a job submit (cascade).
 
     Args:
-        explicit: Caller-supplied rail id (``--rail`` / ``rail_id``).
+        explicit: Caller-supplied rail id (`--rail` / `rail_id`).
         description: Job submit text for LLM matching.
-        workspace: Optional workspace for catalog tier + ``.rail-default``.
+        workspace: Optional workspace for catalog tier + `.rail-default`.
         catalog: Optional catalog; constructed from workspace when None.
         picker: Optional LLM picker; when None, skip LLM step.
-        default_rail: Config ``agent.autopilot.default_rail``.
+        default_rail: Config `agent.autopilot.default_rail`.
         auto_pick: Master switch for the LLM step.
         min_confidence: Threshold for accepting pick or abstain.
         deny: Extra rail ids excluded from candidates.
         max_candidates: Skip LLM when filtered set exceeds this size.
         timeout_s: LLM call timeout.
-        skip_llm_if_workspace_default: Prefer ``.rail-default`` over LLM.
+        skip_llm_if_workspace_default: Prefer `.rail-default` over LLM.
         abstain_overrides_defaults: High-confidence null skips fallbacks.
 
     Returns:
-        ``RailPickResult`` with ``rail_id``, ``source``, and diagnostics.
+        `RailPickResult` with `rail_id`, `source`, and diagnostics.
     """
     cat = catalog if catalog is not None else LoopRailCatalog(workspace=workspace)
 

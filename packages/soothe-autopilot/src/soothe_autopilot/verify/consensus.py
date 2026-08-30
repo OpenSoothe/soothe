@@ -1,15 +1,15 @@
-"""RFC-204 §1.3 / IG-726: Report-commit judgment for Autopilot completions.
+"""Report-commit judgment for Autopilot completions.
 
 Autopilot validates StrangeLoop's "done" judgment from the **CE-committed goal
 report** before accepting completion. If not satisfied, Autopilot send_backs
 the goal with refined instructions, or fails it so host recovery (monitor /
 LoopRail / engine health) can act — never parks for an operator mid-goal.
 
-IG-725/IG-726: no ``evidence_follow_up`` / ``collect_evidence`` turns. Prefer
+No `evidence_follow_up` / `collect_evidence` turns. Prefer
 accepting StrangeLoop Plan-Execute-Eval completions; product send_back/fail
-only. Optional bounded ``dag_ops`` may revise pending CE plan fields. Post-accept
+only. Optional bounded `dag_ops` may revise pending CE plan fields. Post-accept
 DAG structure for rail phases remains LoopRail's job. The host judge never
-opens the workspace (IG-710).
+opens the workspace.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ ConsensusDecision = Literal["accept", "send_back", "fail"]
 
 
 class ConsensusVerdict(BaseModel):
-    """Structured judgment outcome (RFC-630 — no free-text decision parsing)."""
+    """Structured judgment outcome (no free-text decision parsing)."""
 
     decision: ConsensusDecision = Field(
         description="accept if complete; send_back to retry; fail if blocked/unrecoverable"
@@ -72,7 +72,7 @@ async def evaluate_goal_completion(
     dag_context: str = "",
     soothe_config: Any | None = None,
 ) -> ConsensusResult:
-    """RFC-204 §1.3 / IG-726: Holistic evaluation via structured LLM.
+    """Holistic evaluation via structured LLM.
 
     Args:
         goal_description: The original goal text.
@@ -85,7 +85,7 @@ async def evaluate_goal_completion(
         ConsensusResult with decision, reasoning, and optional dag_ops.
 
     Raises:
-        ConsensusEvaluationError: When ``model`` is missing or the LLM call fails.
+        ConsensusEvaluationError: When `model` is missing or the LLM call fails.
     """
     if model is None:
         msg = "Consensus model is required for goal completion validation"

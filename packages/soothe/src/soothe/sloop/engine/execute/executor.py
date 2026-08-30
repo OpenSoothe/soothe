@@ -228,7 +228,7 @@ def _capture_interrupts(
     """Capture ask_user / tool_approval interrupts into the relay queue.
 
     Every interrupt enters the queue — none are dropped. The originating
-    step halts and resumes via ``Command(resume=...)`` when its entry
+    step halts and resumes via `Command(resume=...)` when its entry
     reaches the head.
 
     Returns `True` if at least one interrupt was captured.
@@ -300,8 +300,8 @@ class Executor:
                 `clarification_loop_state_view`, enables clarification
                 relay during the CoreAgent stream.
             clarification_capture: Per-loop FIFO queue for captured
-                ``ask_user`` / ``tool_approval`` requests. The caller reads
-                ``capture.head`` after ``execute()`` completes.
+                `ask_user` / `tool_approval` requests. The caller reads
+                `capture.head` after `execute()` completes.
             clarification_loop_state_view: Read-only loop state snapshot threaded
                 to the policy.
             clarification_resume_answer_payload: Optional LangGraph resume payload
@@ -788,8 +788,8 @@ class Executor:
           the stream alive and prevent client disconnects during slow tool
           execution (browser_use, long searches).
         - When `step_start_perf` is set, the elapsed wall-clock at interrupt
-          time is recorded on the enqueued entry's ``resume_ticket.prior_duration_ms``
-          so the resume pass can accumulate it into the final ``duration_ms``.
+          time is recorded on the enqueued entry's `resume_ticket.prior_duration_ms`
+          so the resume pass can accumulate it into the final `duration_ms`.
         """
         interrupt_iterations = 0
         current_input: dict[str, Any] | Command = (
@@ -1723,7 +1723,7 @@ class Executor:
         tool_calls: list[ToolCallHead],
         evidence_excerpts: list[str],
     ) -> Literal["none", "low", "medium", "high"]:
-        """Deterministic progress hint over wave outputs. See.3."""
+        """Deterministic progress hint over wave outputs."""
         if steps_failed > 0:
             return "low"
         if not tool_calls and not evidence_excerpts:
@@ -1999,7 +1999,7 @@ class Executor:
         immediately for upstream TUI/WebSocket display and is not duplicated on the
         returned `_ExecuteStepResult.events` list.
 
-         : Collects outcome metadata instead of full output string.
+        Collects outcome metadata instead of full output string.
         Fourth tuple element is joined `task` tool delegate-final text for finalize.
         Thread isolation via random `{main}__{hex5}` thread ids; predecessor context via ledger
         projection into graph input (no checkpoint fork).
@@ -2565,9 +2565,14 @@ class Executor:
             # (conversation.jsonl) and the daemon event stream. Without this,
             # the ``error`` field carries only ``str(e)`` (truncated to 50 chars
             # by the TUI summary builder) and the traceback is lost when the
-            # per-loop runner.log handler is detached mid-run (the d15f
-            # incident: a ``TypeError: '<='`` in the aggregation path left no
-            # recoverable traceback in any durable log).
+            # per-loop runner.log handler is detached mid-run.
+            #
+            # The ToolErrorGuardMiddleware now converts unhandled tool
+            # exceptions into error ToolMessages, so a single tool failure no
+            # longer reaches this branch and aborts the whole step. The
+            # original d15f post-mortem misattributed the crash to the
+            # aggregation path; the 33c1 recurrence traceback shows the real
+            # site is tool execution.
             if not _is_recoverable_tool_network_error(e) and not isinstance(e, GraphRecursionError):
                 tb = traceback.format_exc()
                 if tb and tb.strip():
@@ -2611,7 +2616,7 @@ class Executor:
         for real-time display, while also collecting output content for the final
         result.
 
-         : Also extracts tool_call_id and generates outcome metadata.
+        Also extracts tool_call_id and generates outcome metadata.
         Collects AIMessage objects for token usage extraction.
         Collects `task` tool return text (delegate finals) for goal completion when
         subgraph AIMessages are not folded into root-graph act aggregation.

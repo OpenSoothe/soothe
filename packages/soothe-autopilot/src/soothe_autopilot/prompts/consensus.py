@@ -1,4 +1,4 @@
-"""Report-commit consensus judge prompt assembly (IG-736)."""
+"""Report-commit consensus judge prompt assembly."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def build_consensus_prompt(
     """Build prompt for structured report-commit judgment.
 
     Pass the full CE Goal Report projection into the judge prompt. Do not clip
-    with preview truncation here — truncation caused false ``fail`` when the
+    with preview truncation here — truncation caused false `fail` when the
     model mistook the preview for incomplete work.
 
     Args:

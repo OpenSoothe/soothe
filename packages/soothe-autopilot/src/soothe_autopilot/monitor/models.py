@@ -1,4 +1,4 @@
-"""Models for AutopilotMonitor (RFC-625)."""
+"""Models for AutopilotMonitor."""
 
 from __future__ import annotations
 

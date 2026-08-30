@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def configure_unified_persistence(config: SootheConfig) -> None:
-    """Configure process-wide stores that must track ``default_backend``."""
+    """Configure process-wide stores that must track `default_backend`."""
     _validate_no_mixed_overrides(config)
     _warn_vector_store_mismatch(config)
     logger.info(

@@ -1,4 +1,4 @@
-"""Persist LoopRail auto-pick diagnostics under ``jobs/{job_id}/`` (IG-728)."""
+"""Persist LoopRail auto-pick diagnostics under `jobs/{job_id}/`."""
 
 from __future__ import annotations
 
@@ -21,15 +21,15 @@ def write_rail_selection(
     job_id: str,
     pick: RailPickResult,
 ) -> Path | None:
-    """Write ``jobs/{job_id}/rail_selection.json`` for forensics.
+    """Write `jobs/{job_id}/rail_selection.json` for forensics.
 
     Args:
-        jobs_root: Job artifact root (typically ``$SOOTHE_DATA_DIR/jobs``).
+        jobs_root: Job artifact root (typically `$SOOTHE_DATA_DIR/jobs`).
         job_id: Root goal / job id.
-        pick: Resolved ``RailPickResult`` from submit-time selection.
+        pick: Resolved `RailPickResult` from submit-time selection.
 
     Returns:
-        Path written, or None when ``jobs_root`` is unset or write fails.
+        Path written, or None when `jobs_root` is unset or write fails.
     """
     if jobs_root is None:
         return None

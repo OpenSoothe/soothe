@@ -1,10 +1,10 @@
-"""Job-maturity and workspace-inventory evidence caps (RFC-230).
+"""Job-maturity and workspace-inventory evidence caps.
 
 These thresholds bound each evidence slice the autopilot maturity assessor
 feeds to the LLM (verification_rules, GOAL.md, DAG summary, QA response) so
 the assessor sees full contract context without unbounded growth; each
 defaults to the full inventory budget. They were moved here from
-``soothe.config.constants`` — they are autopilot-owned, not host config.
+`soothe.config.constants` — they are autopilot-owned, not host config.
 """
 
 from __future__ import annotations

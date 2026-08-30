@@ -8,10 +8,10 @@ from pathlib import Path
 SOOTHE_HOME = None  # Will be set in methods
 
 THREADS_DATA_DIR = "data/threads"
-"""Directory for CoreAgent thread runtime data (Layer 1)."""
+"""Directory for CoreAgent thread runtime data."""
 
 LOOPS_DATA_DIR = "data/loops"
-"""Directory for StrangeLoop checkpoint data (Layer 2)."""
+"""Directory for StrangeLoop checkpoint data."""
 
 ARCHIVED_LOOPS_DATA_DIR = "data/archived_loops"
 """Directory for archived StrangeLoop checkpoints."""

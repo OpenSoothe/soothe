@@ -1,4 +1,4 @@
-"""Compact job DAG progress for lifecycle notify (IG-713).
+"""Compact job DAG progress for lifecycle notify.
 
 Counts every goal; never attaches a full goal list. Only a small capped
 set of attention highlights (failed / cancelled / active / suspended).
@@ -34,14 +34,14 @@ def build_job_notify_progress(
     *,
     max_highlights: int = DEFAULT_MAX_HIGHLIGHTS,
 ) -> dict[str, Any] | None:
-    """Build a compact progress summary from a job ``dag_snapshot``.
+    """Build a compact progress summary from a job `dag_snapshot`.
 
     Args:
-        dag: Snapshot with ``nodes`` (and optional ``root_id``).
+        dag: Snapshot with `nodes` (and optional `root_id`).
         max_highlights: Max attention rows (failed/cancelled/active/suspended).
 
     Returns:
-        Progress dict, or ``None`` when ``dag`` has no usable nodes.
+        Progress dict, or `None` when `dag` has no usable nodes.
     """
     if not dag or not isinstance(dag, dict):
         return None

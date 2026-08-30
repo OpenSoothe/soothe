@@ -6,7 +6,7 @@ from typing import Protocol
 
 
 class LoopWorkingMemoryProtocol(Protocol):
-    """Bounded working memory for Layer 2 Plan prompts; optional workspace spill."""
+    """Bounded working memory for StrangeLoop Plan prompts; optional workspace spill."""
 
     def clear(self) -> None:
         """Reset for a new goal."""

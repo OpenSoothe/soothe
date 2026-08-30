@@ -1,12 +1,12 @@
-"""WorkerPool — sticky-affinity wrapper over LoopRunnerFactory (RFC-222).
+"""WorkerPool — sticky-affinity wrapper over LoopRunnerFactory.
 
-WorkerPool is the daemon-owned abstraction over RFC-221's per-loop_id
+WorkerPool is the daemon-owned abstraction over the per-loop_id
 runners. Capacity is tracked by reusable **slots**; each goal assignment
-gets a unique job-attributable ``loop_id``:
+gets a unique job-attributable `loop_id`:
 
     autopilot__{job_id}__{uuid4().hex}
 
-so ``data/loops/{loop_id}/`` never mixes jobs when a slot is reused.
+so `data/loops/{loop_id}/` never mixes jobs when a slot is reused.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def allocate_assignment_loop_id(job_id: str) -> str:
 
 
 def parse_job_id_from_loop_id(loop_id: str) -> str | None:
-    """Extract ``job_id`` from ``autopilot__{job_id}__{uuid}``; else None."""
+    """Extract `job_id` from `autopilot__{job_id}__{uuid}`; else None."""
     if not loop_id.startswith(_AUTOPILOT_LOOP_PREFIX):
         return None
     rest = loop_id[len(_AUTOPILOT_LOOP_PREFIX) :]
@@ -60,10 +60,10 @@ class WorkerSlot:
     """One capacity slot in the pool.
 
     Tracks:
-        slot_id: stable pool key (``autopilot__slot_NNN``).
-        loop_id: current (or last) assignment loop id under ``data/loops/``.
-        runner: LoopRunnerProtocol bound to the current ``loop_id``.
-        status: ``idle`` → ``active`` → ``idle``.
+        slot_id: stable pool key (`autopilot__slot_NNN`).
+        loop_id: current (or last) assignment loop id under `data/loops/`.
+        runner: LoopRunnerProtocol bound to the current `loop_id`.
+        status: `idle` → `active` → `idle`.
         current_goal_id: id of the goal currently executing on this slot.
         last_goal_ids: recency list of recent goal_ids (sticky-affinity cache).
         last_dispatch_ok: whether the previous assignment completed cleanly.
@@ -96,7 +96,7 @@ class WorkerSlot:
         """Return this slot to idle after a goal finishes (success or failure).
 
         Failed dispatches must not permanently remove capacity (P0-4).
-        ``last_dispatch_ok`` records outcome for observability only.
+        `last_dispatch_ok` records outcome for observability only.
         """
         if self.current_goal_id:
             self.last_goal_ids.append(self.current_goal_id)
@@ -110,15 +110,15 @@ class WorkerSlot:
         self.idle_since = datetime.now(UTC)
 
     def has_recently_run(self, goal_id: str) -> bool:
-        """True if ``goal_id`` is in this slot's recency cache."""
+        """True if `goal_id` is in this slot's recency cache."""
         return goal_id in self.last_goal_ids or goal_id == self.current_goal_id
 
 
 class WorkerPool:
-    """Sticky-affinity wrapper over LoopRunnerFactory (RFC-222).
+    """Sticky-affinity wrapper over LoopRunnerFactory.
 
     Args:
-        factory: source of ``LoopRunnerProtocol`` instances.
+        factory: source of `LoopRunnerProtocol` instances.
         max_loops: maximum concurrent worker slots in the pool.
     """
 
@@ -158,14 +158,14 @@ class WorkerPool:
         job_id: str,
         prefer: str | None = None,
     ) -> WorkerSlot | None:
-        """Pick a slot for ``goal`` and bind a fresh assignment ``loop_id``.
+        """Pick a slot for `goal` and bind a fresh assignment `loop_id`.
 
         Preference order (by slot):
-        1. Slot matching ``prefer`` (slot_id or current/last loop_id) if idle.
-        2. Idle slot whose ``last_goal_ids`` contains a ``goal.depends_on`` id.
+        1. Slot matching `prefer` (slot_id or current/last loop_id) if idle.
+        2. Idle slot whose `last_goal_ids` contains a `goal.depends_on` id.
         3. Any idle slot (LRU).
-        4. Spawn a new slot if under ``max_loops``.
-        5. ``None`` (no capacity).
+        4. Spawn a new slot if under `max_loops`.
+        5. `None` (no capacity).
         """
         async with self._assignment_lock:
             prefer_slot = self._resolve_slot_id(prefer) if prefer else None
@@ -236,7 +236,7 @@ class WorkerPool:
         return w
 
     async def mark_idle(self, loop_id: str, *, success: bool = True) -> None:
-        """Return the slot owning ``loop_id`` to the idle queue.
+        """Return the slot owning `loop_id` to the idle queue.
 
         Always requeues the slot so failed goals do not leak pool capacity.
         """
@@ -249,7 +249,7 @@ class WorkerPool:
                 self._idle.append(w.slot_id)
 
     async def release_worker(self, loop_id: str) -> WorkerSlot | None:
-        """Remove the slot owning ``loop_id`` from the pool entirely."""
+        """Remove the slot owning `loop_id` from the pool entirely."""
         async with self._assignment_lock:
             w = self._get_by_loop_id_unlocked(loop_id)
             if w is None:
@@ -294,9 +294,9 @@ class WorkerPool:
 
 
 def is_autopilot_worker_loop_id(loop_id: str) -> bool:
-    """True if ``loop_id`` belongs to an autopilot-owned worker.
+    """True if `loop_id` belongs to an autopilot-owned worker.
 
-    Matches assignment-scoped ids (``autopilot__{job}__{uuid}``), pool slot
-    placeholders (``autopilot__slot_*``), and legacy ``autopilot__wNNN``.
+    Matches assignment-scoped ids (`autopilot__{job}__{uuid}`), pool slot
+    placeholders (`autopilot__slot_*`), and legacy `autopilot__wNNN`.
     """
     return loop_id.startswith(_AUTOPILOT_LOOP_PREFIX)

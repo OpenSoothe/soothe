@@ -11,8 +11,6 @@ if TYPE_CHECKING:
 
 from soothe.events import StreamChunk
 
-"""Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
-
 
 @dataclass(frozen=True)
 class GoalDispatchEnvelope:
@@ -60,7 +58,7 @@ class LoopRunRequest:
           `normalized_user_id` is `anonymous` when `user_id` is empty, and
           hash uses `user_id` (or `""`) with `client_workspace_id` or `loop_id`.
 
-     extension (additive): when `autopilot_job` is set, this
+    Autopilot extension (additive): when `autopilot_job` is set, this
     request is dispatched by the daemon's `AutopilotService`; the worker
     branches to a hydrate-from-bundle path. When `None`, the worker runs
     today's solo-mode path. The `LoopRunnerProtocol.run` signature is

@@ -1,4 +1,4 @@
-"""Job lifecycle notify intents (IG-713).
+"""Job lifecycle notify intents.
 
 Channel-agnostic payloads produced by the host NotificationRouter and
 consumed by daemon NotifySink adapters (email, webhook, Feishu, …).
@@ -21,14 +21,14 @@ NotifyKind = Literal[
 
 
 class Severity(StrEnum):
-    """Severity classification for notify intents (IG-713).
+    """Severity classification for notify intents.
 
-    Drift-aware escalation (see ``router._severity_for``):
-    - ``info``    — normal completion, no drift signals.
-    - ``warning`` — suspended timeout, maturity blockers, or repeated
+    Drift-aware escalation (see `router._severity_for`):
+    - `info`    — normal completion, no drift signals.
+    - `warning` — suspended timeout, maturity blockers, or repeated
       failures below the retry budget (the job is *drifting* away from
       a healthy outcome but is not yet terminal).
-    - ``error``   — terminal failure, or retry/send-back budgets
+    - `error`   — terminal failure, or retry/send-back budgets
       exhausted (the job has *drifted* past recovery).
     """
 

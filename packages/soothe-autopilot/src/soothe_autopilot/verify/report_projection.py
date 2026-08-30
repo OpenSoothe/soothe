@@ -1,6 +1,6 @@
-"""Project CE GoalNode.report into Autopilot judge input (IG-726 / RFC-204 §1.3).
+"""Project CE GoalNode.report into Autopilot judge input.
 
-StrangeLoop ledger → CE ``commit_goal_report`` is the evidence SoT. Autopilot
+StrangeLoop ledger → CE `commit_goal_report` is the evidence SoT. Autopilot
 does not rebuild a parallel workspace narrative for per-goal judgment.
 """
 
@@ -19,7 +19,7 @@ def build_goal_report(
 ) -> dict[str, Any]:
     """Build a serializable CE goal report from loop-end fields.
 
-    Always produces at least ``outcome`` + ``summary`` so report-commit can fire
+    Always produces at least `outcome` + `summary` so report-commit can fire
     even on thin/crash terminals.
     """
     finding_texts: list[str] = []

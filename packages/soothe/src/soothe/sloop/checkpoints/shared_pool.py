@@ -102,12 +102,9 @@ class SharedPostgreSQLPool:
     async def _open_locked(self) -> AsyncConnectionPool:
         """Build, open, and schema-init the pool. Caller MUST hold `_init_lock`.
 
-         : extracted from `open` so `reset_pool` can reopen without
-        re-entering `open` (`asyncio.Lock` is not reentrant — the prior
-        `await self.open()` while holding `_init_lock` deadlocked the
-        recovery path, leaving `_pool=None` and every subsequent
-        `for_shared_checkpoint_pool` caller raising "Shared checkpoint pool
-        not initialized" (loop 0041).
+        Extracted from `open` so `reset_pool` can reopen without
+        re-entering `open` (`asyncio.Lock` is not reentrant — re-entering
+        would deadlock the recovery path).
         """
         pool_kwargs: dict[str, Any] = {
             "max_size": self.pool_size,

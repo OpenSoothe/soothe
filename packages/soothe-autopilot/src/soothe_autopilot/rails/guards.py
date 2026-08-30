@@ -1,4 +1,4 @@
-"""Guard evaluation for LoopRail conditions (RFC-630 structured results)."""
+"""Guard evaluation for LoopRail conditions (structured results)."""
 
 from __future__ import annotations
 
@@ -34,17 +34,17 @@ class GuardContext:
 
 
 class GuardEvaluator(Protocol):
-    """Evaluate a rail ``when`` clause."""
+    """Evaluate a rail `when` clause."""
 
     async def evaluate(self, ctx: GuardContext) -> GuardResult:
-        """Return structured match result for ``ctx``."""
+        """Return structured match result for `ctx`."""
 
 
 @dataclass
 class ScriptedGuardEvaluator:
-    """FIFO scripted responses keyed by ``(event, condition_name_or_text)``.
+    """FIFO scripted responses keyed by `(event, condition_name_or_text)`.
 
-    Missing keys default to ``matched=False`` so tests must explicitly allow
+    Missing keys default to `matched=False` so tests must explicitly allow
     builtins to fire.
     """
 
@@ -504,7 +504,7 @@ def _structural_short_circuit(
 
 @dataclass
 class LLMGuardEvaluator:
-    """Evaluate NL rail conditions with a structured chat-model call (RFC-630)."""
+    """Evaluate NL rail conditions with a structured chat-model call."""
 
     model: Any
     soothe_config: Any | None = None
@@ -525,6 +525,8 @@ class LLMGuardEvaluator:
         from soothe_autopilot.prompts import build_guard_messages
 
         class _GuardMatch(BaseModel):
+            """Structured LLM guard-match result."""
+
             matched: bool = Field(description="Whether the condition holds now")
             confidence: float = Field(
                 ge=0.0,

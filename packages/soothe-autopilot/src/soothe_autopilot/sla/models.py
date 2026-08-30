@@ -1,7 +1,7 @@
 """SLA data models — breach detection, tier classification, scan results.
 
-These models are produced by ``SlaMonitor`` and consumed by
-``NotificationRouter.emit_sla_overdue`` to build ``sla.overdue``
+These models are produced by `SlaMonitor` and consumed by
+`NotificationRouter.emit_sla_overdue` to build `sla.overdue`
 notify intents dispatched through the existing email / webhook /
 Feishu sinks.
 """

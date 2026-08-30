@@ -1,4 +1,4 @@
-"""Typed guidance intake for Autopilot (IG-733).
+"""Typed guidance intake for Autopilot.
 
 Guidance is advisory text absorbed into ContextEngine; it never spawns goals.
 """

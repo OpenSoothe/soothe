@@ -1,4 +1,4 @@
-"""Text truncation helpers (L2)."""
+"""Text truncation helpers."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def truncate_text(
         marker: Ellipsis appended when text exceeds the limit.
         strip: When True, strip whitespace before measuring.
         reserve_marker: When True, reserve space for *marker* within *limit*
-            (clip to ``limit - len(marker)``). When False, clip to *limit*
+            (clip to `limit - len(marker)`). When False, clip to *limit*
             and append *marker* beyond it.
     """
     s = text.strip() if strip else text

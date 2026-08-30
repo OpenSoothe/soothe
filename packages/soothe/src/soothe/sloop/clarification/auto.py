@@ -47,19 +47,19 @@ class AutoClarificationPolicy:
     Two fallback paths depending on whether a human is attached:
 
     1. **TUI (interactive_fallback wired)**: When
-       ``degrade_to_manual_on_failure`` is True (default), *all* veritas
+       `degrade_to_manual_on_failure` is True (default), *all* veritas
        failure kinds route to the interactive relay (auto→manual upgrade)
        instead of hard-defering. The user sees an ask widget and can answer
        manually.
 
     2. **Autopilot (no interactive_fallback)**: When
-       ``autopilot_retry_on_fail`` is True (default), veritas failures return
-       a synthetic ``ClarificationAnswer(source="retry")`` carrying a
-       ``"(retry)"`` sentinel. The execute node feeds this back to the
+       `autopilot_retry_on_fail` is True (default), veritas failures return
+       a synthetic `ClarificationAnswer(source="retry")` carrying a
+       `"(retry)"` sentinel. The execute node feeds this back to the
        CoreAgent as the tool result, prompting the LLM to try a different
        action instead of parking the goal indefinitely.
 
-    Origins listed in ``force_manual_origins`` skip veritas entirely and use
+    Origins listed in `force_manual_origins` skip veritas entirely and use
     the interactive relay (or defer when no human is attached).
     """
 
@@ -170,8 +170,8 @@ class AutoClarificationPolicy:
     async def _answer_force_manual(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Force-manual origins skip veritas entirely.
 
-        ``await_clarification`` already emitted with ``mode=manual``, so we
-        call ``answer()`` directly (no re-announce).
+        `await_clarification` already emitted with `mode=manual`, so we
+        call `answer()` directly (no re-announce).
         """
         if self._interactive_fallback is not None:
             logger.info(
@@ -193,9 +193,9 @@ class AutoClarificationPolicy:
 
         On any veritas failure (DeferKind is not None):
         - TUI: route to the interactive relay when
-          ``degrade_to_manual_on_failure`` is True.
+          `degrade_to_manual_on_failure` is True.
         - Autopilot: return a synthetic retry answer when
-          ``autopilot_retry_on_fail`` is True, prompting the LLM to try a
+          `autopilot_retry_on_fail` is True, prompting the LLM to try a
           different action.
         - Otherwise: hard defer (legacy behavior).
         """
@@ -251,7 +251,7 @@ class AutoClarificationPolicy:
     def _build_retry_answer(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Build a synthetic retry answer for autopilot mode.
 
-        The sentinel ``"(retry)"`` is fed back to the CoreAgent as the tool
+        The sentinel `"(retry)"` is fed back to the CoreAgent as the tool
         result for the ask_user / tool_approval interrupt, prompting the LLM
         to try a different action instead of parking the goal.
         """
@@ -266,10 +266,10 @@ class AutoClarificationPolicy:
     async def _delegate_to_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Route to the interactive relay with auto→manual re-announce.
 
-        Uses ``answer_as_manual_fallback`` when available so the TUI
-        re-announces with ``mode=manual`` before pausing (the earlier
-        ``await_clarification`` emit used ``mode=auto``). Falls back to
-        ``answer()`` for bare policies without the upgrade method.
+        Uses `answer_as_manual_fallback` when available so the TUI
+        re-announces with `mode=manual` before pausing (the earlier
+        `await_clarification` emit used `mode=auto`). Falls back to
+        `answer()` for bare policies without the upgrade method.
         """
         fallback = self._interactive_fallback
         upgrade = getattr(fallback, "answer_as_manual_fallback", None)

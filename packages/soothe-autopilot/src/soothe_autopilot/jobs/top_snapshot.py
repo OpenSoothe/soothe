@@ -1,11 +1,11 @@
-"""Autopilot forest helpers for CLI ``top`` (RFC-228 /).
+"""Autopilot forest helpers for CLI `top`.
 
-Pure filter/assembly used by ``AutopilotService.top_snapshot``. Server SoT for
+Pure filter/assembly used by `AutopilotService.top_snapshot`. Server SoT for
 which jobs/goals/loops appear in the live dashboard (active-only by default;
-optional ``include_terminal`` keeps completed/failed/cancelled goals).
+optional `include_terminal` keeps completed/failed/cancelled goals).
 
-``mode=active`` filters goals and loops only. StepDAG rows under kept goals
-are preserved so ``steps=on`` can show plan progress for live work (including
+`mode=active` filters goals and loops only. StepDAG rows under kept goals
+are preserved so `steps=on` can show plan progress for live work (including
 recently completed steps while the goal/loop is still active).
 """
 
@@ -19,14 +19,14 @@ from soothe.context.models import TERMINAL_STATES
 def filter_active_dag(dag: dict[str, Any]) -> dict[str, Any] | None:
     """Keep non-terminal goal nodes and edges that still connect them.
 
-    StepDAG payloads under kept goals are left intact (``steps=on`` needs
-    them). Goal ``steps_completed`` / ``steps_total`` counters are unchanged.
+    StepDAG payloads under kept goals are left intact (`steps=on` needs
+    them). Goal `steps_completed` / `steps_total` counters are unchanged.
 
     Args:
-        dag: Snapshot with ``nodes``, ``edges``, and optional ``root_id``.
+        dag: Snapshot with `nodes`, `edges`, and optional `root_id`.
 
     Returns:
-        Filtered DAG dict, or ``None`` when no non-terminal nodes remain.
+        Filtered DAG dict, or `None` when no non-terminal nodes remain.
     """
     nodes_in = dag.get("nodes") or []
     nodes = [
@@ -54,7 +54,7 @@ def filter_active_dag(dag: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def filter_active_loops(loops: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return JobLoopIndex entries with ``status == "active"``."""
+    """Return JobLoopIndex entries with `status == "active"`."""
     return [entry for entry in loops if isinstance(entry, dict) and entry.get("status") == "active"]
 
 
@@ -64,10 +64,10 @@ def derive_top_running_status(
     nodes: list[dict[str, Any]],
     loops: list[dict[str, Any]],
 ) -> str:
-    """Effective status for top when a rail root stays ``pending`` while work runs.
+    """Effective status for top when a rail root stays `pending` while work runs.
 
-    Rail job roots are coordinators and often remain ``pending`` while child
-    goals / loops execute. Surface ``active`` (or clarification/suspend) so the
+    Rail job roots are coordinators and often remain `pending` while child
+    goals / loops execute. Surface `active` (or clarification/suspend) so the
     live forest does not look idle.
     """
     if root_status in TERMINAL_STATES:
@@ -96,19 +96,19 @@ def derive_job_started_at(
     nodes: list[dict[str, Any]],
     loops: list[dict[str, Any]],
 ) -> str | None:
-    """Earliest known execution start for a job, or ``None`` if nothing ran.
+    """Earliest known execution start for a job, or `None` if nothing ran.
 
-    Rail job roots often stay ``pending`` while child goals execute, so the job
+    Rail job roots often stay `pending` while child goals execute, so the job
     anchor is the earliest start across the root, its goals, and loop history
-    (``JobLoopEntry.started_at`` is append-only, so it survives goal retries).
+    (`JobLoopEntry.started_at` is append-only, so it survives goal retries).
 
     Args:
-        root_started_at: Root goal ``started_at`` (ISO text) or ``None``.
-        nodes: DAG goal nodes, each optionally carrying ``started_at``.
-        loops: JobLoopIndex entries, each carrying ``started_at``.
+        root_started_at: Root goal `started_at` (ISO text) or `None`.
+        nodes: DAG goal nodes, each optionally carrying `started_at`.
+        loops: JobLoopIndex entries, each carrying `started_at`.
 
     Returns:
-        Earliest ISO timestamp, or ``None`` when no start is recorded.
+        Earliest ISO timestamp, or `None` when no start is recorded.
     """
     from datetime import UTC, datetime
 
@@ -147,7 +147,7 @@ def apply_top_running_status(
 ) -> dict[str, Any]:
     """Mutate a top job entry so JOB/root GOAL reflect in-flight work.
 
-    Also fills the job (and coordinator root goal) ``started_at`` from the
+    Also fills the job (and coordinator root goal) `started_at` from the
     earliest subtree start so elapsed time is anchored on execution rather than
     submission.
     """
@@ -183,7 +183,7 @@ def apply_top_running_status(
 
 
 def _job_recency_key(job: dict[str, Any]) -> tuple[float, str]:
-    """Sort key for top jobs: newest ``created_at`` first; missing timestamps last."""
+    """Sort key for top jobs: newest `created_at` first; missing timestamps last."""
     from datetime import UTC, datetime
 
     raw = job.get("created_at")
@@ -204,12 +204,12 @@ def _job_recency_key(job: dict[str, Any]) -> tuple[float, str]:
 
 
 def sort_top_jobs(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Order job rows newest-first for ``autopilot top`` (most recent on top)."""
+    """Order job rows newest-first for `autopilot top` (most recent on top)."""
     return sorted((j for j in jobs if isinstance(j, dict)), key=_job_recency_key)
 
 
 def _copy_dag(dag: dict[str, Any]) -> dict[str, Any]:
-    """Shallow-copy ``nodes``/``edges`` (and optional ``root_id``) for a job row."""
+    """Shallow-copy `nodes`/`edges` (and optional `root_id`) for a job row."""
     out: dict[str, Any] = {
         "nodes": list(dag.get("nodes") or []),
         "edges": list(dag.get("edges") or []),
@@ -220,13 +220,13 @@ def _copy_dag(dag: dict[str, Any]) -> dict[str, Any]:
 
 
 def dag_goal_counts(dag: dict[str, Any]) -> dict[str, int]:
-    """Count goals in a job DAG (pre-filter totals for ``autopilot_top``).
+    """Count goals in a job DAG (pre-filter totals for `autopilot_top`).
 
     Args:
-        dag: Snapshot with ``nodes`` (each may have ``id`` / ``status``).
+        dag: Snapshot with `nodes` (each may have `id` / `status`).
 
     Returns:
-        Dict with ``total_goals``, ``completed_goals``, ``active_goals``.
+        Dict with `total_goals`, `completed_goals`, `active_goals`.
     """
     total = 0
     completed = 0
@@ -264,7 +264,7 @@ def build_top_job_entry(
     total_tokens_used: int = 0,
     rail_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Assemble one job row for ``autopilot_top``, or ``None`` if omitted.
+    """Assemble one job row for `autopilot_top`, or `None` if omitted.
 
     Args:
         job_id: Root goal id.
@@ -274,22 +274,22 @@ def build_top_job_entry(
         workspace: Optional workspace path.
         dag: Full DAG snapshot for the job.
         loops: JobLoopIndex entries (any status).
-        created_at: Optional root ``created_at`` ISO timestamp.
-        started_at: Optional root ``started_at`` ISO timestamp; the emitted job
+        created_at: Optional root `created_at` ISO timestamp.
+        started_at: Optional root `started_at` ISO timestamp; the emitted job
             value is the earliest start across root, goals, and loops.
-        updated_at: Optional root ``updated_at`` ISO timestamp (freeze elapsed
+        updated_at: Optional root `updated_at` ISO timestamp (freeze elapsed
             when the job is terminal).
-        include_terminal: When ``False`` (default), drop terminal goals and
+        include_terminal: When `False` (default), drop terminal goals and
             fully terminal jobs. StepDAG under remaining goals is kept intact.
-            When ``True``, keep the full DAG.
-        maturity: Optional compact maturity wire fields (RFC-230).
+            When `True`, keep the full DAG.
+        maturity: Optional compact maturity wire fields.
         total_tokens_used: Sum of goal tokens in the (pre-filter) job subtree.
         rail_id: Optional LoopRail id bound to this job root.
 
     Returns:
-        Job dict with filtered ``dag`` and active ``loops``, or ``None``.
-        ``total_goals`` / ``completed_goals`` / ``active_goals`` always reflect
-        the full (pre-filter) DAG so ``mode=active`` still shows job progress.
+        Job dict with filtered `dag` and active `loops`, or `None`.
+        `total_goals` / `completed_goals` / `active_goals` always reflect
+        the full (pre-filter) DAG so `mode=active` still shows job progress.
     """
     counts = dag_goal_counts(dag)
     if include_terminal:

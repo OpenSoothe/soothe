@@ -41,9 +41,9 @@ class ToolApprovalPipeline:
     default-approve. No configuration can override a safety denial.
 
     Stage 2 delegates to nano's `WorkspaceToolOperationSecurity` — the same
-    evaluator used by `SoothePolicyMiddleware` (Layer 1) and the tool
-    execution layer (Layer 3). This ensures one source of truth for safety
-    constants (banned command patterns, dangerous paths/files).
+    evaluator used by `SoothePolicyMiddleware` and the tool execution
+    layer. This ensures one source of truth for safety constants (banned
+    command patterns, dangerous paths/files).
     """
 
     def __init__(
@@ -140,8 +140,8 @@ class ToolApprovalPipeline:
         """Run bypass-immune safety checks via nano's OperationSecurity.
 
         Delegates to `WorkspaceToolOperationSecurity.evaluate()` — the same
-        evaluator used at Layer 1 (SoothePolicyMiddleware) and Layer 3 (tool
-        execution). Returns reason if denied, else None.
+        evaluator used at the policy middleware and tool execution layers.
+        Returns reason if denied, else None.
         """
         from soothe_nano.security.operation_guard import (
             WorkspaceToolOperationSecurity,

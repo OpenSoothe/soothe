@@ -36,7 +36,7 @@ def _entry_content_text(entry: dict[str, Any]) -> str:
 
 
 def _build_cancelled_digest(ledger: list[dict[str, Any]], *, reason: str) -> str:
-    """Build the ``goal_interrupted`` AI body from the persisted ledger."""
+    """Build the `goal_interrupted` AI body from the persisted ledger."""
     excerpts: list[str] = []
     seen_prefixes: set[str] = set()
     for entry in reversed(ledger):

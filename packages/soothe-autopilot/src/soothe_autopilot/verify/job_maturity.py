@@ -1,7 +1,7 @@
-"""Job-level maturity assessment (RFC-230).
+"""Job-level maturity assessment.
 
 Host-side (Autopilot + CE): structured LLM judges the job acceptance contract
-against DAG + workspace evidence; latch ``acceptance_met``. StrangeLoop must
+against DAG + workspace evidence; latch `acceptance_met`. StrangeLoop must
 not own job maturity. Domain-agnostic — coding and non-coding workspaces.
 """
 
@@ -74,7 +74,7 @@ class JobMaturitySnapshot:
     probe_summary: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for ``GoalNode.maturity``."""
+        """Serialize for `GoalNode.maturity`."""
         return {
             "assessed_at": self.assessed_at.isoformat(),
             "level": self.level,
@@ -140,7 +140,7 @@ class MaturityCriterionOut(BaseModel):
 
 
 class MaturityAssessmentVerdict(BaseModel):
-    """Structured job-maturity LLM outcome (RFC-630)."""
+    """Structured job-maturity LLM outcome."""
 
     acceptance_met: bool = Field(
         description="True only when the job acceptance contract is satisfied"
@@ -165,7 +165,7 @@ class MaturityAssessmentError(RuntimeError):
 
 
 def maturity_wire_fields(maturity: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Compact maturity fields for job_status / autopilot_top (RFC-230)."""
+    """Compact maturity fields for job_status / autopilot_top."""
     snap = JobMaturitySnapshot.from_dict(maturity)
     if snap is None:
         return None
@@ -189,8 +189,8 @@ def acceptance_contract_brief(
 ) -> str:
     """Build a short acceptance contract blurb for QA / verify goal descriptions.
 
-    Reads the durable job artifact ``jobs/{job_id}/GOAL.md`` only — never a
-    workspace-tree ``GOAL.md`` (IG-742).
+    Reads the durable job artifact `jobs/{job_id}/GOAL.md` only — never a
+    workspace-tree `GOAL.md`.
     """
     from soothe_autopilot.intake import load_job_goal_md
 
@@ -406,8 +406,8 @@ class JobMaturityAssessor:
             children: Optional job descendants for DAG summary.
 
         Returns:
-            Fresh ``JobMaturitySnapshot``. Fail-closed (acceptance_met=false)
-            when the model is missing; raises ``MaturityAssessmentError`` on
+            Fresh `JobMaturitySnapshot`. Fail-closed (acceptance_met=false)
+            when the model is missing; raises `MaturityAssessmentError` on
             LLM invoke failure so callers can log without latching true.
         """
         rules = (verification_rules or "").strip()

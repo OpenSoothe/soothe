@@ -16,68 +16,56 @@ SECRET_KEY_LENGTH = 32
 
 
 def generate_access_key() -> str:
-    """
-    Generate access key with format: AK-{16 chars}.
+    """Generate access key with format: AK-{16 chars}.
 
     Uses secrets.token_urlsafe for cryptographic randomness.
 
     Returns:
-        Access key string (e.g., "AK-x7k2m9p4q1w8")
-
-    format.
+        Access key string (e.g., "AK-x7k2m9p4q1w8").
     """
     random_chars = secrets.token_urlsafe(12)[:ACCESS_KEY_LENGTH]
     return f"{ACCESS_KEY_PREFIX}-{random_chars}"
 
 
 def generate_secret_key() -> str:
-    """
-    Generate secret key with format: SK-{32 chars}.
+    """Generate secret key with format: SK-{32 chars}.
 
     Uses secrets.token_urlsafe for cryptographic randomness.
 
     Returns:
-        Secret key string (e.g., "SK-a1b2c3d4e5f6g7h8...")
-
-    format.
+        Secret key string (e.g., "SK-a1b2c3d4e5f6g7h8...").
     """
     random_chars = secrets.token_urlsafe(24)[:SECRET_KEY_LENGTH]
     return f"{SECRET_KEY_PREFIX}-{random_chars}"
 
 
 def hash_secret_key(secret_key: str) -> str:
-    """
-    Hash secret key for storage using SHA-256.
+    """Hash secret key for storage using SHA-256.
 
     The plaintext secret_key is never stored in the database.
     Only the SHA-256 hash is stored for verification.
 
     Args:
-        secret_key: Plaintext secret key (SK-{32 chars})
+        secret_key: Plaintext secret key (SK-{32 chars}).
 
     Returns:
-        SHA-256 hex digest string (64 chars)
-
-    Checklist.
+        SHA-256 hex digest string (64 chars).
     """
     return hashlib.sha256(secret_key.encode()).hexdigest()
 
 
 def verify_secret_key(secret_key: str, hash_value: str) -> bool:
-    """
-    Verify secret key against stored hash.
+    """Verify secret key against stored hash.
 
     Uses hmac.compare_digest for constant-time comparison to prevent
     timing attacks. This is critical for security.
 
     Args:
-        secret_key: Plaintext secret key to verify
-        hash_value: Stored SHA-256 hash from database
+        secret_key: Plaintext secret key to verify.
+        hash_value: Stored SHA-256 hash from database.
 
     Returns:
-        True if secret_key matches hash, False otherwise
-
-    Checklist (constant-time comparison).
+        True if secret_key matches hash, False otherwise.
     """
     expected_hash = hash_secret_key(secret_key)
     # hmac.compare_digest provides constant-time comparison
@@ -86,13 +74,12 @@ def verify_secret_key(secret_key: str, hash_value: str) -> bool:
 
 
 def generate_aksk_id() -> str:
-    """
-    Generate AKSK ID (UUID for internal reference).
+    """Generate AKSK ID (UUID for internal reference).
 
     Used for revocation tracking and token association.
 
     Returns:
-        UUID string
+        UUID string.
     """
     import uuid
 
@@ -100,14 +87,13 @@ def generate_aksk_id() -> str:
 
 
 def is_valid_access_key_format(access_key: str) -> bool:
-    """
-    Validate access key format.
+    """Validate access key format.
 
     Args:
-        access_key: Access key to validate
+        access_key: Access key to validate.
 
     Returns:
-        True if format is valid (AK-{16 chars}), False otherwise
+        True if format is valid (AK-{16 chars}), False otherwise.
     """
     if not access_key:
         return False

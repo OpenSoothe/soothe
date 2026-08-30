@@ -40,7 +40,7 @@ _CHECK_RETRY = re.compile(
 
 @dataclass
 class RailEvent:
-    """Normalized rail event (YAML ``event:`` vocabulary)."""
+    """Normalized rail event (YAML `event:` vocabulary)."""
 
     name: str
     job_id: str
@@ -50,6 +50,8 @@ class RailEvent:
 
 @dataclass
 class _NormalizedRule:
+    """Flattened rail rule (flow or explicit) ready for interpreter dispatch."""
+
     rule_id: str
     event: str
     when: Any  # None | str | dict
@@ -62,7 +64,7 @@ class LoopRailInterpreter:
     """Job-scoped rail policy engine.
 
     StrangeLoop must not call this for DAG shape. Autopilot / harness emits
-    ``RailEvent``s after CE mutations; the interpreter alone writes the trace.
+    `RailEvent`s after CE mutations; the interpreter alone writes the trace.
     """
 
     def __init__(
@@ -116,18 +118,18 @@ class LoopRailInterpreter:
         workspace: str | None = None,
         engine_max_parallel_goals: int | None = None,
     ) -> RailDefinition:
-        """Resolve rail YAML, bind job state from optional ``fanout:``, fire-ready.
+        """Resolve rail YAML, bind job state from optional `fanout:`, fire-ready.
 
         Engine concerns (only):
-          - ``engine_max_parallel_goals`` — spawn budget from
-            ``autopilot.max_parallel_goals`` (capacity clamp).
+          - `engine_max_parallel_goals` — spawn budget from
+            `autopilot.max_parallel_goals` (capacity clamp).
 
         LoopRail concerns (from YAML / multi-form WavePlan transfer, never submit kwargs):
-          - When ``fanout:`` is present: ``require_plan``, scout/max_waves.
-            Absent ``fanout:`` → no wave-plan pollution.
-          - WavePlan slices applied into ``RailJobState`` (SoT) from structured
+          - When `fanout:` is present: `require_plan`, scout/max_waves.
+            Absent `fanout:` → no wave-plan pollution.
+          - WavePlan slices applied into `RailJobState` (SoT) from structured
             fields, recommended dumps, wave_plan_path, or completion findings.
-          - flow ``then:`` builtins decide *when* to fan out
+          - flow `then:` builtins decide *when* to fan out
 
         Args:
             job_id: Root goal id.
@@ -521,7 +523,7 @@ class LoopRailInterpreter:
 
 
 def _rule_event(entry: dict[str, Any]) -> str:
-    """Read flow/rule trigger name (canonical ``event``, legacy ``on``)."""
+    """Read flow/rule trigger name (canonical `event`, legacy `on`)."""
     if "event" in entry:
         return str(entry["event"])
     if "on" in entry:

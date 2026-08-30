@@ -59,7 +59,7 @@ def build_default_clarification_policy(
             `tool_approval` actions instead of asking the human
             (`tool_approval.manual_scope: ambiguous_only`).
         degrade_low_confidence: Deprecated alias for
-            ``degrade_to_manual_on_failure``. When set, overrides the new flag.
+            `degrade_to_manual_on_failure`. When set, overrides the new flag.
 
     Raises:
         ValueError: if `mode == "auto"` but `veritas_answer` is not provided.

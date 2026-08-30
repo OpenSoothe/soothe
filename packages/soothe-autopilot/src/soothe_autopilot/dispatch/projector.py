@@ -1,15 +1,15 @@
-"""Project parents' GoalDispatchContextContribution entries into one bundle (RFC-222 revised).
+"""Project parents' GoalDispatchContextContribution entries into one bundle.
 
 The projector is what makes bounded summarization work for arbitrary DAG
 shapes. It reads every parent goal's stored contribution, merges + dedups
-them, and emits a single ``GoalDispatchContextBundle`` capped at the limits
-configured in ``ContextProjectionConfig``.
+them, and emits a single `GoalDispatchContextBundle` capped at the limits
+configured in `ContextProjectionConfig`.
 
-Relevance heuristic (v1, per RFC-222 Q2):
-- Findings: rank by ``relevance_score * recency_weight`` where recency_weight
+Relevance heuristic (v1):
+- Findings: rank by `relevance_score * recency_weight` where recency_weight
   decays the older the parent goal was. Take top-K.
-- Effects: dedup by ``ref``; latest parent wins (IG-712).
-- Plan steps: union, prefer most recent N by parent ``updated_at``.
+- Effects: dedup by `ref`; latest parent wins.
+- Plan steps: union, prefer most recent N by parent `updated_at`.
 - Tool stats: simple counter union.
 
 The projector never mutates the goal store or the goal engine; it only reads.
@@ -44,10 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 class ContextProjector:
-    """Builds a GoalDispatchContextBundle from a goal's parents (RFC-222 revised).
+    """Builds a GoalDispatchContextBundle from a goal's parents.
 
-    Bounded by ``ContextProjectionConfig``. Reads contributions from the
-    injected ``GoalDispatchContextStoreProtocol``; never writes.
+    Bounded by `ContextProjectionConfig`. Reads contributions from the
+    injected `GoalDispatchContextStoreProtocol`; never writes.
 
     Args:
         store: Store of per-goal contributions.
@@ -72,15 +72,15 @@ class ContextProjector:
         Args:
             goal: The goal that is about to be dispatched.
             all_goals: Lookup table {goal_id: GoalNode} used to read parent
-                metadata (recency, status). Pass ``goal_engine._goals``
+                metadata (recency, status). Pass `goal_engine._goals`
                 or any equivalent mapping.
 
         Returns:
-            A bundle merged from ``goal.depends_on`` (hard parents) and
-            ``goal.informs`` (soft parents). Empty bundle when goal has
+            A bundle merged from `goal.depends_on` (hard parents) and
+            `goal.informs` (soft parents). Empty bundle when goal has
             no parents. When direct parents lack contributions but
             transitive ancestors have them, the flat fields are empty
-            but ``preamble_messages`` may still carry ancestor pairs.
+            but `preamble_messages` may still carry ancestor pairs.
         """
         parent_ids = list(goal.depends_on) + list(goal.informs)
         if not parent_ids:
@@ -115,12 +115,12 @@ class ContextProjector:
         goal: GoalNode,
         all_goals: dict[str, GoalNode],
     ) -> str:
-        """Render the ancestor pair transcript as readable text (RFC-222 §Goal-Report-Pair).
+        """Render the ancestor pair transcript as readable text.
 
         Used by the backoff reasoner so its LLM sees the same ancestor
         (user → ai) transcript the executing StrangeLoop worker does — with
         outcome, summary, findings, and effects per ancestor — instead of a
-        flat description-only chain. Returns ``""`` when the goal has no
+        flat description-only chain. Returns `""` when the goal has no
         ancestors with a stored contribution.
         """
         preamble = await self._build_preamble(goal, all_goals, {})
@@ -249,11 +249,11 @@ class ContextProjector:
     ) -> list[GoalReportUserTurn | GoalReportAITurn]:
         """Build the projected ancestor (user, ai) transcript.
 
-        Walks the full transitive ancestor subgraph (``depends_on`` hard +
-        ``informs`` soft, recursively), topologically sorts roots-first, and
+        Walks the full transitive ancestor subgraph (`depends_on` hard +
+        `informs` soft, recursively), topologically sorts roots-first, and
         emits one pair per ancestor with a stored contribution. Bounded by
-        ``MAX_PREAMBLE_TURNS`` (the hard IPC cap also enforced
-        by ``GoalDispatchContextBundle._enforce_bounds``). Returns ``[]`` when
+        `MAX_PREAMBLE_TURNS` (the hard IPC cap also enforced
+        by `GoalDispatchContextBundle._enforce_bounds`). Returns `[]` when
         the goal has no ancestors with a stored contribution.
 
         Args:
@@ -284,12 +284,12 @@ class ContextProjector:
     ) -> list[GoalNode]:
         """Return transitive ancestors in topological order (roots first).
 
-        Walks ``depends_on`` (hard) + ``informs`` (soft) recursively from
-        ``goal``. A ``visited`` set guards against ``informs`` cycles. Ties
-        within a topological level are broken by ``created_at`` ascending
+        Walks `depends_on` (hard) + `informs` (soft) recursively from
+        `goal`. A `visited` set guards against `informs` cycles. Ties
+        within a topological level are broken by `created_at` ascending
         (older first) so the transcript reads chronologically.
 
-        The dispatched ``goal`` itself is excluded; only its ancestors appear.
+        The dispatched `goal` itself is excluded; only its ancestors appear.
         """
         visited: set[str] = set()
         # adjacency: ancestor_id -> set of its ancestors (for topo sort)
@@ -354,11 +354,11 @@ class ContextProjector:
         """Emit one (user, ai) pair per ancestor with a stored contribution.
 
         Skips ancestors with no contribution (e.g. crashed before emitting
-        one) — no empty AI turns. Stops at ``MAX_PREAMBLE_TURNS``
+        one) — no empty AI turns. Stops at `MAX_PREAMBLE_TURNS`
         messages (the hard IPC cap also enforced by
-        ``GoalDispatchContextBundle._enforce_bounds``). When the cap bites
+        `GoalDispatchContextBundle._enforce_bounds`). When the cap bites
         mid-subgraph, logs the drop count (no silent truncation) and keeps the
-        most-recently-completed ancestors by ``updated_at``.
+        most-recently-completed ancestors by `updated_at`.
         """
         # Pair-ify each ancestor, skipping those without a contribution.
         candidate_pairs: list[tuple[GoalNode, GoalDispatchContextContribution]] = []
@@ -409,10 +409,10 @@ def _build_ai_turn(
 ) -> GoalReportAITurn:
     """Build the AI half of a projected ancestor pair.
 
-    Prefers ``GoalNode.report`` — the committed CE goal report (IG-726 SoT),
-    built via ``build_goal_report`` + ``commit_goal_report`` — so the
+    Prefers `GoalNode.report` — the committed CE goal report (the SoT),
+    built via `build_goal_report` + `commit_goal_report` — so the
     preamble mirrors exactly what was judged. Falls back to a minimal report
-    synthesized from the stored contribution when ``report`` is absent
+    synthesized from the stored contribution when `report` is absent
     (defensive: a terminal goal should always have one).
 
     Per-pair caps: 8 findings, 8 effects (tighter than the 40-item report
@@ -460,8 +460,8 @@ def synthesize_sloop_response_from_contribution(
     """Best-effort one-line summary from a contribution (fallback path).
 
     Reuses the finding summaries when present; else a fixed string. The
-    committed ``GoalNode.report`` is the primary path above; this only runs
-    when ``report`` is absent.
+    committed `GoalNode.report` is the primary path above; this only runs
+    when `report` is absent.
     """
     for finding in contribution.findings:
         text = getattr(finding, "summary", None) or str(finding)
@@ -474,7 +474,7 @@ def synthesize_sloop_response_from_contribution(
 def _render_turn_text(turn: GoalReportUserTurn | GoalReportAITurn) -> str:
     """Render a projected pair turn as readable text (for the backoff prompt).
 
-    Mirrors the worker's ``_render_ai_turn_text`` format so the backoff LLM
+    Mirrors the worker's `_render_ai_turn_text` format so the backoff LLM
     sees the same ancestor context the executing worker did.
     """
     if isinstance(turn, GoalReportUserTurn):

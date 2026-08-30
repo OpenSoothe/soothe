@@ -35,7 +35,7 @@ class LoopStateView:
     active_mcp_servers: tuple[str, ...]
     prior_clarifications: tuple[str, ...] = ()
     """Prior Q&A pairs from earlier clarifications in the same goal run.
-    Format: ``"Q: {question}\\nA: {answer} (source={source}, conf={confidence})"``.
+    Format: `"Q: {question}\\nA: {answer} (source={source}, conf={confidence})"`.
     Empty tuple when no prior clarifications exist (first clarification in a goal).
     """
 
@@ -50,8 +50,8 @@ class ClarificationRequest:
     origin_interrupt_id: str
     loop_state: LoopStateView
     metadata: Mapping[str, Any] = field(default_factory=dict)
-    """Origin-specific payload. For ``tool_approval``:
-    ``{"action_requests": [...]}`` so the approval pipeline can inspect tool
+    """Origin-specific payload. For `tool_approval`:
+    `{"action_requests": [...]}` so the approval pipeline can inspect tool
     names and args directly. Empty for other origins."""
 
 
@@ -71,7 +71,7 @@ class ClarificationDeferredError(Exception):
     goal status and terminates the loop until the question is answered
     out-of-band (e.g. by `soothe goal answer ...`).
 
-     attaches a `kind: DeferKind` so operators can distinguish
+    The constructor attaches a `kind: DeferKind` so operators can distinguish
     legitimate "I don't know" defers from forced ones (e.g. the LLM produced
     malformed structured output). The kind is propagated into the
     `LOOP_CLARIFICATION_DEFERRED` event payload.

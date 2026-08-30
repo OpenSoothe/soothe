@@ -129,7 +129,7 @@ class NotifyTargetConfig(BaseModel):
 class NotifyEventsConfig(BaseModel):
     """Which job-root lifecycle intents to emit.
 
-    All events are enabled by default; add a kind string to ``disabled``
+    All events are enabled by default; add a kind string to `disabled`
     to suppress it.
     """
 
@@ -145,7 +145,7 @@ class NotifyEventsConfig(BaseModel):
 
 
 class EmailNotifySinkConfig(BaseModel):
-    """Outbound SMTP settings for ``EmailNotifySink`` (not IMAP chat)."""
+    """Outbound SMTP settings for `EmailNotifySink` (not IMAP chat)."""
 
     enabled: bool = False
     smtp_host: str = ""
@@ -208,7 +208,7 @@ class SlaConfig(BaseModel):
     """SLA monitoring thresholds for overdue gap items.
 
     When enabled, the watchdog tick scans active goals for unresolved gap
-    items that have persisted past these thresholds. Set a tier to ``0``
+    items that have persisted past these thresholds. Set a tier to `0`
     to disable it.
     """
 
@@ -394,7 +394,7 @@ class AutopilotConfig(BaseModel):
         default_factory=list,
         description=(
             "Extra rail ids excluded from auto-pick candidates (still selectable "
-            "via explicit rail_id / --rail). Rails with YAML ``auto_pick: false`` "
+            "via explicit rail_id / --rail). Rails with YAML `auto_pick: false` "
             "are omitted without listing them here."
         ),
     )
@@ -632,7 +632,7 @@ class WorkspaceReservationConfig(BaseModel):
 class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory scratchpad.
 
-    Large entries spill under ``SOOTHE_HOME/data/threads/{thread_id}/working_memory/``.
+    Large entries spill under `SOOTHE_HOME/data/threads/{thread_id}/working_memory/`.
     """
 
     enabled: bool = Field(default=True, description="Enable working memory")
@@ -653,7 +653,7 @@ class LoopWorkingMemoryConfig(BaseModel):
 class PlanPromptLedgerConfig(BaseModel):
     """Caps for ledger copies sent to plan-assess / plan-generate.
 
-    Use ``0`` for unlimited (legacy: full ledger, no copies).
+    Use `0` for unlimited (legacy: full ledger, no copies).
     """
 
     plan_ledger_max_messages: int = Field(
@@ -775,7 +775,7 @@ class LoopCheckpointAsyncConfig(BaseModel):
 class LoopConcurrencyConfig(BaseModel):
     """Loop execution concurrency and scheduling controls.
 
-    Goal fan-out is owned by ``agent.autopilot.max_parallel_goals``.
+    Goal fan-out is owned by `agent.autopilot.max_parallel_goals`.
     """
 
     max_parallel_steps: int = Field(
@@ -805,8 +805,8 @@ class OutputStreamingConfig(BaseModel):
     """Configuration for output streaming behavior.
 
     Controls how goal_completion synthesis and other assistant outputs are
-    delivered from daemon to client. Three delivery modes: ``batch``
-    (single-shot), ``adaptive`` (stream then block-buffer), ``streaming``
+    delivered from daemon to client. Three delivery modes: `batch`
+    (single-shot), `adaptive` (stream then block-buffer), `streaming`
     (raw passthrough).
     """
 
@@ -920,7 +920,7 @@ class ContextEngineConfig(BaseModel):
 
     Always active; replaces PlanManager, LoopWorkingMemory, and
     GoalContextManager as the internal state backend. The persistence
-    backend follows ``persistence.default_backend``.
+    backend follows `persistence.default_backend`.
     """
 
 
@@ -1025,7 +1025,7 @@ class StrangeLoopConfig(BaseModel):
 
     max_subagent_tasks_per_wave: int = Field(
         default=4,
-        description="Max completed subagent ``task`` tool results per Execute wave (0 = no limit)",
+        description="Max completed subagent `task` tool results per Execute wave (0 = no limit)",
         ge=0,
         le=20,
     )
@@ -1033,13 +1033,13 @@ class StrangeLoopConfig(BaseModel):
     general_purpose_subagent: GeneralPurposeSubagentMode = Field(
         default="off",
         description=(
-            "General-purpose subagent mode. ``off`` (default) disables GP for StrangeLoop "
-            "hosts; ``full`` registers a single GP variant with full filesystem access; "
-            "``readonly`` restricts it to read-only tools (ls, read_file, file_info, glob, "
+            "General-purpose subagent mode. `off` (default) disables GP for StrangeLoop "
+            "hosts; `full` registers a single GP variant with full filesystem access; "
+            "`readonly` restricts it to read-only tools (ls, read_file, file_info, glob, "
             "grep) with write-deny permissions (research-only delegation; mutations happen "
-            "via DISPATCH→EXECUTE); ``per_step`` registers both variants and a host "
+            "via DISPATCH→EXECUTE); `per_step` registers both variants and a host "
             "middleware routes full GP on agent-mode steps (incl. Eval) and read-only GP "
-            "on plan/ask steps. Propagated to nano ``agent.runtime.general_purpose_subagent``."
+            "on plan/ask steps. Propagated to nano `agent.runtime.general_purpose_subagent`."
         ),
     )
 
@@ -1176,7 +1176,7 @@ class StrangeLoopConfig(BaseModel):
             "in-place compaction is triggered."
         ),
     )
-    """ : Trigger threshold for context compaction (0.80 = 80%)."""
+    """Trigger threshold for context compaction (0.80 = 80%)."""
 
     output_streaming: OutputStreamingConfig = Field(
         default_factory=OutputStreamingConfig,
@@ -1200,7 +1200,7 @@ class StrangeLoopConfig(BaseModel):
 
     execute_prompt_ledger: ExecutePromptLedgerConfig = Field(
         default_factory=ExecutePromptLedgerConfig,
-        description="Execute-step CoreAgent ledger projection ",
+        description="Execute-step CoreAgent ledger projection",
     )
 
     checkpoint: LoopCheckpointConfig = Field(
@@ -1266,7 +1266,7 @@ class VeritasFallbackConfig(BaseModel):
     """Stage 4: veritas LLM fallback for ambiguous tool approvals.
 
     Disabled by default. When no rule matches, the interrupt defers to the
-    human relay (manual mode) or raises ``ClarificationDeferredError`` (auto).
+    human relay (manual mode) or raises `ClarificationDeferredError` (auto).
     """
 
     enabled: bool = False
@@ -1275,18 +1275,18 @@ class VeritasFallbackConfig(BaseModel):
 
 
 def _default_deny_rules() -> list[ToolApprovalRule]:
-    """Default deny rules — belt-and-suspenders for the ``when`` predicates.
+    """Default deny rules — belt-and-suspenders for the `when` predicates.
 
-    The ``interrupt_on`` ``when`` predicates in
+    The `interrupt_on` `when` predicates in
     :mod:`soothe.sloop.clarification.interrupt_rules` already prevent
     dangerous operations from reaching execution without an interrupt.
     These deny rules provide a second layer: if an interrupt fires and
     reaches the pipeline, these patterns are auto-rejected without user
     input. Stage 2 safety checks (nano's
-    ``WorkspaceToolOperationSecurity``) add a third layer.
+    `WorkspaceToolOperationSecurity`) add a third layer.
 
     Only operations that are high-risk AND not already caught by the
-    ``when`` predicates or safety checks belong here.
+    `when` predicates or safety checks belong here.
     """
     return [
         # --- Privilege escalation (sudo is caught by safety; su/doas are not) ---
@@ -1348,8 +1348,8 @@ class ToolApprovalConfig(BaseModel):
     """Which tool actions reach the human in manual clarification mode.
 
     Deny/safety stages always auto-reject dangerous actions in any mode.
-    ``all`` (default) asks the human for every remaining tool action;
-    ``ambiguous_only`` also auto-approves allow-rule matches, so only
+    `all` (default) asks the human for every remaining tool action;
+    `ambiguous_only` also auto-approves allow-rule matches, so only
     rule-unresolved actions reach the human.
     """
     deny_rules: list[ToolApprovalRule] = Field(default_factory=_default_deny_rules)
@@ -1358,7 +1358,7 @@ class ToolApprovalConfig(BaseModel):
 
 
 class ClarificationConfig(BaseModel):
-    """: configuration for the clarification relay.
+    """Configuration for the clarification relay.
 
     Only structured `ask_user` LangGraph interrupts are detected. Plain-text
     questions in assistant messages are NOT treated as clarifications —
@@ -1366,7 +1366,7 @@ class ClarificationConfig(BaseModel):
     """
 
     auto_min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
-    """Below this confidence, ``AutoClarificationPolicy`` treats the result as a
+    """Below this confidence, `AutoClarificationPolicy` treats the result as a
     failure and applies the fallback path (TUI: degrade to manual; autopilot:
     retry)."""
 
@@ -1375,23 +1375,23 @@ class ClarificationConfig(BaseModel):
     (low confidence, structured output failure, answer-was-question, explicit
     defer) to the interactive TUI relay (auto→manual upgrade) instead of a hard
     defer. The user sees an ask widget and can answer manually. Ignored for
-    autopilot (headless) runs — see ``autopilot_retry_on_fail``."""
+    autopilot (headless) runs — see `autopilot_retry_on_fail`."""
 
     autopilot_retry_on_fail: bool = True
     """When True and no human is attached (autopilot), veritas failures return a
     synthetic retry answer instead of parking the goal. The sentinel
-    ``"(retry)"`` is fed back to the CoreAgent as the tool result, prompting
+    `"(retry)"` is fed back to the CoreAgent as the tool result, prompting
     the LLM to try a different action. When False, veritas failures hard-defer
-    (legacy behavior — the goal parks in ``awaiting_clarification`` status)."""
+    (legacy behavior — the goal parks in `awaiting_clarification` status)."""
 
     default_mode: Literal["auto", "manual"] = "auto"
-    """Mode used when a request payload does not specify ``clarification_mode``.
+    """Mode used when a request payload does not specify `clarification_mode`.
 
-    ``auto`` (default) routes tool-approval through the deny-list pipeline:
+    `auto` (default) routes tool-approval through the deny-list pipeline:
     deny → safety → default-approve. Only actions matching a deny rule or
-    failing a safety check are blocked. ``manual`` routes all tool actions
+    failing a safety check are blocked. `manual` routes all tool actions
     through the TUI relay (interactive policy). Autopilot always forces
-    ``auto`` regardless of this setting.
+    `auto` regardless of this setting.
     """
 
     force_manual_origins: list[
@@ -1405,11 +1405,11 @@ class ClarificationConfig(BaseModel):
         default_factory=lambda: list(DEFAULT_FORCE_MANUAL_ORIGINS),
         description=(
             "Clarification origins that never use veritas auto-answer, even when "
-            "``default_mode`` / wire ``clarification_mode`` is ``auto``. "
+            "`default_mode` / wire `clarification_mode` is `auto`. "
             "With a human attached, the interactive TUI relay is used; otherwise "
-            "the loop defers. Default is ``plan_mode_review`` only — ``tool_approval`` "
+            "the loop defers. Default is `plan_mode_review` only — `tool_approval` "
             "is evaluated by the multi-stage pipeline (§9b) in auto mode so safe "
-            "tool calls auto-approve without an LLM. Re-add ``tool_approval`` to "
+            "tool calls auto-approve without an LLM. Re-add `tool_approval` to "
             "route every non-rejected tool action through a human — deny/safety "
             "stages still auto-reject dangerous actions."
         ),
@@ -1423,25 +1423,25 @@ class ClarificationConfig(BaseModel):
 
 
 class VeritasConfig(BaseModel):
-    """: configuration for the veritas auto-answerer subagent."""
+    """Configuration for the veritas auto-answerer subagent."""
 
     model_role: Literal["default", "fast", "think", "image", "ocr", "embedding"] = "think"
-    """Which ``ModelRole`` to use for veritas calls; defaults to ``think``."""
+    """Which `ModelRole` to use for veritas calls; defaults to `think`."""
 
     max_context_steps: int = Field(default=8, ge=0)
     """How many recent step outputs to include in the veritas user prompt."""
 
     max_retries: int = Field(default=2, ge=0)
     """Max retry attempts for transient infrastructure failures (rate limit,
-    timeout, connection error). ``StructuredOutputError`` (model output
-    malformed) still defers immediately. Set to ``0`` to disable retries."""
+    timeout, connection error). `StructuredOutputError` (model output
+    malformed) still defers immediately. Set to `0` to disable retries."""
 
     retry_backoff_seconds: float = Field(default=2.0, ge=0.0)
-    """Base backoff for exponential retry (``backoff * 2**attempt``)."""
+    """Base backoff for exponential retry (`backoff * 2**attempt`)."""
 
     coerced_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
     """Confidence value assigned when the model returns answers but omits
-    ``confidence``."""
+    `confidence`."""
 
 
 class SkillifyConfig(BaseModel):

@@ -1,6 +1,6 @@
-"""Named Autopilot LLM system role strings (IG-736).
+"""Named Autopilot LLM system role strings.
 
-Short role prefixes only — rubrics live in ``fragments/``.
+Short role prefixes only — rubrics live in `fragments/`.
 """
 
 from __future__ import annotations

@@ -1,13 +1,13 @@
 """Build worker contribution / wire response from a completed PlanResult.
 
-Lives under ``dispatch`` (wire contribution packing), not ``verify``
+Lives under `dispatch` (wire contribution packing), not `verify`
 (judgment). StrangeLoop Plan-Execute-Eval owns goal-done judgment; autopilot
 consensus compares goal text to the wire response synthesized here — not
-host workspace probes (IG-710 / RFC-204).
+host workspace probes.
 
-Side-effect claims (``GoalEffect``) are emitted by StrangeLoop assess and
+Side-effect claims (`GoalEffect`) are emitted by StrangeLoop assess and
 copied by the worker — this module does not infer effects from prose or the
-filesystem (IG-712).
+filesystem.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 
 
 def decision_step_actions(decision: Any | None) -> list[Any]:
-    """Return plan step actions from an ``AgentDecision``-like object."""
+    """Return plan step actions from an `AgentDecision`-like object."""
     if decision is None:
         return []
     steps = getattr(decision, "steps", None)
@@ -28,7 +28,7 @@ def decision_step_actions(decision: Any | None) -> list[Any]:
 def synthesize_sloop_response(plan_result: Any | None) -> str:
     """Derive the StrangeLoop response string for the consensus wire field.
 
-    Prefer explicit ``evidence_summary``, then user-visible ``full_output``,
+    Prefer explicit `evidence_summary`, then user-visible `full_output`,
     then completed decision step descriptions. Never uses the goal text.
 
     The autopilot wire does not clip length here — consensus already takes the

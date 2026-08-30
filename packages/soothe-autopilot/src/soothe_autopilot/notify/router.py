@@ -1,4 +1,4 @@
-"""Host NotificationRouter — job-root intents to injected dispatcher (IG-713)."""
+"""Host NotificationRouter — job-root intents to injected dispatcher."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _severity_for(
     Escalation signals (job is *drifting* away from a healthy outcome):
     - Completed job with failed/active children → warning (drift from
       a clean completion; the job nominally finished but left churn).
-    - Maturity ``blockers`` present → warning (acceptance not met).
+    - Maturity `blockers` present → warning (acceptance not met).
     - Suspended timeout with very long age (≥ 2× threshold) → error.
     """
     if kind == "job.failed":
@@ -145,7 +145,7 @@ def _body_for(
 class NotificationRouter:
     """Filter job-root lifecycle changes into NotifyIntent and dispatch.
 
-    The daemon injects ``dispatch_fn`` (NotifyDispatcher.dispatch). When unset,
+    The daemon injects `dispatch_fn` (NotifyDispatcher.dispatch). When unset,
     intents are logged and dropped (tests / host-only mode).
     """
 
@@ -270,7 +270,7 @@ class NotificationRouter:
         now: datetime | None = None,
         progress_by_job: dict[str, dict[str, Any] | None] | None = None,
     ) -> list[NotifyIntent]:
-        """Emit suspended_timeout for roots past ``suspend_after_seconds``."""
+        """Emit suspended_timeout for roots past `suspend_after_seconds`."""
         if not self._config.enabled or not self._event_enabled("job.suspended_timeout"):
             return []
         threshold = float(self._config.suspend_after_seconds)
@@ -302,7 +302,7 @@ class NotificationRouter:
         *,
         goal: GoalNode | None = None,
     ) -> NotifyIntent | None:
-        """Build, dedup, and dispatch an ``sla.overdue`` escalation intent.
+        """Build, dedup, and dispatch an `sla.overdue` escalation intent.
 
         Args:
             breach: The SLA breach detected by the monitor.

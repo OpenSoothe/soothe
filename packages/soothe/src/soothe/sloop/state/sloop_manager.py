@@ -231,7 +231,7 @@ class StrangeLoopStateManager:
         """Create new loop for thread.
 
         Phase 2: Database schema initialized lazily by writer connection.
-        : Initialize with schema_version 5.0 and execution_checkpoint.
+        Initializes with schema_version 5.0 and execution_checkpoint.
 
         Args:
             thread_id: First thread for this loop
@@ -547,7 +547,7 @@ class StrangeLoopStateManager:
 
         Phase 2: Use single writer connection for SQLite consistency.
         PostgreSQL uses connection pool for async operations.
-        : Fire-and-forget async writes with periodic flush.
+        Fire-and-forget async writes with periodic flush.
 
         Args:
             checkpoint: Checkpoint to persist.
@@ -617,7 +617,7 @@ class StrangeLoopStateManager:
     ) -> None:
         """Perform actual checkpoint write (called by worker or sync fallback).
 
-        : Extracted backend write logic for reuse.
+        Extracted backend write logic for reuse.
         """
         async with self._checkpoint_write_lock:
             hot_cold = self._backend_type == "postgresql"
@@ -635,7 +635,7 @@ class StrangeLoopStateManager:
     async def force_flush(self, *, timeout: float | None = None) -> None:
         """Force immediate checkpoint write (for critical operations).
 
-        : Used by finalize_loop, archive_and_finalize, close.
+        Used by finalize_loop, archive_and_finalize, close.
         """
         timeout = self._durable_flush_timeout if timeout is None else timeout
         if not self._last_save_checkpoint:
@@ -702,7 +702,7 @@ class StrangeLoopStateManager:
         Also preserves daemon-managed fields: client_workspace, detached_at,
         created_at, schema_version.
 
-        : Includes execution_checkpoint field for schema 5.0.
+        Includes the `execution_checkpoint` field for schema 5.0.
         """
         # Serialize complex structures to JSON strings
         thread_ids_json = json.dumps(checkpoint.thread_ids, ensure_ascii=False)
@@ -978,7 +978,7 @@ class StrangeLoopStateManager:
     ) -> None:
         """Update goal record after each iteration.
 
-         : Ledger already contains Plan and Execute turns.
+        Ledger already contains Plan and Execute turns.
         This method only updates metrics and working memory.
 
         Args:
@@ -1271,7 +1271,7 @@ class StrangeLoopStateManager:
 
         Prevent pool exhaustion in concurrent execution.
         Shared pools are closed at daemon level, not per-StrangeLoop.
-        : Force final checkpoint flush before closing.
+        Forces final checkpoint flush before closing.
 
         Must be called after StrangeLoop completes to release database connections.
         For shared pool mode, only clears references (pool closed at daemon shutdown).

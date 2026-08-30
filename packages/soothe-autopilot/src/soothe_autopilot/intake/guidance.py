@@ -1,6 +1,6 @@
-"""Guidance absorb/collect façade for Autopilot intake (IG-733 / RFC-228).
+"""Guidance absorb/collect façade for Autopilot intake.
 
-Absorbs advisory text into ContextEngine ``guidance_accumulated`` for the next
+Absorbs advisory text into ContextEngine `guidance_accumulated` for the next
 worker dispatch. Does not create or inject goals.
 """
 
@@ -19,6 +19,8 @@ from soothe_autopilot.intake.models import (
 
 
 class _AbsorbCapable(Protocol):
+    """Protocol for CE-like objects that can absorb guidance text."""
+
     async def absorb_guidance(
         self,
         goal_id: str,
@@ -37,14 +39,14 @@ async def absorb_guidance(
     scope: GuidanceScope = "goal",
     source: GuidanceSource = "user",
 ) -> bool:
-    """Absorb guidance into CE for ``goal_id`` (next Autopilot dispatch).
+    """Absorb guidance into CE for `goal_id` (next Autopilot dispatch).
 
     Args:
-        ce: ContextEngine (or test double) with ``absorb_guidance``.
+        ce: ContextEngine (or test double) with `absorb_guidance`.
         goal_id: Target goal or job root id.
         text: Operator / channel guidance text.
-        scope: ``goal`` for one node, ``job`` for root job-wide entries.
-        source: Provenance tag (``user``, ``channel``, or ``system``).
+        scope: `goal` for one node, `job` for root job-wide entries.
+        source: Provenance tag (`user`, `channel`, or `system`).
 
     Returns:
         True when absorbed, False when the goal is missing or text empty.
@@ -69,7 +71,7 @@ async def absorb_user_guidance(
     *,
     scope: GuidanceScope = "goal",
 ) -> bool:
-    """Absorb CLI / WS ``job_guidance`` text (source=user)."""
+    """Absorb CLI / WS `job_guidance` text (source=user)."""
     return await absorb_guidance(ce, goal_id, text, scope=scope, source="user")
 
 
@@ -88,7 +90,7 @@ def collect_operator_guidance(
     goal: GoalNode,
     all_goals: dict[str, GoalNode],
 ) -> list[str]:
-    """Collect RFC-228 guidance texts for a goal about to be dispatched.
+    """Collect guidance texts for a goal about to be dispatched.
 
     Includes guidance on the goal itself plus job-scoped entries on the root.
     """

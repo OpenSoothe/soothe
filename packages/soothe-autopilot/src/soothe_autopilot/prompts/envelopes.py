@@ -1,4 +1,4 @@
-"""Shared envelope helpers for Autopilot prompts (IG-736)."""
+"""Shared envelope helpers for Autopilot prompts."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def wrap_untrusted(body: str) -> str:
         body: Condition text, goal summaries, or other untrusted content.
 
     Returns:
-        Body enclosed in ``<untrusted_data>`` markers.
+        Body enclosed in `<untrusted_data>` markers.
     """
     cleaned = body if body.endswith("\n") else f"{body}\n"
     return f"{UNTRUSTED_OPEN}\n{cleaned}{UNTRUSTED_CLOSE}"

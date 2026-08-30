@@ -32,7 +32,7 @@ class GraphPromptWrapper:
     Assembles `[SystemMessage, projected_ledger, HumanMessage]` (or the
     step-completion triple) so nodes share projection and wiring.
 
-    Usage::
+    Usage:
 
         wrapper = GraphPromptWrapper(config)
         messages = wrapper.build_synthesis_messages(
@@ -72,7 +72,7 @@ class GraphPromptWrapper:
                 call-site compatibility.
 
         Returns:
-            :class:`ProjectionResult` with projected messages and completion flag.
+            `ProjectionResult` with projected messages and completion flag.
         """
         _ = soothe_config
         cfg = ledger_cfg

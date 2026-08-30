@@ -1,4 +1,4 @@
-"""AutopilotMonitor — proactive DAG monitoring (RFC-625)."""
+"""AutopilotMonitor — proactive DAG monitoring."""
 
 from __future__ import annotations
 

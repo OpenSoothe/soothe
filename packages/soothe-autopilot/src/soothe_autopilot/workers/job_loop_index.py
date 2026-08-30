@@ -1,8 +1,8 @@
 """Durable job ↔ loop membership index.
 
 A job is the root GoalNode id. Each StrangeLoop assignment gets a unique
-``loop_id`` under ``data/loops/{loop_id}/``. This module persists membership
-and history so autopilot can map ``job_id → loops`` across restarts.
+`loop_id` under `data/loops/{loop_id}/`. This module persists membership
+and history so autopilot can map `job_id → loops` across restarts.
 """
 
 from __future__ import annotations
@@ -54,9 +54,9 @@ class JobLoopRecord(BaseModel):
 
 
 class JobLoopIndex:
-    """Persist job↔loop membership via ``AsyncPersistStore``.
+    """Persist job↔loop membership via `AsyncPersistStore`.
 
-    When ``store`` is None, keeps an in-memory map (tests / no durability).
+    When `store` is None, keeps an in-memory map (tests / no durability).
     """
 
     def __init__(self, store: AsyncPersistStore | None = None) -> None:

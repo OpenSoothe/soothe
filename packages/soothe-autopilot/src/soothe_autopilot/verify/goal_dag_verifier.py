@@ -1,4 +1,4 @@
-"""GoalDAGVerifier - DAG verification coordinator (RFC-625 / IG-743).
+"""GoalDAGVerifier - DAG verification coordinator.
 
 Coordinates:
 1. Periodic health verification (LLM when gated on; else structural/heuristic)
@@ -47,8 +47,8 @@ CancelGoalFn = Callable[[str, str], Awaitable[Any]]
 class GoalDAGVerifier:
     """Goal DAG verification and restructuring suggestions.
 
-    Uses DagVerificationReasoner for structured LLM calls when ``use_llm`` is
-    True. Falls back to heuristics when LLM fails or is skipped (IG-743).
+    Uses DagVerificationReasoner for structured LLM calls when `use_llm` is
+    True. Falls back to heuristics when LLM fails or is skipped.
 
     Args:
         ce: ContextEngine instance for goal access.
@@ -68,7 +68,7 @@ class GoalDAGVerifier:
         Args:
             ce: ContextEngine instance
             config: SootheConfig for LLM model access
-            cancel_goal: Optional async ``(goal_id, reason) -> ...`` cascade cancel
+            cancel_goal: Optional async `(goal_id, reason) -> ...` cascade cancel
         """
         self._ce = ce
         self._config = config
@@ -81,11 +81,11 @@ class GoalDAGVerifier:
         self._cancel_goal = cancel_goal
 
     async def verify_dag_health(self, *, use_llm: bool = True) -> DagHealthReport:
-        """Periodic DAG verification (RFC-625 / IG-743).
+        """Periodic DAG verification.
 
-        When ``use_llm`` is True, runs the monitor health LLM (falls back to
+        When `use_llm` is True, runs the monitor health LLM (falls back to
         heuristics on failure). When False, uses heuristics only. Always merges
-        structural deadlock recoveries  into ``suggest_reset``.
+        structural deadlock recoveries into `suggest_reset`.
 
         Args:
             use_llm: Whether to invoke the health LLM for this tick.

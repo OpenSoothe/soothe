@@ -60,7 +60,7 @@ _SLIM_GOAL_RECORD_COLUMNS = frozenset(
 class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     """SQLite backend for StrangeLoop checkpoint persistence.
 
-    / : process-scoped `SqliteStoreRuntime` per database file.
+    Process-scoped `SqliteStoreRuntime` per database file.
     """
 
     def __init__(self, db_path: Path, pool_size: int = 5) -> None:

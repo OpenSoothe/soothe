@@ -537,7 +537,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     ) -> None:
         """Partially update loop metadata fields with retry.
 
-         : `status` is owned by `StrangeLoop` once the loop has any
+        `status` is owned by `StrangeLoop` once the loop has any
         `goal_history`. Status writes from the daemon path (pre-query
         bookkeeping) are silently dropped for established loops to avoid
         clobbering `finalize_goal`'s `"idle"` back to `"running"`,

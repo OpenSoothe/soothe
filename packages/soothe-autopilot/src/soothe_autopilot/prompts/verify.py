@@ -1,4 +1,4 @@
-"""Verify / backoff prompt rendering and DAG format helpers (IG-736)."""
+"""Verify / backoff prompt rendering and DAG format helpers."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""LangChain message-content text extraction helpers (L2)."""
+"""LangChain message-content text extraction helpers."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def join_text_fragments(parts: list[str]) -> str:
 
 
 def extract_text_from_message_content(content: Any) -> str:
-    """Flatten LangChain message ``content`` (str or block list) to plain text."""
+    """Flatten LangChain message `content` (str or block list) to plain text."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):

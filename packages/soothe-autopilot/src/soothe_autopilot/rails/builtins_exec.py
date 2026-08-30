@@ -1,14 +1,14 @@
-"""CE-facing LoopRail builtins + Rail Exec dispatch (RFC-231).
+"""CE-facing LoopRail builtins + Rail Exec dispatch.
 
 Mutates ContextEngine goal DAG. Goal tags / branch metadata are mirrored onto
-``GoalNode.rail_*`` and also kept in ``RailJobState`` for wave counters.
-``tags_by_goal`` falls back to CE ``rail_tags``, hydrates annotations on bind,
-and optionally persists ``rail_state.json`` under the job artifact dir so
+`GoalNode.rail_*` and also kept in `RailJobState` for wave counters.
+`tags_by_goal` falls back to CE `rail_tags`, hydrates annotations on bind,
+and optionally persists `rail_state.json` under the job artifact dir so
 guards survive daemon restart.
 
-``invoke`` prefers YAML ``verbs.<name>.do`` recipes over ``_do_*``.
-Wave fan-out applies a flat WavePlan into ``RailJobState`` (SoT) from
-structured completion fields, recommended dumps, ``wave_plan_path``, or
+`invoke` prefers YAML `verbs.<name>.do` recipes over `_do_*`.
+Wave fan-out applies a flat WavePlan into `RailJobState` (SoT) from
+structured completion fields, recommended dumps, `wave_plan_path`, or
 findings JSON — then mirrors recommended dump paths best-effort.
 """
 
@@ -187,7 +187,7 @@ def _is_git_repo(path: Path) -> bool:
 
 
 class RailBuiltinExecutor:
-    """Execute ``then:`` verbs against ContextEngine + RailJobState."""
+    """Execute `then:` verbs against ContextEngine + RailJobState."""
 
     def __init__(
         self,
@@ -211,7 +211,7 @@ class RailBuiltinExecutor:
     def _global_worktree_recycle_enabled(self) -> bool:
         """Global config override for worktree recycling.
 
-        When ``autopilot.lifecycle_worktree_recycle_enabled`` is False, all
+        When `autopilot.lifecycle_worktree_recycle_enabled` is False, all
         recycling is skipped (forensics retention). Rail-level policy still
         gates per-rail, but the global flag is a hard off-switch.
         """
@@ -226,8 +226,8 @@ class RailBuiltinExecutor:
     async def bind_job(self, state: RailJobState) -> None:
         """Register or replace job state for a root goal id.
 
-        Merges prior in-memory state and on-disk ``rail_state.json``, then
-        hydrates annotations from CE ``GoalNode.rail_*``.
+        Merges prior in-memory state and on-disk `rail_state.json`, then
+        hydrates annotations from CE `GoalNode.rail_*`.
         """
         async with self._lock:
             loaded = self._load_rail_state_unlocked(state.job_id)
@@ -250,7 +250,7 @@ class RailBuiltinExecutor:
             self._persist_rail_state_unlocked(merged)
 
     async def set_acceptance_met(self, job_id: str, *, met: bool) -> None:
-        """Persist job acceptance latch for rail guards (RFC-230)."""
+        """Persist job acceptance latch for rail guards."""
         async with self._lock:
             state = self._jobs.get(job_id)
             if state is None:
@@ -342,7 +342,7 @@ class RailBuiltinExecutor:
 
     @staticmethod
     def _merge_rail_state(base: RailJobState, donor: RailJobState) -> RailJobState:
-        """Prefer ``base`` identity; keep donor annotations / catalog maps."""
+        """Prefer `base` identity; keep donor annotations / catalog maps."""
         annotations = dict(donor.annotations)
         annotations.update(base.annotations)
         spawned = dict(donor.spawned_slices or {})
@@ -507,7 +507,7 @@ class RailBuiltinExecutor:
         )
 
     def _tags_by_goal_unlocked(self, job_id: str) -> dict[str, list[str]]:
-        """Union in-memory annotations with CE ``rail_tags``."""
+        """Union in-memory annotations with CE `rail_tags`."""
         out: dict[str, list[str]] = {}
         state = self._jobs.get(job_id)
         if state is not None:
@@ -534,7 +534,7 @@ class RailBuiltinExecutor:
             return self._tags_by_goal_unlocked(job_id)
 
     async def ensure_trigger_tags(self, job_id: str, goal_id: str) -> list[str]:
-        """Fail-closed repair: hydrate annotation tags from CE ``rail_tags``.
+        """Fail-closed repair: hydrate annotation tags from CE `rail_tags`.
 
         When in-memory annotations lack tags after restart, copy CE tags into
         the annotation map and return the resolved tag list.
@@ -576,12 +576,12 @@ class RailBuiltinExecutor:
         job_id: str,
         trigger_goal_id: str | None = None,
     ) -> BuiltinResult:
-        """Dispatch a catalog verb: prefer YAML ``do:`` recipe, else ``_do_*``.
+        """Dispatch a catalog verb: prefer YAML `do:` recipe, else `_do_*`.
 
-        Rail-id-aware native dispatch (IG-717): when ``state.rail_id`` matches
+        Rail-id-aware native dispatch: when `state.rail_id` matches
         a rail with a native exec module, route specific verbs to that module
-        before the generic ``_do_*`` fallback. Currently only ``autoresearch``
-        has a native ``plan_and_implement`` (research synthesis plan+writer
+        before the generic `_do_*` fallback. Currently only `autoresearch`
+        has a native `plan_and_implement` (research synthesis plan+writer
         instead of code planning+implementation).
         """
         try:
@@ -639,7 +639,7 @@ class RailBuiltinExecutor:
         """Whether plan_milestones should spawn a verify planner for a dump.
 
         Requires transfer evidence (recorded source path or diagnosable dump),
-        not a bare ``wave_slices`` seed. Never short-path after a prior
+        not a bare `wave_slices` seed. Never short-path after a prior
         architecture attempt (retry must spawn a normal planner).
         """
         state = self._jobs.get(job_id)
@@ -1014,8 +1014,8 @@ class RailBuiltinExecutor:
     def _ingest_job_wave_plan(self, state: RailJobState) -> None:
         """Apply WavePlan from multi-form sources into rail state.
 
-        Already-applied ``wave_slices`` win; otherwise diagnose dumps /
-        ``wave_plan_path`` / architecture findings.
+        Already-applied `wave_slices` win; otherwise diagnose dumps /
+        `wave_plan_path` / architecture findings.
         """
         if state.wave_slices:
             return
@@ -1093,7 +1093,7 @@ class RailBuiltinExecutor:
         return ready
 
     def has_ready_unspawned_slices(self, job_id: str) -> bool:
-        """Structural helper for ``slices_ready_to_spawn`` guards."""
+        """Structural helper for `slices_ready_to_spawn` guards."""
         state = self._jobs.get(job_id)
         if state is None:
             return False
@@ -1104,7 +1104,7 @@ class RailBuiltinExecutor:
     async def _do_spawn_wave_makers(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Spawn-ready makers for unspawned catalog slices (streaming; IG-732)."""
+        """Spawn-ready makers for unspawned catalog slices (streaming)."""
         del trigger_goal_id
         state = await self._require(job_id)
         self._ingest_job_wave_plan(state)
@@ -1272,7 +1272,7 @@ class RailBuiltinExecutor:
     ) -> BuiltinResult:
         """Spawn an agent integrate goal (custom rails only).
 
-        Shipped greenfield/migration use host ``merge_branches`` instead.
+        Shipped greenfield/migration use host `merge_branches` instead.
         """
         state = await self._require(job_id)
         makers = [
@@ -1750,7 +1750,7 @@ class RailBuiltinExecutor:
         return out
 
     def resolve_inflight_for_maker(self, job_id: str, maker_id: str) -> str | None:
-        """Return pending/active resolve+merge goal id for ``maker_id``, if any."""
+        """Return pending/active resolve+merge goal id for `maker_id`, if any."""
         state = self._jobs.get(job_id)
         if state is None:
             return None
@@ -2147,7 +2147,7 @@ class RailBuiltinExecutor:
     async def _do_pause_for_user(
         self, *, job_id: str, trigger_goal_id: str | None
     ) -> BuiltinResult:
-        """Human gate: Veritas auto-clarify first; suspend only on defer/deny (IG-737)."""
+        """Human gate: Veritas auto-clarify first; suspend only on defer/deny."""
         state = await self._require(job_id)
         decision = await self._resolve_pause_clarify(job_id=job_id, trigger_goal_id=trigger_goal_id)
         state.last_pause_clarify = decision_to_audit(decision)
@@ -2241,5 +2241,5 @@ class RailBuiltinExecutor:
             return state
 
     async def descendant_goals(self, job_id: str) -> list[GoalNode]:
-        """Direct job children + root (same scope as ``_job_descendants``)."""
+        """Direct job children + root (same scope as `_job_descendants`)."""
         return self._job_descendants(job_id)

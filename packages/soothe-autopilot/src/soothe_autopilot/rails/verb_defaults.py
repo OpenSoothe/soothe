@@ -1,11 +1,11 @@
-"""Default catalog-verb goal briefs for Rail Exec (RFC-231 M1/M2).
+"""Default catalog-verb goal briefs for Rail Exec.
 
-Rails override via YAML ``verbs.<name>.brief`` or ``do:`` (M3). Templates may
-include ``{job_id}``; interpolation is literal replace only.
+Rails override via YAML `verbs.<name>.brief` or `do:` (M3). Templates may
+include `{job_id}`; interpolation is literal replace only.
 
 Discipline fragments (TDD, systematic debugging, parallel dispatch,
-``using-git-worktrees``) are appended by helpers so Python builtins and YAML
-``do:`` recipes share one SoT (IG-737).
+`using-git-worktrees`) are appended by helpers so Python builtins and YAML
+`do:` recipes share one SoT.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ QA_VERIFY_DISCIPLINE_BRIEF = (
 
 
 def ensure_waveplan_efficiency_hint(brief: str) -> str:
-    """Append ``WAVEPLAN_EFFICIENCY_HINT`` once (idempotent)."""
+    """Append `WAVEPLAN_EFFICIENCY_HINT` once (idempotent)."""
     text = (brief or "").rstrip()
     if not text:
         return text
@@ -86,7 +86,7 @@ def ensure_waveplan_efficiency_hint(brief: str) -> str:
 
 
 def ensure_parallel_dispatch_hint(brief: str) -> str:
-    """Append ``PARALLEL_DISPATCH_HINT`` once (idempotent)."""
+    """Append `PARALLEL_DISPATCH_HINT` once (idempotent)."""
     text = (brief or "").rstrip()
     if not text:
         return text
@@ -96,7 +96,7 @@ def ensure_parallel_dispatch_hint(brief: str) -> str:
 
 
 def ensure_worktree_skill_brief(brief: str) -> str:
-    """Append ``WORKTREE_SKILL_BRIEF`` once (idempotent)."""
+    """Append `WORKTREE_SKILL_BRIEF` once (idempotent)."""
     text = (brief or "").rstrip()
     if not text:
         return text
@@ -106,7 +106,7 @@ def ensure_worktree_skill_brief(brief: str) -> str:
 
 
 def ensure_tdd_iron_law(brief: str) -> str:
-    """Append ``TDD_IRON_LAW_BRIEF`` once (idempotent)."""
+    """Append `TDD_IRON_LAW_BRIEF` once (idempotent)."""
     text = (brief or "").rstrip()
     if not text:
         return text
@@ -116,7 +116,7 @@ def ensure_tdd_iron_law(brief: str) -> str:
 
 
 def ensure_systematic_debug_maker(brief: str) -> str:
-    """Append ``SYSTEMATIC_DEBUG_MAKER_BRIEF`` once (idempotent)."""
+    """Append `SYSTEMATIC_DEBUG_MAKER_BRIEF` once (idempotent)."""
     text = (brief or "").rstrip()
     if not text:
         return text
@@ -126,7 +126,7 @@ def ensure_systematic_debug_maker(brief: str) -> str:
 
 
 def ensure_qa_verify_discipline(brief: str) -> str:
-    """Append ``QA_VERIFY_DISCIPLINE_BRIEF`` once (idempotent)."""
+    """Append `QA_VERIFY_DISCIPLINE_BRIEF` once (idempotent)."""
     text = (brief or "").rstrip()
     if not text:
         return text
@@ -149,7 +149,7 @@ def apply_planner_waveplan_hints(brief: str) -> str:
 
 
 def scout_explore_brief(*, job_id: str, domain_index: int, domain_hint: str | None = None) -> str:
-    """Default scout brief for ``decompose_parallel`` (systematic debugging)."""
+    """Default scout brief for `decompose_parallel` (systematic debugging)."""
     domain = (domain_hint or "").strip() or f"independent domain {domain_index}"
     return (
         f"Systematic debugging / exploration scout for job {job_id}. "
@@ -170,7 +170,7 @@ def scout_explore_brief(*, job_id: str, domain_index: int, domain_hint: str | No
 
 
 def plan_implementation_brief(*, job_id: str) -> str:
-    """Planner goal brief for ``plan_and_implement``."""
+    """Planner goal brief for `plan_and_implement`."""
     base = (
         f"Plan implementation for job {job_id}. "
         "Use scout findings (informs). Produce a concrete plan with "
@@ -183,7 +183,7 @@ def plan_implementation_brief(*, job_id: str) -> str:
 
 
 def implement_goal_brief(*, job_id: str) -> str:
-    """Maker goal brief for ``plan_and_implement``."""
+    """Maker goal brief for `plan_and_implement`."""
     base = (
         f"Implement for job {job_id} according to the plan goal. "
         "Stay within planned ownership; commit on an isolated branch when "
@@ -201,7 +201,7 @@ def slice_maker_brief(
     job_branch: str,
     retry: bool = False,
 ) -> str:
-    """Maker brief for ``spawn_wave_makers`` / ``retry_maker`` (+ discipline)."""
+    """Maker brief for `spawn_wave_makers` / `retry_maker` (+ discipline)."""
     own = (ownership or "").strip() or f"Implement only the '{slug}' slice ownership."
     label = f"Slice maker [{slug}] retry" if retry else f"Slice maker [{slug}]"
     base = (
@@ -294,7 +294,7 @@ DEFAULT_VERB_ROLES: dict[str, str] = {
 
 
 def interpolate_brief(template: str, *, job_id: str) -> str:
-    """Replace ``{job_id}`` only (no full ``str.format``)."""
+    """Replace `{job_id}` only (no full `str.format`)."""
     return template.replace("{job_id}", job_id)
 
 

@@ -1,18 +1,18 @@
-"""Daemon-owned storage for GoalDispatchContextContribution entries (RFC-222 revised).
+"""Daemon-owned storage for GoalDispatchContextContribution entries.
 
-Stores one ``GoalDispatchContextContribution`` per ``goal_id``. Used by the
-``ContextProjector`` to merge a goal's parents' contributions into a single
-``GoalDispatchContextBundle`` for hydration.
+Stores one `GoalDispatchContextContribution` per `goal_id`. Used by the
+`ContextProjector` to merge a goal's parents' contributions into a single
+`GoalDispatchContextBundle` for hydration.
 
 Production qualities of the in-memory implementation:
 
-- **Concurrency-safe**: an ``asyncio.Lock`` guards every mutation and every
+- **Concurrency-safe**: an `asyncio.Lock` guards every mutation and every
   composite read so that concurrent dispatch tasks observe a consistent view.
 - **Bounded**: an LRU policy evicts the oldest entries (by write timestamp)
-  when ``max_entries`` is exceeded, and time-based eviction removes entries
-  older than ``context_retention_hours``. This keeps daemon memory bounded
+  when `max_entries` is exceeded, and time-based eviction removes entries
+  older than `context_retention_hours`. This keeps daemon memory bounded
   across long-running sessions with many goals.
-- **Closable**: ``close()`` releases the in-memory state so the daemon can
+- **Closable**: `close()` releases the in-memory state so the daemon can
   shut down cleanly.
 """
 
@@ -40,11 +40,11 @@ class GoalDispatchContextStoreProtocol(Protocol):
     """Public interface backends must satisfy."""
 
     async def put(self, goal_id: str, contribution: GoalDispatchContextContribution) -> None:
-        """Store the contribution for ``goal_id`` (overwrites prior entry)."""
+        """Store the contribution for `goal_id` (overwrites prior entry)."""
         ...
 
     async def get(self, goal_id: str) -> GoalDispatchContextContribution | None:
-        """Return the contribution for ``goal_id``, or ``None`` if absent."""
+        """Return the contribution for `goal_id`, or `None` if absent."""
         ...
 
     async def get_many(self, goal_ids: list[str]) -> dict[str, GoalDispatchContextContribution]:
@@ -56,7 +56,7 @@ class GoalDispatchContextStoreProtocol(Protocol):
         ...
 
     async def delete_many(self, goal_ids: list[str]) -> int:
-        """Delete all entries in ``goal_ids``; return the count actually removed."""
+        """Delete all entries in `goal_ids`; return the count actually removed."""
         ...
 
     async def all_goal_ids(self) -> set[str]:
@@ -73,7 +73,7 @@ class InMemoryGoalDispatchContextStore:
 
     Suitable for daemon-resident use when no durability backend is configured.
     Not multi-process safe. A durability-backed implementation
-    (``DurabilityGoalDispatchContextStore``) is used when crash recovery
+    (`DurabilityGoalDispatchContextStore`) is used when crash recovery
     requires persistence across restarts.
 
     Args:

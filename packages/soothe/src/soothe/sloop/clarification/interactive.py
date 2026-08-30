@@ -69,7 +69,7 @@ class InteractiveClarificationPolicy:
     async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Re-announce as `mode=manual` then pause (auto→manual upgrade).
 
-                Used when veritas structured output fails and a human is attached
+        Used when veritas structured output fails and a human is attached.
         The earlier `await_clarification` emit used `mode=auto`.
         """
         return await self._answer(request, announce=True)
@@ -113,7 +113,7 @@ class InteractiveClarificationPolicy:
     def _evaluate_tool_approval_pipeline(
         self, request: ClarificationRequest
     ) -> ClarificationAnswer | None:
-        """Run the tool-approval pipeline pre-filter for manual mode (§9b).
+        """Run the tool-approval pipeline pre-filter for manual mode.
 
         Returns a static answer when the pipeline resolves the batch, or
         `None` to fall through to the human interrupt.

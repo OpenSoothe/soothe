@@ -1,4 +1,4 @@
-"""LoopRail guard prompt assembly (IG-736)."""
+"""LoopRail guard prompt assembly."""
 
 from __future__ import annotations
 

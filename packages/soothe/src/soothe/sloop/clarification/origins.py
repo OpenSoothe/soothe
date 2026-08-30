@@ -9,19 +9,19 @@ from soothe.sloop.orchestrator.stations import EXECUTE, PLAN_REVIEW
 # --- Live StrangeLoop / host origins ----------------------------------------
 
 ORIGIN_EXECUTE: Final = EXECUTE
-"""CoreAgent execute-step ``ask_user`` clarification."""
+"""CoreAgent execute-step `ask_user` clarification."""
 
 ORIGIN_PLAN_MODE_REVIEW: Final = "plan_mode_review"
 """Human review gate after plan-mode draft (approve / reject / refine)."""
 
 ORIGIN_RAIL_PAUSE: Final = "rail_pause"
-"""LoopRail ``pause_for_user`` human gate; host-side Veritas only."""
+"""LoopRail `pause_for_user` human gate; host-side Veritas only."""
 
 ORIGIN_TOOL_APPROVAL: Final = "tool_approval"
-"""Deepagents ``HumanInTheLoopMiddleware`` tool-action approval gate.
+"""Deepagents `HumanInTheLoopMiddleware` tool-action approval gate.
 
-The executor captures ``action_requests`` interrupts here instead of
-auto-approving them. The request resumes at ``EXECUTE`` (the step
+The executor captures `action_requests` interrupts here instead of
+auto-approving them. The request resumes at `EXECUTE` (the step
 containing the tool call)."""
 
 ClarificationOrigin = Literal[
@@ -49,15 +49,15 @@ CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
 DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
 """Origins that never use veritas auto-answer, even in auto mode.
 
-``plan_mode_review`` — the plan approve/reject/refine gate is a human call.
+`plan_mode_review` — the plan approve/reject/refine gate is a human call.
 
-``tool_approval`` is intentionally NOT in this list: in auto mode the
-``tool_approval`` origin is resolved by the multi-stage pipeline (§9b) —
+`tool_approval` is intentionally NOT in this list: in auto mode the
+`tool_approval` origin is resolved by the multi-stage pipeline —
 deterministic deny → safety → allow stages handle most tool actions without
 an LLM. Veritas's security-approver prompt (see
-``build_veritas_system_prompt_for_origin``) handles the ambiguous tail.
+`build_veritas_system_prompt_for_origin`) handles the ambiguous tail.
 Operators who want tool actions to require a human can re-add
-``tool_approval`` to ``ClarificationConfig.force_manual_origins`` in config:
+`tool_approval` to `ClarificationConfig.force_manual_origins` in config:
 deny/safety stages still auto-reject dangerous actions (safety property),
 but allow rules and veritas are skipped so every other tool action goes to
 the human relay."""

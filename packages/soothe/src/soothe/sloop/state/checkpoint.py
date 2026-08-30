@@ -80,9 +80,9 @@ class ThreadHealthMetrics(BaseModel):
 class StrangeLoopCheckpoint(BaseModel):
     """Complete StrangeLoop state.
 
-    : Added execution_checkpoint field for schema 5.0.
-    goal_history is now a lightweight index (GoalIndexEntry pattern).
-    Goal/step/ledger state recovered from CE persistence on restart.
+    Includes an `execution_checkpoint` field for schema 5.0. `goal_history`
+    is a lightweight index (GoalIndexEntry pattern); goal/step/ledger state is
+    recovered from CE persistence on restart.
     """
 
     # Identity (RFC-216: loop_id independent of thread)
@@ -198,7 +198,7 @@ _GOAL_INDEX_FIELDS = frozenset(
 
 
 def _strip_enriched_goal_index_fields(item: Any) -> Any:
-    """Drop pre- goal content from `goal_history` rows on load."""
+    """Drop enriched goal content from `goal_history` rows on load."""
     if not isinstance(item, dict):
         return item
     return {k: v for k, v in item.items() if k in _GOAL_INDEX_FIELDS}
@@ -212,11 +212,11 @@ def normalize_checkpoint_data(
     """Fill defaults for partial checkpoint blobs stored by daemon registration.
 
     PostgreSQL `register_loop` / `update_loop_metadata` persist a minimal JSONB
-    document for daemon bookkeeping. `StrangeLoopStateManager.load()` expects a full
-    `StrangeLoopCheckpoint` schema.
+    document for daemon bookkeeping. `StrangeLoopStateManager.load()` expects a
+    full `StrangeLoopCheckpoint` schema.
 
-    : Supports schema 5.0 execution_checkpoint field.
-    Lazy migration: fills defaults for missing execution_checkpoint.
+    Supports schema 5.0 `execution_checkpoint` field with lazy migration:
+    fills defaults for missing `execution_checkpoint`.
     """
     out = dict(data)
     resolved_loop_id = out.get("loop_id") or loop_id

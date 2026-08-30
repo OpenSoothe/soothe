@@ -74,8 +74,8 @@ class PriorStepSummary(BaseModel):
 class GoalEffect(BaseModel):
     """One claimed side-effect of a completed goal — domain-agnostic.
 
-    Opaque to the host: ``ref`` may be a path, URL, ticket id, channel, or
-    ``answer`` for narrative-only work. Emitted via structured assess output.
+    Opaque to the host: `ref` may be a path, URL, ticket id, channel, or
+    `answer` for narrative-only work. Emitted via structured assess output.
     """
 
     kind: GoalEffectKind
@@ -221,7 +221,7 @@ class GoalDispatchContextBundle(BaseModel):
 class GoalDispatchContextContribution(BaseModel):
     """What one goal's execution adds back to the DAG's context pool.
 
-    Emitted by the worker once, just before the terminal ``done`` chunk.
+    Emitted by the worker once, just before the terminal `done` chunk.
     """
 
     model_config = ConfigDict(extra="ignore")

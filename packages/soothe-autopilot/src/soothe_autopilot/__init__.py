@@ -1,11 +1,9 @@
-"""Autopilot — goal lifecycle orchestration and dispatch (RFC-222, RFC-625).
+"""Autopilot — goal lifecycle orchestration and dispatch.
 
-Autopilot manages:
-- Intake (GOAL.md / user / channel guidance → CE; IG-733)
-- Goal DAG orchestration (create, schedule, dependencies)
-- Goal lifecycle (pending, active, completed, failed)
-- Backoff reasoning on failure
-- Dispatch to StrangeLoop workers
+Manages intake (GOAL.md / user / channel guidance → CE), goal DAG
+orchestration (create, schedule, dependencies), goal lifecycle
+(pending, active, completed, failed), backoff reasoning on failure, and
+dispatch to StrangeLoop workers.
 
 ContextEngine (`soothe.context`) is the sole source of truth for goal/step
 state. AutopilotService uses ContextEngine and AutopilotMonitor for

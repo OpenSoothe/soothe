@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_context_engine_persistence(config: SootheConfig, loop_id: str) -> Any:
-    """Return a ContextEngine persistence backend for ``loop_id``."""
+    """Return a ContextEngine persistence backend for `loop_id`."""
     persistence_backend = config.persistence.default_backend
 
     persistence = None

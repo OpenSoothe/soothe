@@ -1,7 +1,7 @@
-"""Durability-backed GoalDispatchContextStore (RFC-222 revised).
+"""Durability-backed GoalDispatchContextStore.
 
-Persists per-goal ``GoalDispatchContextContribution`` entries through
-``AsyncPersistStore`` so parent context survives daemon restarts.
+Persists per-goal `GoalDispatchContextContribution` entries through
+`AsyncPersistStore` so parent context survives daemon restarts.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _KEY_PREFIX = "autopilot:context:"
 
 
 class DurabilityGoalDispatchContextStore:
-    """Persist contributions via ``AsyncPersistStore``.
+    """Persist contributions via `AsyncPersistStore`.
 
     Args:
         store: Async key-value backend (SQLite/PostgreSQL).

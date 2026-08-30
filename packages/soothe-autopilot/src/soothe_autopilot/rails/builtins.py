@@ -1,14 +1,14 @@
 """Rail discovery helpers for built-in and user/project rails.
 
-Precedence (low → high, last wins on duplicate ``id``):
+Precedence (low → high, last wins on duplicate `id`):
 
-1. Package ``soothe/rails/builtin_rails/``
-2. ``$SOOTHE_HOME/rails/`` (typically ``~/.soothe/rails/``)
-3. ``<workspace>/.soothe/rails/`` when a workspace is provided
+1. Package `soothe/rails/builtin_rails/`
+2. `$SOOTHE_HOME/rails/` (typically `~/.soothe/rails/`)
+3. `<workspace>/.soothe/rails/` when a workspace is provided
 
-``BUILTIN_RAIL_IDS`` (the set of shipped builtin rail ids) lives in
-``soothe_autopilot.rails.catalog`` to avoid a circular import (catalog already
-imports ``get_rails_paths`` from here).
+`BUILTIN_RAIL_IDS` (the set of shipped builtin rail ids) lives in
+`soothe_autopilot.rails.catalog` to avoid a circular import (catalog already
+imports `get_rails_paths` from here).
 """
 
 from __future__ import annotations
@@ -19,21 +19,21 @@ _BUILTIN_RAILS_DIR_NAME = "builtin_rails"
 
 
 def get_builtin_rails_dir() -> Path:
-    """Return the package-bundled ``builtin_rails/`` directory."""
+    """Return the package-bundled `builtin_rails/` directory."""
     return Path(__file__).resolve().parent / _BUILTIN_RAILS_DIR_NAME
 
 
 def get_rails_paths(workspace: str | None = None) -> list[Path]:
     """Return rail directories in precedence order (low → high).
 
-    Missing directories are omitted. Drafts under ``drafts/`` are not roots;
-    only the parent ``rails/`` directories are returned for catalog loading.
+    Missing directories are omitted. Drafts under `drafts/` are not roots;
+    only the parent `rails/` directories are returned for catalog loading.
 
     Args:
         workspace: Optional workspace directory for project-local rails.
 
     Returns:
-        ``[builtin_rails/, $SOOTHE_HOME/rails/, <workspace>/.soothe/rails/]``
+        `[builtin_rails/, $SOOTHE_HOME/rails/, <workspace>/.soothe/rails/]`
         (only existing dirs).
     """
     from soothe.config import SOOTHE_HOME

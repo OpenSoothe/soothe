@@ -1,4 +1,4 @@
-"""Bounded CE DAG ops from report-commit judgment (IG-726 / RFC-204 §1.3).
+"""Bounded CE DAG ops from report-commit judgment.
 
 Allowed: wire/unwire depends_on, set priority, update pending briefs.
 spawn/cancel require an explicit allowlist (empty by default — LoopRail owns

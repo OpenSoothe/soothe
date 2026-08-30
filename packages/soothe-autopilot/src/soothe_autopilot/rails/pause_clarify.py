@@ -1,8 +1,8 @@
-"""Veritas auto-clarification for LoopRail ``pause_for_user`` (IG-737).
+"""Veritas auto-clarification for LoopRail `pause_for_user`.
 
 Host-side only: synthesizes a PROCEED/PAUSE gate question, runs the same
 auto clarification policy autopilot workers use, and maps the answer to a
-rail decision without entering StrangeLoop ``await_clarification``.
+rail decision without entering StrangeLoop `await_clarification`.
 """
 
 from __future__ import annotations
@@ -121,11 +121,11 @@ async def run_rail_pause_clarify(
     trigger: GoalNode | None,
     trigger_tags: list[str] | None = None,
 ) -> PauseClarifyDecision:
-    """Run Veritas auto-clarification for ``pause_for_user``.
+    """Run Veritas auto-clarification for `pause_for_user`.
 
     Returns:
-        Decision with outcome ``proceed``, ``deny``, or ``defer``. Policy
-        deferrals and unexpected errors map to ``defer`` (caller suspends).
+        Decision with outcome `proceed`, `deny`, or `defer`. Policy
+        deferrals and unexpected errors map to `defer` (caller suspends).
     """
     tags = list(trigger_tags or [])
     if trigger is not None and not tags:
@@ -193,7 +193,7 @@ async def run_rail_pause_clarify(
 
 
 def decision_to_audit(decision: PauseClarifyDecision) -> dict[str, Any]:
-    """JSON-serializable audit blob for ``rail_state.json``."""
+    """JSON-serializable audit blob for `rail_state.json`."""
     return {
         "outcome": decision.outcome,
         "confidence": decision.confidence,

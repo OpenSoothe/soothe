@@ -1,4 +1,4 @@
-"""Job lifecycle notify (IG-713) — host intents and router."""
+"""Job lifecycle notify — host intents and router."""
 
 from soothe_autopilot.notify.models import (
     DeliveryResult,

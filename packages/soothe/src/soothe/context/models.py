@@ -406,7 +406,7 @@ class GoalNode(BaseModel):
         default_factory=list,
         description=(
             "Legacy append-only evidence ids (schema retained for persistence). "
-            "Autopilot judgment SoT is ``report`` / ``report_revision``."
+            "Autopilot judgment SoT is `report` / `report_revision`."
         ),
     )
 

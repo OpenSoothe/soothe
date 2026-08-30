@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class InternalEventBus:
-    """In-memory async event dispatch for AL ↔ GE ↔ AP coordination."""
+    """In-memory async event dispatch for StrangeLoop, ContextEngine, and AutopilotService coordination."""
 
     def __init__(self) -> None:
         """Initialize the internal event bus."""

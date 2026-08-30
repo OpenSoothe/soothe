@@ -1,14 +1,14 @@
-"""Conditional ``interrupt_on`` predicates for the HITL middleware.
+"""Conditional `interrupt_on` predicates for the HITL middleware.
 
-Each predicate returns ``True`` when the tool call is dangerous enough to
-warrant a human-facing interrupt, and ``False`` when it is safe to execute
+Each predicate returns `True` when the tool call is dangerous enough to
+warrant a human-facing interrupt, and `False` when it is safe to execute
 silently. This keeps safe in-workspace edits and routine commands off the
 clarification queue entirely — only genuinely dangerous operations
 (out-of-workspace writes, destructive commands) trigger the interrupt.
 
 The predicates are intentionally conservative: when the workspace root or
-command cannot be inspected, they return ``True`` (fail-safe — interrupt).
-The nano security evaluator (``WorkspaceToolOperationSecurity``) and the
+command cannot be inspected, they return `True` (fail-safe — interrupt).
+The nano security evaluator (`WorkspaceToolOperationSecurity`) and the
 deny-rule pipeline still run as belt-and-suspenders regardless of these
 predicates.
 """
@@ -105,7 +105,7 @@ def _workspace_from_config(config: dict[str, Any] | None) -> str | None:
 
 
 def _is_path_outside_workspace(path_str: str, workspace: str) -> bool:
-    """True when ``path_str`` resolves outside the workspace root."""
+    """True when `path_str` resolves outside the workspace root."""
     # Check for dangerous dotfiles by name against the raw path so symlinks
     # (e.g. macOS /home → /System/Volumes/Data/home) don't false-positive.
     raw_path = path_str.strip()
@@ -130,9 +130,9 @@ def _should_interrupt_path_tool(
     *,
     arg_keys: tuple[str, ...] = ("file_path", "path", "directory"),
 ) -> bool:
-    """Predicate for ``edit_file`` / ``write_file`` / ``delete``.
+    """Predicate for `edit_file` / `write_file` / `delete`.
 
-    Returns ``True`` (interrupt) when the target path is outside the
+    Returns `True` (interrupt) when the target path is outside the
     workspace or targets a dangerous dotfile/config. In-workspace
     writes are safe and do not interrupt.
     """
@@ -151,9 +151,9 @@ def _should_interrupt_path_tool(
 
 
 def _should_interrupt_run_command(req: ToolCallRequest) -> bool:
-    """Predicate for ``run_command``.
+    """Predicate for `run_command`.
 
-    Returns ``True`` (interrupt) when the command matches a dangerous
+    Returns `True` (interrupt) when the command matches a dangerous
     pattern (privilege escalation, destructive ops, system package
     installs, force-push, etc.) or writes to a system path. Safe routine
     commands do not interrupt.

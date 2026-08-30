@@ -1,6 +1,6 @@
-"""Rail Exec L0 recipe runner (RFC-231 M3 / IG-717).
+"""Rail Exec L0 recipe runner.
 
-Runs catalog verb ``do:`` lists as closed CE primitives. Unknown ops are
+Runs catalog verb `do:` lists as closed CE primitives. Unknown ops are
 rejected at catalog load time; this module assumes validated steps.
 """
 
@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _RecipeCtx:
+    """Per-recipe execution context: job id, rail state, and step tracking."""
+
     job_id: str
     trigger_goal_id: str | None
     state: RailJobState
@@ -38,7 +40,7 @@ class _RecipeCtx:
 
 
 def interpolate_recipe_text(template: str, ctx: _RecipeCtx) -> str:
-    """Replace ``{key}`` / ``${key}`` for job counters and ``{job_id}``."""
+    """Replace `{key}` / `${key}` for job counters and `{job_id}`."""
     text = interpolate_brief(template, job_id=ctx.job_id)
     replacements = {
         "feedback_round": str(ctx.state.feedback_round),
@@ -82,7 +84,7 @@ def _resolve_ref_list(refs: Any, ctx: _RecipeCtx) -> list[str]:
 
 
 class RecipeRunner:
-    """Execute a validated ``do:`` list against ``RailBuiltinExecutor`` helpers."""
+    """Execute a validated `do:` list against `RailBuiltinExecutor` helpers."""
 
     def __init__(self, executor: RailBuiltinExecutor) -> None:
         self._ex = executor

@@ -2,8 +2,8 @@
 
 Memory backend for tests; JSONL file backend for SQLite-mode jobs.
 
-Job artifacts live under ``data/jobs/{job_id}/`` (distinct from StrangeLoop
-assignment dirs under ``data/loops/autopilot__{job_id}__{uuid}/``).
+Job artifacts live under `data/jobs/{job_id}/` (distinct from StrangeLoop
+assignment dirs under `data/loops/autopilot__{job_id}__{uuid}/`).
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 def _sanitize_job_id(job_id: str) -> str:
     """Reject job_ids containing path separators or traversal sequences.
 
-    Prevents path traversal via ``JsonlRailTraceStore._path()`` when
-    a caller passes an unsanitized ``job_id`` containing ``../`` or
-    ``/`` / ``\\`` characters.
+    Prevents path traversal via `JsonlRailTraceStore._path()` when
+    a caller passes an unsanitized `job_id` containing `../` or
+    `/` / `\\` characters.
     """
     if not job_id or not job_id.strip():
         raise ValueError("job_id must be a non-empty string")
@@ -35,7 +35,7 @@ def _sanitize_job_id(job_id: str) -> str:
 
 @dataclass
 class GuardResult:
-    """Structured guard evaluation outcome (RFC-630)."""
+    """Structured guard evaluation outcome."""
 
     matched: bool
     confidence: float = 1.0
@@ -91,11 +91,11 @@ class MemoryRailTraceStore:
 
 @dataclass
 class JsonlRailTraceStore:
-    """Append-only JSONL under ``root/{job_id}/rail_trace.jsonl``.
+    """Append-only JSONL under `root/{job_id}/rail_trace.jsonl`.
 
     Args:
-        root: Job artifact root (typically ``$SOOTHE_DATA_DIR/jobs``).
-        legacy_root: Optional prior root (``…/loops``) for one-shot migrate.
+        root: Job artifact root (typically `$SOOTHE_DATA_DIR/jobs`).
+        legacy_root: Optional prior root (`…/loops`) for one-shot migrate.
     """
 
     root: Path
@@ -112,7 +112,7 @@ class JsonlRailTraceStore:
         return self.legacy_root / job_id / "rail_trace.jsonl"
 
     def _ensure_migrated(self, job_id: str) -> Path:
-        """Return job path, copying from legacy ``loops/{job_id}/`` once if needed."""
+        """Return job path, copying from legacy `loops/{job_id}/` once if needed."""
         path = self._path(job_id)
         if path.is_file():
             return path

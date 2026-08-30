@@ -1,20 +1,20 @@
-"""Native autoresearch rail execution helpers (RFC-231 / IG-717).
+"""Native autoresearch rail execution helpers.
 
-The ``autoresearch`` rail (``builtin_rails/autoresearch.yml``) uses YAML
-``do:`` recipes for ``decompose_parallel`` and ``spawn_feedback_cycle`` and
-``brief:`` overrides for ``review`` / ``qa_verify``. The generic
-``_do_plan_and_implement`` fallback, however, spawns code-planning +
+The `autoresearch` rail (`builtin_rails/autoresearch.yml`) uses YAML
+`do:` recipes for `decompose_parallel` and `spawn_feedback_cycle` and
+`brief:` overrides for `review` / `qa_verify`. The generic
+`_do_plan_and_implement` fallback, however, spawns code-planning +
 code-implementation goals with TDD / worktree discipline — wrong for research
 synthesis.
 
 This module supplies research-specific brief builders and a native
-``plan_and_implement`` dispatch path so the autoresearch rail synthesizes an
+`plan_and_implement` dispatch path so the autoresearch rail synthesizes an
 adaptive report from gathered evidence instead of writing production code.
 
-Dispatch is rail-id-aware: ``RailBuiltinExecutor.invoke`` routes to
-``AutoresearchExec.plan_and_implement`` only when ``state.rail_id ==
-"autoresearch"``; all other verbs fall through to the generic ``_do_*``
-handlers or YAML ``do:`` recipes.
+Dispatch is rail-id-aware: `RailBuiltinExecutor.invoke` routes to
+`AutoresearchExec.plan_and_implement` only when `state.rail_id ==
+"autoresearch"`; all other verbs fall through to the generic `_do_*`
+handlers or YAML `do:` recipes.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ RESEARCH_SCOPE_BANNER = (
 
 
 def research_plan_brief(*, job_id: str) -> str:
-    """Synthesis plan goal brief for autoresearch ``plan_and_implement``.
+    """Synthesis plan goal brief for autoresearch `plan_and_implement`.
 
     Reviews gathered scout/feedback evidence and produces a concrete report
     outline (sections, key findings per section, source citations). Does not
@@ -69,7 +69,7 @@ def research_plan_brief(*, job_id: str) -> str:
 
 
 def research_synthesis_brief(*, job_id: str) -> str:
-    """Synthesis writer goal brief for autoresearch ``plan_and_implement``.
+    """Synthesis writer goal brief for autoresearch `plan_and_implement`.
 
     Composes the adaptive report from the synthesis plan and gathered
     evidence. Does not re-gather web sources.
@@ -87,9 +87,9 @@ def research_synthesis_brief(*, job_id: str) -> str:
 def research_scout_inform_ids(state: RailJobState, ce: Any) -> list[str]:
     """Collect completed scout/feedback gather goal ids to inform synthesis.
 
-    Includes goals tagged ``research`` + (``scout`` or ``gather``) that are
-    completed. Mirrors the generic ``_do_plan_and_implement`` inform pattern
-    but filtered for research roles rather than ``exploration``.
+    Includes goals tagged `research` + (`scout` or `gather`) that are
+    completed. Mirrors the generic `_do_plan_and_implement` inform pattern
+    but filtered for research roles rather than `exploration`.
     """
     out: list[str] = []
     for gid, ann in state.annotations.items():
@@ -107,11 +107,11 @@ def research_scout_inform_ids(state: RailJobState, ce: Any) -> list[str]:
 class AutoresearchExec:
     """Native autoresearch rail execution helpers.
 
-    Bound to a ``RailBuiltinExecutor`` instance. Dispatched by
-    ``invoke()`` only when ``state.rail_id == AUTORESEARCH_RAIL_ID``.
+    Bound to a `RailBuiltinExecutor` instance. Dispatched by
+    `invoke()` only when `state.rail_id == AUTORESEARCH_RAIL_ID`.
 
-    All methods are async and return ``BuiltinResult`` to match the
-    ``_do_*`` contract. They use the executor's CE and annotation APIs so
+    All methods are async and return `BuiltinResult` to match the
+    `_do_*` contract. They use the executor's CE and annotation APIs so
     state persistence and GoalNode mirroring are identical to generic verbs.
     """
 
@@ -123,7 +123,7 @@ class AutoresearchExec:
     ) -> BuiltinResult:
         """Spawn synthesis plan → synthesis writer goals (research variant).
 
-        Unlike the generic ``_do_plan_and_implement`` (code planning + code
+        Unlike the generic `_do_plan_and_implement` (code planning + code
         implementation with TDD/worktree discipline), this spawns:
           1. A synthesis plan goal (reviews evidence, produces report outline)
           2. A synthesis writer goal (composes the adaptive report)
@@ -186,12 +186,12 @@ class AutoresearchExec:
     async def review(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
         """Native review for autoresearch — synthesis draft review.
 
-        Falls back to the generic ``_do_review`` when the rail YAML provides
-        a ``brief:`` override (it does). This method is only called when
-        ``invoke()`` detects autoresearch and the verb has no ``do:`` recipe
-        — but ``review`` has a ``brief:`` override in the YAML, so the generic
-        ``_do_review`` already resolves the correct brief via
-        ``resolve_verb_brief``. Kept as a hook for future research-specific
+        Falls back to the generic `_do_review` when the rail YAML provides
+        a `brief:` override (it does). This method is only called when
+        `invoke()` detects autoresearch and the verb has no `do:` recipe
+        — but `review` has a `brief:` override in the YAML, so the generic
+        `_do_review` already resolves the correct brief via
+        `resolve_verb_brief`. Kept as a hook for future research-specific
         review logic.
         """
         return await self._ex._do_review(job_id=job_id, trigger_goal_id=trigger_goal_id)
@@ -199,8 +199,8 @@ class AutoresearchExec:
     async def qa_verify(self, *, job_id: str, trigger_goal_id: str | None) -> BuiltinResult:
         """Native QA verify for autoresearch — source/claim verification.
 
-        Like ``review``, the YAML provides a ``brief:`` override so the generic
-        ``_do_qa_verify`` resolves the correct brief. Kept as a hook.
+        Like `review`, the YAML provides a `brief:` override so the generic
+        `_do_qa_verify` resolves the correct brief. Kept as a hook.
         """
         return await self._ex._do_qa_verify(job_id=job_id, trigger_goal_id=trigger_goal_id)
 
@@ -211,10 +211,10 @@ def is_autoresearch_job(state: RailJobState | None) -> bool:
 
 
 def get_autoresearch_exec(executor: RailBuiltinExecutor) -> AutoresearchExec | None:
-    """Return an ``AutoresearchExec`` bound to ``executor`` (lazy, no state).
+    """Return an `AutoresearchExec` bound to `executor` (lazy, no state).
 
-    Returns ``None`` is impossible — the executor always has the required
-    CE and annotation APIs. Caller checks ``is_autoresearch_job`` first.
+    Returns `None` is impossible — the executor always has the required
+    CE and annotation APIs. Caller checks `is_autoresearch_job` first.
     """
     return AutoresearchExec(executor)
 

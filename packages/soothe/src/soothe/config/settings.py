@@ -173,8 +173,8 @@ class SootheConfig(BaseSettings):
     def from_yaml_file(cls, path: str) -> SootheConfig:
         """Load nano-owned agent configuration from a single YAML file.
 
-        Host-owned keys are rejected — use ``from_split_yaml_files`` for those.
-        Environment variable placeholders (``${ENV_VAR}``) are expanded
+        Host-owned keys are rejected — use `from_split_yaml_files` for those.
+        Environment variable placeholders (`${ENV_VAR}`) are expanded
         throughout the config tree before Pydantic validation.
         """
         config_data = cls._load_yaml_config_data(path)
@@ -188,7 +188,7 @@ class SootheConfig(BaseSettings):
         nano_path: str,
         soothe_path: str,
     ) -> SootheConfig:
-        """Load configuration from split ``nano.yml`` and ``soothe.yml`` files."""
+        """Load configuration from split `nano.yml` and `soothe.yml` files."""
         nano_data = cls._load_yaml_config_data(nano_path)
         soothe_data = cls._load_yaml_config_data(soothe_path)
         merged = compose_host_agent_config(
@@ -225,10 +225,10 @@ class SootheConfig(BaseSettings):
     """Embedding model + vector dimensions (independent from router profile switching)."""
 
     active_router_profile: str = "default"
-    """Name of the router profile to apply. Overridable via ``SOOTHE_ACTIVE_ROUTER_PROFILE``."""
+    """Name of the router profile to apply. Overridable via `SOOTHE_ACTIVE_ROUTER_PROFILE`."""
 
     router: ModelRouter = Field(default_factory=ModelRouter, init=False)
-    """Resolved role → ``provider:model`` map from the active router profile."""
+    """Resolved role → `provider:model` map from the active router profile."""
 
     embedding_dims: int = Field(default=1536, init=False)
     """Resolved embedding width from the active embedding profile."""
@@ -242,7 +242,7 @@ class SootheConfig(BaseSettings):
     """Unified agent configuration: identity, behavior, autopilot, loop, protocols."""
 
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
-    """Subagent name to config mapping. Set ``enabled: false`` to disable.
+    """Subagent name to config mapping. Set `enabled: false` to disable.
 
     Builtin subagents (deep_research, academic_research, browser_use) are added
     automatically. browser_use is provided by soothe-nano and is enabled by default.
@@ -495,13 +495,13 @@ class SootheConfig(BaseSettings):
     mcp_builtins: list[str] = Field(default_factory=list)
     """Opt-in builtin MCP server names (playwright, github, slack, postgres, gdrive).
 
-    Resolved into ``mcp_servers`` at config load. Empty by default — no MCP servers
-    connect until you list names here or add explicit ``mcp_servers`` entries.
-    All builtins use ``defer: true`` (progressive tool loading).
+    Resolved into `mcp_servers` at config load. Empty by default — no MCP servers
+    connect until you list names here or add explicit `mcp_servers` entries.
+    All builtins use `defer: true` (progressive tool loading).
     """
 
     progressive_mcp: ProgressiveMCPConfig = Field(default_factory=ProgressiveMCPConfig)
-    """ : Progressive MCP tool listing budget tunables."""
+    """Progressive MCP tool listing budget tunables."""
 
     plugins: list[PluginConfig] = Field(default_factory=list)
     """Plugin configurations. Third-party plugins can be loaded via entry points, config, or filesystem."""
@@ -510,7 +510,7 @@ class SootheConfig(BaseSettings):
     """SKILL.md source paths passed to SkillsMiddleware."""
 
     progressive_skills: ProgressiveSkillsConfig = Field(default_factory=ProgressiveSkillsConfig)
-    """ : Progressive skill listing budget and per-entry caps."""
+    """Progressive skill listing budget and per-entry caps."""
 
     progressive_tools: ProgressiveToolsConfig = Field(default_factory=ProgressiveToolsConfig)
     """Progressive builtin-tool loading: core tier bound, deferred tools listed."""
@@ -527,17 +527,17 @@ class SootheConfig(BaseSettings):
     """Maximum number of activity lines retained in the TUI Activity Panel."""
 
     tui_debug: bool = False
-    """Emit structured TUI trace logs (logger ``soothe.ux.tui.trace``) for EventProcessor + TuiRenderer."""
+    """Emit structured TUI trace logs (logger `soothe.ux.tui.trace`) for EventProcessor + TuiRenderer."""
 
     hide_thinking_tokens: bool = True
-    """Strip inline ``<think>``/``<thinking>``/``<reasoning>`` reasoning blocks
+    """Strip inline `<think>`/`<thinking>`/`<reasoning>` reasoning blocks
     from local-model LLM output before it surfaces to the agent/UI.
 
-    When ``True`` (default), reasoning tokens emitted inline by local thinking
+    When `True` (default), reasoning tokens emitted inline by local thinking
     models (DeepSeek-R1, QwQ, GLM with thinking enabled, etc.) are removed by
-    :mod:`soothe_nano.llm.thinking_filter` and recorded at ``DEBUG`` level
-    first ("record before strip" rule). Set ``False`` to pass raw model output
-    through unchanged. The env var override is ``SOOTHE_HIDE_THINKING_TOKENS``.
+    :mod:`soothe_nano.llm.thinking_filter` and recorded at `DEBUG` level
+    first ("record before strip" rule). Set `False` to pass raw model output
+    through unchanged. The env var override is `SOOTHE_HIDE_THINKING_TOKENS`.
     """
 
     ui: UIConfig = Field(default_factory=UIConfig)
@@ -555,7 +555,7 @@ class SootheConfig(BaseSettings):
     """Unified observability configuration for debugging and monitoring."""
 
     cron: CronConfig = Field(default_factory=CronConfig)
-    """ : Cron service configuration for natural language scheduled jobs."""
+    """Cron service configuration for natural language scheduled jobs."""
 
     skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
     """Daemon-shared Skillify semantic skill warehouse indexing and retrieval."""

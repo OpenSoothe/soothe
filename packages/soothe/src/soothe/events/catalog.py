@@ -129,7 +129,7 @@ AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 # ---------------------------------------------------------------------------
 
 StreamChunk = tuple[tuple[str, ...], str, Any]
-"""Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
+"""Deepagents-canonical stream chunk: `(namespace, mode, data)`."""
 
 
 def custom_event(data: dict[str, Any]) -> StreamChunk:
@@ -204,7 +204,7 @@ class LoopCompletedEvent(LifecycleEvent):
 class DaemonHeartbeatEvent(LifecycleEvent):
     """Heartbeat event broadcast by daemon to keep clients alive during long operations.
 
-     : Daemon broadcasts heartbeat every 5 seconds to subscribed clients.
+    Daemon broadcasts heartbeat every 5 seconds to subscribed clients.
     This prevents client timeout when LLM operations take longer than the client's
     query start timeout (default 20 seconds).
     """
@@ -359,7 +359,7 @@ class WiredSubagentCancelledEvent(LifecycleEvent):
 
 
 class StrangeLoopStepStartedEvent(LifecycleEvent):
-    """Level 2: Step description in three-level tree."""
+    """Step description in the StrangeLoop three-level tree."""
 
     type: Literal["soothe.cognition.strange_loop.step.started"] = (
         "soothe.cognition.strange_loop.step.started"
@@ -379,7 +379,7 @@ class StrangeLoopStepQueuedEvent(LifecycleEvent):
 
 
 class StrangeLoopStepCompletedEvent(LifecycleEvent):
-    """Level 3: Step result in three-level tree.
+    """Step result in the StrangeLoop three-level tree.
 
     For `ask_user` steps resolved by veritas / interactive relay, the optional
     `clarification` field carries the questions, the answers, the answer

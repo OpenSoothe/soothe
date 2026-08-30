@@ -1,7 +1,7 @@
-"""Job-scoped GOAL.md contract artifact under ``data/jobs/{job_id}/`` (IG-702/IG-733).
+"""Job-scoped GOAL.md contract artifact under `data/jobs/{job_id}/`.
 
 Persists the Autopilot root job description as a durable filesystem snapshot
-alongside rail soft-state. Distinct from workspace ``GOAL.md`` (operator
+alongside rail soft-state. Distinct from workspace `GOAL.md` (operator
 contract in the project tree).
 """
 
@@ -25,7 +25,7 @@ def _sanitize_job_id(job_id: str) -> str:
 
 
 def resolve_job_goal_md_path(*, jobs_root: Path, job_id: str) -> Path:
-    """Absolute path for ``jobs/{job_id}/GOAL.md`` under ``jobs_root``."""
+    """Absolute path for `jobs/{job_id}/GOAL.md` under `jobs_root`."""
     root = jobs_root.expanduser().resolve()
     safe = _sanitize_job_id(job_id)
     path = (root / safe / GOAL_MD_FILENAME).resolve()
@@ -42,15 +42,15 @@ def write_job_goal_md(
     job_id: str,
     description: str,
 ) -> Path | None:
-    """Write job description to ``jobs/{job_id}/GOAL.md``.
+    """Write job description to `jobs/{job_id}/GOAL.md`.
 
     Args:
-        jobs_root: Job artifact root (typically ``$SOOTHE_DATA_DIR/jobs``).
+        jobs_root: Job artifact root (typically `$SOOTHE_DATA_DIR/jobs`).
         job_id: Root goal / job id.
         description: Submit description body (UTF-8 markdown text).
 
     Returns:
-        Path written, or None when ``jobs_root`` is unset or write fails.
+        Path written, or None when `jobs_root` is unset or write fails.
     """
     if jobs_root is None:
         return None
