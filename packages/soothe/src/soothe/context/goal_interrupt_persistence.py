@@ -32,7 +32,7 @@ def _entry_phase(entry: dict[str, Any]) -> str:
 
 def _entry_content_text(entry: dict[str, Any]) -> str:
     content = entry.get("content")
-    return extract_text_from_message_content(content).replace("\n", "")
+    return extract_text_from_message_content(content)
 
 
 def _build_cancelled_digest(ledger: list[dict[str, Any]], *, reason: str) -> str:

@@ -47,7 +47,6 @@ def _resolve_max_branch_root(conf: dict[str, Any]) -> int:
 
 
 def _build_and_queue(
-    task_text: str,
     subtasks: list[Any],
     *,
     step_id: str,
@@ -62,7 +61,10 @@ def _build_and_queue(
     if len(parsed) > max_branch:
         logger.info(
             "[decompose] truncating %d → %d subtasks (cap=%d, step=%s)",
-            len(parsed), max_branch, max_branch, step_id,
+            len(parsed),
+            max_branch,
+            max_branch,
+            step_id,
         )
         parsed = parsed[:max_branch]
     proposal = DecompositionProposal(
@@ -73,7 +75,9 @@ def _build_and_queue(
     sink.append(proposal)
     logger.info(
         "[decompose] queued proposal parent=%s subtasks=%d wave=%d",
-        step_id, len(proposal.subtasks), proposal.wave_seq,
+        step_id,
+        len(proposal.subtasks),
+        proposal.wave_seq,
     )
     return (
         f"Decomposition proposal queued for step {step_id} "
@@ -95,9 +99,7 @@ async def _arun_decompose_task(task: str, subtasks: list[Any]) -> str:
             "Error: decompose_task is only available inside a StrangeLoop step "
             "thread with a proposal sink bound."
         )
-    return _build_and_queue(
-        (task or "").strip(), subtasks, step_id=step_id, sink=sink
-    )
+    return _build_and_queue(subtasks, step_id=step_id, sink=sink)
 
 
 def _run_decompose_task(task: str, subtasks: list[Any]) -> str:
@@ -109,9 +111,7 @@ def _run_decompose_task(task: str, subtasks: list[Any]) -> str:
             "Error: decompose_task is only available inside a StrangeLoop step "
             "thread with a proposal sink bound."
         )
-    return _build_and_queue(
-        (task or "").strip(), subtasks, step_id=step_id, sink=sink
-    )
+    return _build_and_queue(subtasks, step_id=step_id, sink=sink)
 
 
 def build_decompose_task_tool() -> StructuredTool:

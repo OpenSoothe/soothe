@@ -1,4 +1,4 @@
-"""Soothe CoreAgent builder: host injections over soothe-nano builder."""
+"""Host CoreAgent builder that injects host middleware and tools over the soothe-nano builder."""
 
 from __future__ import annotations
 

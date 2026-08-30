@@ -101,9 +101,7 @@ def test_decompose_tool_truncates_branch_cap() -> None:
             result = tool.invoke(
                 {
                     "task": "too many subtasks",
-                    "subtasks": [
-                        {"description": f"subtask {i}"} for i in range(6)
-                    ],
+                    "subtasks": [{"description": f"subtask {i}"} for i in range(6)],
                 }
             )
         assert "queued" in result.lower()
@@ -127,9 +125,7 @@ def test_decompose_tool_default_branch_cap_is_8() -> None:
             tool.invoke(
                 {
                     "task": "many subtasks",
-                    "subtasks": [
-                        {"description": f"subtask {i}"} for i in range(12)
-                    ],
+                    "subtasks": [{"description": f"subtask {i}"} for i in range(12)],
                 }
             )
         assert len(sink[0].subtasks) == 8  # default cap

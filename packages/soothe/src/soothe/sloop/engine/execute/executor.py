@@ -1150,7 +1150,7 @@ class Executor:
             if not isinstance(msg, (AIMessage, AIMessageChunk)):
                 continue
             content = msg.content
-            extracted_text = extract_text_from_message_content(content).replace("\n", "")
+            extracted_text = extract_text_from_message_content(content)
 
             if isinstance(msg, AIMessageChunk) and extracted_text:
                 accumulated_chunks += extracted_text

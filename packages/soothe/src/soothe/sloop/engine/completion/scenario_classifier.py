@@ -203,7 +203,7 @@ def _coerce_response_text(content: object) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return extract_text_from_message_content(content).replace("\n", "")
+        return extract_text_from_message_content(content)
     return str(content)
 
 
