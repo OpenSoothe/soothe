@@ -1288,21 +1288,18 @@ class VeritasFallbackConfig(BaseModel):
 
 
 def _default_deny_rules() -> list[ToolApprovalRule]:
-    """Default deny rules — only genuinely high-risk operations.
+    """Default deny rules — belt-and-suspenders for the ``when`` predicates.
 
-    The pipeline is **deny-list-first**: anything not matched here is
-    auto-approved (in auto mode) or sent to the human (in manual mode).
-    Stage 2 safety checks (delegated to nano's
-    ``WorkspaceToolOperationSecurity``) catch a wide range of dangerous
-    patterns — ``rm -rf``, ``sudo``, ``chmod 777``, force-push, ``mkfs``,
-    ``dd``, curl-pipe-to-shell, etc. — so they need not be duplicated here.
+    The ``interrupt_on`` ``when`` predicates in
+    :mod:`soothe.sloop.clarification.interrupt_rules` already prevent
+    dangerous operations from reaching execution without an interrupt.
+    These deny rules provide a second layer: if an interrupt fires and
+    reaches the pipeline, these patterns are auto-rejected without user
+    input. Stage 2 safety checks (nano's
+    ``WorkspaceToolOperationSecurity``) add a third layer.
 
-    Only operations that are (a) high-risk AND (b) NOT already caught by
-    safety checks belong here: privilege escalation beyond ``sudo``,
-    recursive permission changes, disk/partition tools, system shutdown,
-    system-level package installs, and system path file edits (the
-    bypass-immune dangerous-component check only covers dotfiles like
-    ``.git``/``.bashrc``, not ``/etc`` or ``/System``). Everything else runs.
+    Only operations that are high-risk AND not already caught by the
+    ``when`` predicates or safety checks belong here.
     """
     return [
         # --- Privilege escalation (sudo is caught by safety; su/doas are not) ---

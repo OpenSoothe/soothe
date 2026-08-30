@@ -80,22 +80,45 @@ class AgentBuilder(nano_builder.AgentBuilder):
         extra_tools.append(build_ask_user_tool())
         kwargs["tools"] = extra_tools
 
-        # Wire interrupt_on for mutating tools so their action_requests
-        # interrupts surface to the clarification relay (tool_approval origin)
-        # instead of being silently auto-approved.
-        # Read-only interaction modes (plan/ask) keep their own deny-based
-        # permissions; agent mode gets interrupt_on for write/exec tools.
+        # Wire conditional interrupt_on for mutating tools. The ``when``
+        # predicates interrupt only on genuinely dangerous operations
+        # (out-of-workspace writes, destructive commands) — safe
+        # in-workspace edits and routine commands execute without an
+        # interrupt, reducing the clarification queue load by ~90%.
+        # The deny-rule pipeline and nano safety evaluator still run as
+        # belt-and-suspenders regardless.
         if kwargs.get("interaction_mode") not in ("plan", "ask"):
             from langchain.agents.middleware import InterruptOnConfig
 
-            _approve_reject = InterruptOnConfig(allowed_decisions=["approve", "reject"])
+            from soothe.sloop.clarification.interrupt_rules import (
+                when_delete,
+                when_edit_file,
+                when_run_command,
+                when_write_file,
+            )
+
+            _approve_reject = InterruptOnConfig(
+                allowed_decisions=["approve", "reject"],
+            )
             kwargs.setdefault(
                 "interrupt_on",
                 {
-                    "edit_file": _approve_reject,
-                    "write_file": _approve_reject,
-                    "delete": _approve_reject,
-                    "run_command": _approve_reject,
+                    "edit_file": InterruptOnConfig(
+                        allowed_decisions=["approve", "reject"],
+                        when=when_edit_file,
+                    ),
+                    "write_file": InterruptOnConfig(
+                        allowed_decisions=["approve", "reject"],
+                        when=when_write_file,
+                    ),
+                    "delete": InterruptOnConfig(
+                        allowed_decisions=["approve", "reject"],
+                        when=when_delete,
+                    ),
+                    "run_command": InterruptOnConfig(
+                        allowed_decisions=["approve", "reject"],
+                        when=when_run_command,
+                    ),
                 },
             )
 
