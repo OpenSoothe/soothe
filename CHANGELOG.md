@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.1] - 2026-08-30
+
+### Changed
+- Patch version bump to 1.0.1 across all monorepo-owned packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`). The `soothe-sdk` package remains on its independent 1.x version line.
+- Bump `soothe-nano` floor to 1.2.16 and advance the submodule pin; refresh `uv.lock` metadata.
+
+### Added
+- StrangeLoop `interrupt_on` is now conditional — only dangerous tool calls trigger human-in-the-loop, reducing unnecessary HITL interruptions.
+- Replace `ClarificationCapture` first-wins with a FIFO `ClarificationQueue`, so clarifications are processed in arrival order.
+
+### Fixed
+- Strip `__pregel_scratchpad` and coerce string `current_goal_index` to prevent type errors in the StrangeLoop state.
+- Consolidate message text extraction and truncation into `soothe.utils.messages`; migrate all callers to the unified helper.
+- Remove the read-only streak circuit breaker and dead back-compat shims from StrangeLoop, plus the evidence-collection apparatus from `decompose_task`.
+- CLI replaces `in:`/`out:` token labels with `↑`/`↓` arrows for clearer stream direction.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.0...v1.0.1
+
 ## [v1.0.0] - 2026-08-29
 
 ### Changed
