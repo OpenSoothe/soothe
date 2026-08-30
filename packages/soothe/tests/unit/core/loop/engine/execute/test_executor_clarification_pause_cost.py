@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import ClarificationRequest, LoopStateView
@@ -102,8 +102,12 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
             _stream: Any, **_kwargs: Any
         ) -> AsyncIterator[_StreamCollectChunk]:
             # Simulate the stream capturing a tool_approval interrupt: the
-            # capture is set before the finalized chunk is yielded.
-            capture.pending_request = _tool_approval_request()
+            # capture is enqueued before the finalized chunk is yielded.
+            capture.enqueue(
+                _tool_approval_request(),
+                resume_ticket=ResumeTicket(thread_id="thread-1"),
+                step_id="step-paused",
+            )
             yield _StreamCollectChunk.finalized(
                 output="",
                 main_tool_count=0,
@@ -148,7 +152,11 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
         async def fake_stream_and_collect(
             _stream: Any, **_kwargs: Any
         ) -> AsyncIterator[_StreamCollectChunk]:
-            capture.pending_request = _tool_approval_request()
+            capture.enqueue(
+                _tool_approval_request(),
+                resume_ticket=ResumeTicket(thread_id="thread-1"),
+                step_id="step-paused",
+            )
             yield _StreamCollectChunk.finalized(
                 output="",
                 main_tool_count=0,
@@ -197,7 +205,11 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
             call_count += 1
             # First pass captures the interrupt; if the retry loop doesn't
             # break, a second pass would be needed (and call_count would hit 2).
-            capture.pending_request = _tool_approval_request()
+            capture.enqueue(
+                _tool_approval_request(),
+                resume_ticket=ResumeTicket(thread_id="thread-1"),
+                step_id="step-paused",
+            )
             yield _StreamCollectChunk.finalized(
                 output="",
                 main_tool_count=0,

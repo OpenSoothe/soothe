@@ -75,6 +75,14 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
+    # FIFO queue of captured clarifications. Every interrupt from every step
+    # enters this list; the head is resolved one at a time. After the head is
+    # answered, it is popped and the next entry becomes the head.
+    # ``pending_clarification`` mirrors the head.
+    clarification_queue: list[dict[str, Any]] | None
+    # Resume tickets keyed by ``origin_interrupt_id`` so the resume path
+    # finds the CoreAgent thread_id for the step that issued the head entry.
+    clarification_resume_tickets: dict[str, dict[str, Any]] | None
     # Interrupt-resume identity (thread + step) for an ask_user /
     # tool_approval interrupt. Carried on a single channel (consolidates the
     # former three separate scalar fields). Read

@@ -1,9 +1,9 @@
-"""Side-channel for capturing clarification requests during a CoreAgent stream."""
+"""Per-loop FIFO queue for clarification requests captured during CoreAgent streams."""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -31,37 +31,105 @@ class ResumeTicket:
 
 
 @dataclass
-class ClarificationCapture:
-    """First-wins capture of a clarification request emitted mid-stream.
+class QueuedClarification:
+    """One captured clarification request plus its resume ticket."""
 
-    The CoreAgent stream wrapper writes here when it detects a structured
-    `ask_user` interrupt. The originating loop node reads the captured
-    request after the stream ends and threads it into
-    `pending_clarification` so the graph router dispatches to
-    `await_clarification`.
+    request: ClarificationRequest
+    resume_ticket: ResumeTicket
+    step_id: str | None = None
 
-    Attributes:
-        pending_request: The first captured clarification request (None until set).
-        resume_ticket: The interrupt-resume identity (thread + step) captured
-            by the executor when a `GraphInterrupt` fires, so the resume path
-            can re-enter the CoreAgent on the same thread and re-emit
-            `step_started` with the same step the TUI already has a card for.
-            See :class:`ResumeTicket`.
+
+@dataclass
+class ClarificationQueue:
+    """Per-loop FIFO queue of captured clarification requests.
+
+    Never drops interrupts — every ``ask_user`` / ``tool_approval`` interrupt
+    from every step enters via :meth:`enqueue`. The originating step halts
+    (its CoreAgent thread is checkpointed with the pending LangGraph interrupt)
+    and resumes via ``Command(resume=...)`` when its entry reaches the head
+    and is answered.
     """
 
-    pending_request: ClarificationRequest | None = None
-    resume_ticket: ResumeTicket | None = None
+    _entries: list[QueuedClarification] = field(default_factory=list)
 
-    def set(self, request: ClarificationRequest) -> None:
-        if self.pending_request is None:
-            self.pending_request = request
-            return
-        logger.warning(
-            "[ClarificationCapture] dropping secondary ask_user (first-wins); "
-            "kept interrupt_id=%s dropped=%s",
-            self.pending_request.origin_interrupt_id,
-            request.origin_interrupt_id,
+    def enqueue(
+        self,
+        request: ClarificationRequest,
+        *,
+        resume_ticket: ResumeTicket,
+        step_id: str | None = None,
+    ) -> None:
+        """Add a clarification request to the back of the queue."""
+        self._entries.append(
+            QueuedClarification(request=request, resume_ticket=resume_ticket, step_id=step_id)
+        )
+        logger.info(
+            "[ClarificationQueue] enqueued interrupt_id=%s step_id=%s queue_len=%d",
+            request.origin_interrupt_id[:16],
+            step_id,
+            len(self._entries),
         )
 
+    def peek(self) -> QueuedClarification | None:
+        """Return the head entry without removing it."""
+        return self._entries[0] if self._entries else None
 
-__all__ = ["ClarificationCapture", "ResumeTicket"]
+    def dequeue(self) -> QueuedClarification | None:
+        """Remove and return the head entry (after it has been answered)."""
+        if not self._entries:
+            return None
+        entry = self._entries.pop(0)
+        logger.info(
+            "[ClarificationQueue] dequeued interrupt_id=%s queue_len=%d",
+            entry.request.origin_interrupt_id[:16],
+            len(self._entries),
+        )
+        return entry
+
+    @property
+    def head(self) -> ClarificationRequest | None:
+        """The head clarification request, or ``None`` if empty."""
+        return self.peek().request if self._entries else None
+
+    @property
+    def head_ticket(self) -> ResumeTicket | None:
+        """Resume ticket for the head entry, or ``None`` if empty."""
+        return self.peek().resume_ticket if self._entries else None
+
+    @property
+    def resume_ticket(self) -> ResumeTicket | None:
+        """Alias for :attr:`head_ticket`."""
+        return self.head_ticket
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def __bool__(self) -> bool:
+        return bool(self._entries)
+
+    def set(self, request: ClarificationRequest) -> None:
+        """Back-compat: enqueue only when empty (first-wins emulation).
+
+        New call sites should call :meth:`enqueue` directly.
+        """
+        if self._entries:
+            logger.warning(
+                "[ClarificationQueue] back-compat set() dropping secondary "
+                "interrupt (use enqueue()); kept=%s dropped=%s",
+                self.head.origin_interrupt_id[:16] if self.head else "?",
+                request.origin_interrupt_id[:16],
+            )
+            return
+        self.enqueue(request, resume_ticket=ResumeTicket())
+
+    @property
+    def pending_request(self) -> ClarificationRequest | None:
+        """Back-compat alias for :attr:`head`."""
+        return self.head
+
+
+class ClarificationCapture(ClarificationQueue):
+    """Deprecated alias for :class:`ClarificationQueue`."""
+
+
+__all__ = ["ClarificationCapture", "ClarificationQueue", "QueuedClarification", "ResumeTicket"]

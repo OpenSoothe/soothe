@@ -23,7 +23,7 @@ from unittest.mock import patch
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import LoopStateView
@@ -745,13 +745,14 @@ class TestCapturedClarificationScoringCase:
             _stream: Any, **_kwargs: Any
         ) -> AsyncIterator[_StreamCollectChunk]:
             # Simulate the interrupt capture happening mid-stream.
-            capture.set(
+            capture.enqueue(
                 ClarificationRequest(
                     questions=("What next?",),
                     origin_node=ORIGIN_EXECUTE,
                     origin_interrupt_id="iAU",
                     loop_state=_view(),
-                )
+                ),
+                resume_ticket=ResumeTicket(),
             )
             yield _StreamCollectChunk.finalized(
                 output="I attempted to ask the user a follow-up question.",

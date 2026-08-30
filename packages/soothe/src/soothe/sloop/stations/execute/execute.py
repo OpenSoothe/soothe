@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
-from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
+from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import (
@@ -421,6 +421,26 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
+    # Pop the head of the clarification queue now that the answer is being
+    # consumed. The next entry (if any) becomes the new head and will be
+    # routed to await_clarification after this step resumes.
+    queue_after_pop: list[dict[str, Any]] | None = None
+    tickets_after_pop: dict[str, dict[str, Any]] | None = None
+    if pending_answer_state:
+        queue_list = state_dict.get("clarification_queue") or []
+        tickets_map = state_dict.get("clarification_resume_tickets") or {}
+        if isinstance(queue_list, list) and queue_list:
+            queue_after_pop = queue_list[1:] or None
+        if isinstance(tickets_map, dict):
+            head_iid = (
+                str(pending_request_state.get("origin_interrupt_id", ""))
+                if isinstance(pending_request_state, dict)
+                else ""
+            )
+            if head_iid:
+                tickets_map = {k: v for k, v in tickets_map.items() if k != head_iid}
+            tickets_after_pop = tickets_map or None
+
     if decision is None or plan_result is None:
         # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
         # graph after a clarification interrupt, ``ctx.scratch`` is freshly
@@ -766,7 +786,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 "pending_clarification_answer": None,
             }
 
-    clarification_capture = ClarificationCapture()
+    clarification_capture = ClarificationQueue()
     clarification_detector: ClarificationDetector | None = None
     clarification_view: LoopStateView | None = None
     if ctx.clarification_policy is not None:
@@ -937,32 +957,76 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 exc_info=True,
             )
 
-    # RFC-622: surface a captured clarification so the graph routes to
-    # ``await_clarification`` instead of ``record_iteration``.
-    if clarification_capture.pending_request is not None:
-        # Store the resume ticket on both LoopState and graph state
-        # so it survives the checkpoint save/restore between the two
-        # ainvoke calls (pause → user answers → resume).
+    # Surface captured clarifications so the graph routes to
+    # ``await_clarification`` instead of ``record_iteration``. The queue may
+    # hold multiple entries; the head is mirrored into
+    # ``pending_clarification`` and the full queue + resume tickets survive
+    # via graph checkpoint.
+    if clarification_capture.head is not None:
+        head_entry = clarification_capture.peek()
+        assert head_entry is not None  # narrowed by head check above
+        head_request = head_entry.request
+        head_ticket = head_entry.resume_ticket
+        queue_state = [request_to_state(e.request) for e in clarification_capture._entries]
+        tickets_state: dict[str, dict[str, Any]] = {}
+        for e in clarification_capture._entries:
+            rt = e.resume_ticket
+            tickets_state[e.request.origin_interrupt_id] = {
+                "thread_id": rt.thread_id,
+                "step_id": rt.step_id,
+                "step_description": rt.step_description,
+                "prior_duration_ms": rt.prior_duration_ms,
+            }
         result: dict[str, Any] = {
-            "pending_clarification": request_to_state(clarification_capture.pending_request),
+            "pending_clarification": request_to_state(head_request),
             "last_clarification_origin": ORIGIN_EXECUTE,
             # Clear any prior answer so re-entry only consumes it once.
             "pending_clarification_answer": None,
+            "clarification_queue": queue_state,
+            "clarification_resume_tickets": tickets_state,
         }
-        if clarification_capture.resume_ticket:
-            state.resume_ticket = clarification_capture.resume_ticket
-            result["resume_ticket"] = clarification_capture.resume_ticket
-        logger.info("[execute] clarification captured; routing to await_clarification")
+        if head_ticket:
+            state.resume_ticket = head_ticket
+            result["resume_ticket"] = head_ticket
+        logger.info(
+            "[execute] %d clarification(s) queued; routing to await_clarification "
+            "(head interrupt_id=%s)",
+            len(clarification_capture),
+            head_request.origin_interrupt_id[:16],
+        )
         return result
 
     if resume_answer_payload is not None or planner_ask_answered_step_id is not None:
         # Successfully resumed from a prior clarification (CoreAgent interrupt
-        # or planner-emitted ask_user). Clear BOTH the request and the
-        # answer channels so route_after_execute does not re-route us back into
-        # await_clarification on the next graph tick.
-        return {
+        # or planner-emitted ask_user). Clear the consumed head's request and
+        # answer channels. If the queue still has entries, surface the next
+        # head so route_after_execute routes back to await_clarification for it.
+        result: dict[str, Any] = {
             "pending_clarification": None,
             "pending_clarification_answer": None,
         }
+        if queue_after_pop:
+            # Next entry becomes the head — route to await_clarification.
+            next_head = queue_after_pop[0]
+            next_iid = str(next_head.get("origin_interrupt_id", ""))
+            next_ticket = (tickets_after_pop or {}).get(next_iid)
+            result["pending_clarification"] = next_head
+            result["clarification_queue"] = queue_after_pop
+            result["clarification_resume_tickets"] = tickets_after_pop
+            if next_ticket:
+                rt = _coerce_resume_ticket(next_ticket)
+                if rt:
+                    state.resume_ticket = rt
+                    result["resume_ticket"] = rt
+            logger.info(
+                "[execute] resume complete; %d clarification(s) remain in queue "
+                "(next head interrupt_id=%s)",
+                len(queue_after_pop),
+                next_iid[:16],
+            )
+        else:
+            result["clarification_queue"] = None
+            result["clarification_resume_tickets"] = None
+        return result
 
     return {}

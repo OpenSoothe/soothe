@@ -31,7 +31,7 @@ from soothe.config.constants import (
     DEFAULT_READ_ONLY_STREAK_LIMIT,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
-from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
+from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import ClarificationOrigin, LoopStateView
@@ -224,11 +224,18 @@ def _extract_interrupts_from_graph_interrupt(exc: GraphInterrupt) -> tuple[Inter
 def _capture_interrupts(
     interrupts: tuple[Interrupt, ...],
     detector: ClarificationDetector,
-    capture: ClarificationCapture,
+    capture: ClarificationQueue,
     loop_state_view: LoopStateView,
     origin_node: ClarificationOrigin,
+    *,
+    resume_ticket: ResumeTicket | None = None,
+    step_id: str | None = None,
 ) -> bool:
-    """Capture ask_user / tool_approval interrupts into the relay.
+    """Capture ask_user / tool_approval interrupts into the relay queue.
+
+    Every interrupt enters the queue — none are dropped. The originating
+    step halts and resumes via ``Command(resume=...)`` when its entry
+    reaches the head.
 
     Returns `True` if at least one interrupt was captured.
     """
@@ -245,7 +252,8 @@ def _capture_interrupts(
         if request is not None:
             if request.origin_node == ORIGIN_TOOL_APPROVAL:
                 logger.info("[executor] captured tool_approval interrupt id=%s", iid)
-            capture.set(request)
+            ticket = resume_ticket or ResumeTicket()
+            capture.enqueue(request, resume_ticket=ticket, step_id=step_id)
             captured = True
         elif is_ask_user_interrupt(value) or is_tool_approval_interrupt(value):
             # A recognized shape that failed to parse (e.g. empty questions) —
@@ -274,7 +282,7 @@ class Executor:
         config: SootheConfig | None = None,
         loop_id: str | None = None,
         clarification_detector: ClarificationDetector | None = None,
-        clarification_capture: ClarificationCapture | None = None,
+        clarification_capture: ClarificationQueue | None = None,
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
         context_engine: Any | None = None,  # RFC-624 Phase 4
@@ -297,9 +305,9 @@ class Executor:
             clarification_detector: When set with `clarification_capture` and
                 `clarification_loop_state_view`, enables clarification
                 relay during the CoreAgent stream.
-            clarification_capture: Side-channel that receives the first detected
-                `ask_user` request. The caller reads `capture.pending_request`
-                after `execute()` completes.
+            clarification_capture: Per-loop FIFO queue for captured
+                ``ask_user`` / ``tool_approval`` requests. The caller reads
+                ``capture.head`` after ``execute()`` completes.
             clarification_loop_state_view: Read-only loop state snapshot threaded
                 to the policy.
             clarification_resume_answer_payload: Optional LangGraph resume payload
@@ -670,7 +678,7 @@ class Executor:
         graph_config: dict[str, Any],
         *,
         detector: ClarificationDetector | None,
-        capture: ClarificationCapture | None,
+        capture: ClarificationQueue | None,
         loop_state_view: LoopStateView | None,
         origin_node: ClarificationOrigin,
         step_id: str | None = None,
@@ -724,32 +732,30 @@ class Executor:
             if clarification_enabled and (
                 is_ask_user_interrupt(value) or is_tool_approval_interrupt(value)
             ):
+                # Build the resume ticket before enqueuing so the queue
+                # entry carries the thread_id + step identity the resume
+                # path needs to re-enter the CoreAgent on the same thread.
+                cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
+                ticket = ResumeTicket()
+                if cfg_tid:
+                    ticket.thread_id = cfg_tid
+                if step_id:
+                    ticket.step_id = step_id
+                if step_description:
+                    ticket.step_description = step_description
+                if step_start_perf is not None:
+                    ticket.prior_duration_ms = int((time.perf_counter() - step_start_perf) * 1000)
                 _capture_interrupts(
                     (interrupt_obj,),
                     detector,  # type: ignore[arg-type]
                     capture,  # type: ignore[arg-type]
                     loop_state_view,  # type: ignore[arg-type]
                     origin_node,
+                    resume_ticket=ticket,
+                    step_id=step_id,
                 )
-                if capture.pending_request is not None:
+                if capture.head is not None:
                     captured_clarification = True
-                    # Record the originating step identity alongside the
-                    # thread_id so the resume path re-emits step_started
-                    # with the same step the TUI already has a card for.
-                    cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
-                    if cfg_tid or step_id or step_description:
-                        ticket = capture.resume_ticket or ResumeTicket()
-                        if cfg_tid and not ticket.thread_id:
-                            ticket.thread_id = cfg_tid
-                        if step_id and not ticket.step_id:
-                            ticket.step_id = step_id
-                        if step_description and not ticket.step_description:
-                            ticket.step_description = step_description
-                        if step_start_perf is not None and not ticket.prior_duration_ms:
-                            ticket.prior_duration_ms = int(
-                                (time.perf_counter() - step_start_perf) * 1000
-                            )
-                        capture.resume_ticket = ticket
                 else:
                     uncapturable_ask_user = True
                 continue
@@ -768,7 +774,7 @@ class Executor:
         graph_config: dict[str, Any],
         *,
         detector: ClarificationDetector | None = None,
-        capture: ClarificationCapture | None = None,
+        capture: ClarificationQueue | None = None,
         loop_state_view: LoopStateView | None = None,
         origin_node: ClarificationOrigin = ORIGIN_EXECUTE,
         resume_answer_payload: dict[str, Any] | None = None,
@@ -855,44 +861,39 @@ class Executor:
                 # ``exc.args[0]``, NOT in graph state. Capture them directly.
                 logger.info("[executor] GraphInterrupt during stream (step=%s)", step_id)
                 if clarification_enabled:
+                    # Build the resume ticket before enqueuing so the queue
+                    # entry carries the thread_id + step identity the resume
+                    # path needs to re-enter the CoreAgent on the same thread.
+                    cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
+                    ticket = ResumeTicket()
+                    if cfg_tid:
+                        ticket.thread_id = cfg_tid
+                    if step_id:
+                        ticket.step_id = step_id
+                    if step_description:
+                        ticket.step_description = step_description
+                    if step_start_perf is not None:
+                        ticket.prior_duration_ms = int(
+                            (time.perf_counter() - step_start_perf) * 1000
+                        )
                     _capture_interrupts(
                         _extract_interrupts_from_graph_interrupt(exc),
                         detector,  # type: ignore[arg-type]
                         capture,  # type: ignore[arg-type]
                         loop_state_view,  # type: ignore[arg-type]
                         origin_node,
+                        resume_ticket=ticket,
+                        step_id=step_id,
                     )
-                # Store the thread_id so the resume path can reuse it.
-                if capture.pending_request is not None:
-                    # Read the thread_id from the graph config (it's the
-                    # fork_thread_id set by _execute_step_collecting_events).
-                    cfg_tid = graph_config.get("configurable", {}).get("thread_id", "")
-                    if cfg_tid:
-                        # Store on the capture object so node_execute can
-                        # propagate it to LoopState.resume_ticket.
-                        ticket = capture.resume_ticket or ResumeTicket()
-                        ticket.thread_id = cfg_tid
-                        # Record the originating step identity so the resume
-                        # path rebuilds the decision with the same step id +
-                        # title the TUI already has a card for (not the CE
-                        # root node). Planner-emitted ask_user steps carry
-                        # their own id on the interrupt prefix and do not
-                        # flow through here.
-                        if step_id:
-                            ticket.step_id = step_id
-                        if step_description:
-                            ticket.step_description = step_description
-                        if step_start_perf is not None:
-                            ticket.prior_duration_ms = int(
-                                (time.perf_counter() - step_start_perf) * 1000
-                            )
-                        capture.resume_ticket = ticket
-                        logger.info(
-                            "[executor] stored resume thread_id=%s for step %s",
-                            cfg_tid[:24],
-                            step_id,
-                        )
-                if capture.pending_request is not None:
+                # When the queue is non-empty, the step halts — the CoreAgent
+                # thread is checkpointed with the pending LangGraph interrupt.
+                # node_execute reads the queue and routes to await_clarification.
+                if capture.head is not None:
+                    logger.info(
+                        "[executor] stored resume thread_id=%s for step %s",
+                        capture.head_ticket.thread_id[:24] if capture.head_ticket else "?",
+                        step_id,
+                    )
                     return
             finally:
                 await chunk_reader.cancel()
@@ -2271,7 +2272,7 @@ class Executor:
                 # so any completion LLM call now is wasted cost on stale input.
                 if (
                     self._clarification_capture is not None
-                    and self._clarification_capture.pending_request is not None
+                    and self._clarification_capture.head is not None
                 ):
                     break
 
@@ -2389,7 +2390,7 @@ class Executor:
             # calls are skipped because the step resumes after the user answers.
             captured_clarification = (
                 self._clarification_capture is not None
-                and self._clarification_capture.pending_request is not None
+                and self._clarification_capture.head is not None
             )
             if step.kind == "action" and not captured_clarification:
                 from soothe.sloop.eval.step_close_report import assess_step_close

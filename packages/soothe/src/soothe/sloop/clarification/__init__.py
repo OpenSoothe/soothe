@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
-from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.capture import (
+    ClarificationCapture,
+    ClarificationQueue,
+    QueuedClarification,
+    ResumeTicket,
+)
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
 from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeline
@@ -11,7 +16,10 @@ from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeli
 __all__ = [
     "AutoClarificationPolicy",
     "ClarificationCapture",
+    "ClarificationQueue",
     "ClarificationDetector",
     "InteractiveClarificationPolicy",
+    "QueuedClarification",
+    "ResumeTicket",
     "ToolApprovalPipeline",
 ]

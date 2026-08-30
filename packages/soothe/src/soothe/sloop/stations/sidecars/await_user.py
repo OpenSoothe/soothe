@@ -34,6 +34,20 @@ async def node_await_clarification(
     )
     pending = state.get("pending_clarification")
     if not pending:
+        # Fallback: if pending_clarification is None but the queue has
+        # entries, promote the head. This guards against a state-transition
+        # edge case where the queue was set but the head mirror was not.
+        queue = state.get("clarification_queue")
+        if isinstance(queue, list) and queue:
+            pending = queue[0]
+            logger.info(
+                "[await_clarification] promoted queue head to pending_clarification "
+                "(interrupt_id=%s)",
+                str(pending.get("origin_interrupt_id", ""))[:16]
+                if isinstance(pending, dict)
+                else "?",
+            )
+    if not pending:
         logger.warning("[await_clarification] entered without pending_clarification; no-op")
         return {"pending_clarification": None}
 
