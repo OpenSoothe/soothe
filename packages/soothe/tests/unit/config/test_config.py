@@ -52,7 +52,6 @@ class TestSootheConfig:
         assert "evidence_max_iterations" not in type(cfg.agent.autopilot).model_fields
         assert cfg.agent.loop.max_iterations == 99
         assert cfg.agent.loop.dispatch_idle_seconds == 300.0
-        assert cfg.agent.loop.dispatch_tool_timeout_seconds == 0.0
         assert cfg.agent.middleware.llm_rate_limit.enabled is True
         assert len(cfg.vector_stores) == 1
         assert cfg.vector_stores[0].name == "sqlite_vec_default"
@@ -127,7 +126,7 @@ class TestSootheConfig:
         assert not hasattr(cfg.agent.loop.concurrency, "max_parallel_goals")
         assert cfg.agent.loop.concurrency.max_parallel_steps == 3
         assert cfg.agent.loop.concurrency.max_parallel_subagents == 3
-        assert cfg.agent.loop.concurrency.global_max_llm_calls == 8
+        assert cfg.agent.loop.concurrency.global_max_llm_calls == 3
 
     def test_loop_concurrency_ignores_legacy_max_parallel_goals(self) -> None:
         """Stale YAML key must not fail load (Pydantic ignores extras)."""

@@ -2,11 +2,9 @@
 
 Covers:
 - Deadlock detection (no chunks, no root tool pending)
-- Per-wave tool wall-clock cap
 - Long tool execution tolerance (idle suppressed while tools pending)
 - Parallel tool waves (first ToolMessage must not clear remaining tools)
 - Nested subgraph ToolMessages (progress only; do not clear parent)
-- Sentinel cap suspended while tools are active
 """
 
 from __future__ import annotations
@@ -214,43 +212,6 @@ async def test_idle_timeout_does_not_fire_during_tool_execution() -> None:
         await reader.read_next()
 
 
-# --- Per-tool wall-clock cap (tool_timeout) ---
-
-
-@pytest.mark.asyncio
-async def test_tool_timeout_fires_when_tool_runs_too_long() -> None:
-    """tool_timeout caps the root tool-wave wall-clock time."""
-    dispatch_msg = AIMessage(
-        content="",
-        tool_calls=[{"name": "run_command", "args": {"command": "ls"}, "id": "c1"}],
-    )
-    dispatch_chunk = ((), "messages", [dispatch_msg, {}])
-
-    reader = GraphStreamChunkReader(
-        _dispatch_pause_result(
-            dispatch_chunk,
-            pause=10.0,
-            result=((), "messages", [ToolMessage(content="late", tool_call_id="c1"), {}]),
-        ),
-        idle_timeout=0.0,
-        tool_timeout=0.5,
-        heartbeat_interval=0.2,
-        step_id="TST-03",
-    )
-
-    chunk = await reader.read_next()
-    assert chunk == dispatch_chunk
-
-    with pytest.raises(DispatchTimeoutError) as exc_info:
-        while True:
-            await reader.read_next()
-
-    assert exc_info.value.timeout_seconds == 0.5
-    assert exc_info.value.step_id == "TST-03"
-    assert exc_info.value.reason == "tool_wall_clock"
-    assert "tool" in str(exc_info.value).lower()
-
-
 # --- Legacy compatibility removed: use idle_timeout ---
 
 
@@ -270,47 +231,6 @@ async def test_idle_timeout_via_explicit_field() -> None:
             if chunk is _STREAM_HEARTBEAT_SENTINEL:
                 continue
             break  # pragma: no cover
-
-
-# --- Timeouts disabled + sentinel cap ---
-
-
-@pytest.mark.asyncio
-async def test_no_timeouts_heartbeats_until_cancelled() -> None:
-    """When idle/tool timeouts are 0, heartbeats continue until cancel."""
-    reader = GraphStreamChunkReader(
-        _slow_single_chunk(delay=10.0),
-        idle_timeout=0,
-        tool_timeout=0,
-        heartbeat_interval=0.2,
-        max_heartbeats=0,  # disable sentinel cap for this case
-        step_id="TST-05",
-    )
-
-    for _ in range(3):
-        chunk = await reader.read_next()
-        assert chunk is _STREAM_HEARTBEAT_SENTINEL
-
-    await reader.cancel()
-
-
-@pytest.mark.asyncio
-async def test_sentinel_cap_fires_when_idle() -> None:
-    """Sentinel cap fires after max_heartbeats with no real chunks and no tools."""
-    reader = GraphStreamChunkReader(
-        _slow_single_chunk(delay=10.0),
-        idle_timeout=0,
-        tool_timeout=0,
-        heartbeat_interval=0.1,
-        max_heartbeats=3,
-        step_id="TST-05b",
-    )
-
-    with pytest.raises(DispatchTimeoutError) as exc_info:
-        while True:
-            await reader.read_next()
-
-    assert exc_info.value.reason == "sentinel_cap"
 
 
 # --- Multiple tool cycles ---
@@ -341,7 +261,6 @@ async def test_multiple_tool_cycles_no_false_positive() -> None:
     reader = GraphStreamChunkReader(
         _multi_tool_cycle(),
         idle_timeout=0.3,
-        tool_timeout=5.0,
         heartbeat_interval=0.1,
         step_id="TST-06",
     )
@@ -392,7 +311,6 @@ async def test_parallel_tools_first_result_does_not_enable_idle() -> None:
             ]
         ),
         idle_timeout=0.4,
-        tool_timeout=0,
         heartbeat_interval=0.15,
         step_id="TST-07",
     )
@@ -442,7 +360,6 @@ async def test_nested_tool_message_does_not_clear_parent_activity() -> None:
             ]
         ),
         idle_timeout=0.4,
-        tool_timeout=0,
         heartbeat_interval=0.15,
         step_id="TST-08",
     )
@@ -460,12 +377,12 @@ async def test_nested_tool_message_does_not_clear_parent_activity() -> None:
     assert len(chunks) == 3
 
 
-# --- Sentinel cap suspended while tools active ---
+# --- Long-running tool tolerance ---
 
 
 @pytest.mark.asyncio
-async def test_sentinel_cap_suspended_while_tool_active() -> None:
-    """Sentinel cap must not kill a long-running root tool."""
+async def test_long_tool_not_killed_by_idle() -> None:
+    """Idle watchdog must not fire while a root tool is still pending."""
     dispatch = (
         (),
         "messages",
@@ -474,13 +391,9 @@ async def test_sentinel_cap_suspended_while_tool_active() -> None:
     result = ((), "messages", [ToolMessage(content="done", tool_call_id="c1"), {}])
 
     reader = GraphStreamChunkReader(
-        # Poll interval is 0.5s; use a multi-second tool gap so heartbeats exceed
-        # max_heartbeats without raising while the tool is still pending.
         _dispatch_pause_result(dispatch, pause=2.5, result=result),
-        idle_timeout=0,
-        tool_timeout=0,
-        heartbeat_interval=0.4,
-        max_heartbeats=3,
+        idle_timeout=0.4,
+        heartbeat_interval=0.2,
         step_id="TST-09",
     )
 
@@ -495,4 +408,4 @@ async def test_sentinel_cap_suspended_while_tool_active() -> None:
         assert chunk == result
         break
 
-    assert heartbeats > 3, "Expected heartbeats beyond max_heartbeats without sentinel_cap"
+    assert heartbeats >= 1, "Expected heartbeats during long tool execution"

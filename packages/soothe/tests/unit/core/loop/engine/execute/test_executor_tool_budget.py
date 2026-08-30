@@ -188,7 +188,6 @@ async def test_stream_collect_exposes_execution_metrics() -> None:
 async def test_stream_collect_no_progress_watchdog_raises_timeout() -> None:
     config = MagicMock()
     config.agent.loop.dispatch_idle_seconds = 0.01
-    config.agent.loop.dispatch_tool_timeout_seconds = 0
     config.agent.loop.max_tool_calls_per_step = 999
 
     async def fake_stream():

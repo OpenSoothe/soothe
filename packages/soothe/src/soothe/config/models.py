@@ -787,7 +787,10 @@ class LoopConcurrencyConfig(BaseModel):
         default=3, ge=0, description="Maximum parallel subagents (0=unlimited)"
     )
     global_max_llm_calls: int = Field(
-        default=8, ge=0, description="Global LLM call cap (0=unlimited)"
+        default=3,
+        ge=0,
+        description="Max concurrent active LLM streams across parallel steps (0=unlimited). "
+        "Defaults to max_parallel_steps; set lower to reduce LLM stream contention.",
     )
     step_parallelism: Literal["sequential", "dependency", "max"] = Field(
         default="dependency", description="Step scheduling strategy"
@@ -1072,8 +1075,7 @@ class StrangeLoopConfig(BaseModel):
             raise ValueError(f"agent.loop keys moved to nano.yml agent.middleware: {joined}")
         if "dispatch_timeout_seconds" in data:
             raise ValueError(
-                "agent.loop.dispatch_timeout_seconds removed; use "
-                "dispatch_idle_seconds and dispatch_tool_timeout_seconds"
+                "agent.loop.dispatch_timeout_seconds removed; use dispatch_idle_seconds"
             )
         return data
 
@@ -1081,26 +1083,8 @@ class StrangeLoopConfig(BaseModel):
         default=300.0,
         description=(
             "Deadlock detector: max seconds of stream inactivity when no root-level "
-            "tool is pending. Resets on every real chunk (including nested subgraph "
-            "progress). Idle fires only after the last root ToolMessage until the "
-            "next LLM hop — the hang class from loop 9e20. Parallel tool waves keep "
-            "idle suppressed until every pending tool_call id completes. Default "
-            "300s (5 min). Set to 0 to disable (not recommended; the idle sentinel "
-            "cap provides a 1-hour secondary safety net when no tools are pending)."
-        ),
-        ge=0,
-        le=86_400,
-    )
-
-    dispatch_tool_timeout_seconds: float = Field(
-        default=0.0,
-        description=(
-            "Optional wall-clock cap for a root tool wave (from first pending "
-            "dispatch until the pending set empties). 0 disables this cap and "
-            "relies on agent.middleware.tool_timeout per-tool middleware instead. "
-            "Set > 0 only when you need a graph-stream-level bound in addition to "
-            "middleware. When the cap fires, the step fails with "
-            "DispatchTimeoutError(reason='tool_wall_clock')."
+            "tool is pending. Resets on every real chunk. When it fires, the step "
+            "is retried up to dispatch_retry_max times before failing. Default 300s."
         ),
         ge=0,
         le=86_400,
@@ -1113,6 +1097,18 @@ class StrangeLoopConfig(BaseModel):
         ),
         ge=0,
         le=5,
+    )
+
+    dispatch_retry_max: int = Field(
+        default=3,
+        description=(
+            "Max retries when dispatch_idle_seconds fires (0 = no retry, step fails "
+            "on first timeout). Retries reuse the LangGraph checkpoint so prior tool "
+            "results are preserved. Total timeout budget is "
+            "dispatch_idle_seconds × (dispatch_retry_max + 1)."
+        ),
+        ge=0,
+        le=10,
     )
 
     execute_min_answer_chars: int = Field(

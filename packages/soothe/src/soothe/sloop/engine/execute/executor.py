@@ -317,6 +317,7 @@ class Executor:
         self._checkpointer = checkpointer
         self._max_parallel_steps = max_parallel_steps
         self._config = config
+        self._llm_stream_semaphore = self._build_llm_stream_semaphore()
         self._loop_id = loop_id
         self._clarification_detector = clarification_detector
         self._clarification_capture = clarification_capture
@@ -434,16 +435,16 @@ class Executor:
             return 0.0
         return max(0.0, float(self._config.agent.loop.dispatch_idle_seconds))
 
-    def _dispatch_tool_timeout_seconds(self) -> float:
-        """Optional graph-level tool-wave wall-clock cap. 0 = disabled."""
-        if self._config is None:
-            return 0.0
-        return max(0.0, float(self._config.agent.loop.dispatch_tool_timeout_seconds))
-
     def _execute_action_retry_max(self) -> int:
         if self._config is None:
             return 1
         return max(0, int(self._config.agent.loop.execute_action_retry_max))
+
+    def _dispatch_retry_max(self) -> int:
+        """Max retries when dispatch_idle_seconds fires (0 = no retry)."""
+        if self._config is None:
+            return 0
+        return max(0, int(self._config.agent.loop.dispatch_retry_max))
 
     async def _read_runtime_state(
         self,
@@ -808,13 +809,12 @@ class Executor:
                 current_input,
                 graph_config=graph_config,
             )
-            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: tool-aware
-            # idle/tool timers (root pending-tool set; nested msgs are progress only).
+            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: idle timer
+            # (root pending-tool set; nested msgs are progress only).
             chunk_reader = GraphStreamChunkReader(
                 chunk_iter,
                 step_id=step_id,
                 idle_timeout=self._dispatch_idle_seconds(),
-                tool_timeout=self._dispatch_tool_timeout_seconds(),
             )
             try:
                 while True:
@@ -1307,6 +1307,19 @@ class Executor:
         if self._config is None:
             return 5
         return self._config.agent.loop.concurrency.max_parallel_tools
+
+    def _global_max_llm_calls(self) -> int:
+        """Max concurrent active LLM streams across parallel steps (0=unlimited)."""
+        if self._config is None:
+            return 0
+        return max(0, int(self._config.agent.loop.concurrency.global_max_llm_calls))
+
+    def _build_llm_stream_semaphore(self) -> asyncio.Semaphore | None:
+        """Build the LLM stream gate. None = unlimited."""
+        limit = self._global_max_llm_calls()
+        if limit <= 0:
+            return None
+        return asyncio.Semaphore(limit)
 
     def _wave_size(self, remaining: int) -> int:
         """Concurrent step count for the next execute batch (`0` = unlimited).
@@ -2170,6 +2183,8 @@ class Executor:
 
             max_action_retries = self._execute_action_retry_max()
             action_retries_done = 0
+            max_dispatch_retries = self._dispatch_retry_max()
+            dispatch_retries_done = 0
             stream_input_messages: list[Any] = graph_input_messages
 
             # Stream events and collect outcome metadata (RFC-211)
@@ -2183,54 +2198,77 @@ class Executor:
             execution_metrics: dict[str, int] = {}
 
             while True:
-                stream = self._core_agent_astream_with_interrupt_resume(
-                    self._execute_graph_input(
-                        stream_input_messages,
-                        routing_classification=routing_classification,
-                        response_language=response_language,
-                        workspace=workspace,
-                        continue_loop_mode=continue_loop_mode,
-                        skill_activation=skill_activation,
-                        mcp_state=mcp_state,
-                        tool_activation=tool_activation,
-                    ),
-                    config,
-                    detector=self._clarification_detector,
-                    capture=self._clarification_capture,
-                    loop_state_view=self._clarification_loop_state_view,
-                    origin_node=ORIGIN_EXECUTE,
-                    resume_answer_payload=self._clarification_resume_answer_payload,
-                    step_id=step.id,  # for heartbeat correlation + capture
-                    step_description=step.full_description or step.description,
-                    step_start_perf=start,
-                )
+                # Gate concurrent LLM streams across parallel steps.
+                slot_acquired = False
+                if self._llm_stream_semaphore is not None:
+                    await self._llm_stream_semaphore.acquire()
+                    slot_acquired = True
+                try:
+                    stream = self._core_agent_astream_with_interrupt_resume(
+                        self._execute_graph_input(
+                            stream_input_messages,
+                            routing_classification=routing_classification,
+                            response_language=response_language,
+                            workspace=workspace,
+                            continue_loop_mode=continue_loop_mode,
+                            skill_activation=skill_activation,
+                            mcp_state=mcp_state,
+                            tool_activation=tool_activation,
+                        ),
+                        config,
+                        detector=self._clarification_detector,
+                        capture=self._clarification_capture,
+                        loop_state_view=self._clarification_loop_state_view,
+                        origin_node=ORIGIN_EXECUTE,
+                        resume_answer_payload=self._clarification_resume_answer_payload,
+                        step_id=step.id,  # for heartbeat correlation + capture
+                        step_description=step.full_description or step.description,
+                        step_start_perf=start,
+                    )
 
-                pass_output = ""
-                pass_main_tool_call_count = 0
-                pass_subgraph_tool_call_count = 0
-                pass_messages: list[BaseMessage] = []
-                pass_delegate_final = ""
-                pass_stream_outcomes: list[dict[str, Any]] = []
-                pass_has_tool_error = False
-                pass_execution_metrics: dict[str, int] = {}
+                    pass_output = ""
+                    pass_main_tool_call_count = 0
+                    pass_subgraph_tool_call_count = 0
+                    pass_messages: list[BaseMessage] = []
+                    pass_delegate_final = ""
+                    pass_stream_outcomes: list[dict[str, Any]] = []
+                    pass_has_tool_error = False
+                    pass_execution_metrics: dict[str, int] = {}
 
-                async for chunk in self._stream_and_collect(
-                    stream,
-                    budget=budget,
-                    step_id=step.id,
-                    step_description=step.description,
-                ):
-                    if chunk.event is not None:
-                        _append_parallel_stream_event(events, chunk.event, live_event_queue)
-                    elif chunk.output is not None:
-                        pass_output = chunk.output
-                        pass_main_tool_call_count = chunk.main_tool_count
-                        pass_subgraph_tool_call_count = chunk.subgraph_tool_count
-                        pass_messages = list(chunk.messages)
-                        pass_delegate_final = chunk.delegate_final
-                        pass_stream_outcomes = list(chunk.outcomes)
-                        pass_has_tool_error = chunk.has_error
-                        pass_execution_metrics = dict(chunk.execution_metrics)
+                    async for chunk in self._stream_and_collect(
+                        stream,
+                        budget=budget,
+                        step_id=step.id,
+                        step_description=step.description,
+                    ):
+                        if chunk.event is not None:
+                            _append_parallel_stream_event(events, chunk.event, live_event_queue)
+                        elif chunk.output is not None:
+                            pass_output = chunk.output
+                            pass_main_tool_call_count = chunk.main_tool_count
+                            pass_subgraph_tool_call_count = chunk.subgraph_tool_count
+                            pass_messages = list(chunk.messages)
+                            pass_delegate_final = chunk.delegate_final
+                            pass_stream_outcomes = list(chunk.outcomes)
+                            pass_has_tool_error = chunk.has_error
+                            pass_execution_metrics = dict(chunk.execution_metrics)
+                except DispatchTimeoutError:
+                    if dispatch_retries_done >= max_dispatch_retries:
+                        raise
+                    dispatch_retries_done += 1
+                    logger.warning(
+                        "[Execute] step %s stream stalled, retrying (dispatch retry %d/%d)",
+                        step.id,
+                        dispatch_retries_done,
+                        max_dispatch_retries,
+                    )
+                    # Reuse the same input — the LangGraph checkpoint has
+                    # prior tool results so the LLM resumes from there.
+                    stream_input_messages = graph_input_messages
+                    continue
+                finally:
+                    if slot_acquired and self._llm_stream_semaphore is not None:
+                        self._llm_stream_semaphore.release()
 
                 output = pass_output
                 main_tool_call_count = pass_main_tool_call_count

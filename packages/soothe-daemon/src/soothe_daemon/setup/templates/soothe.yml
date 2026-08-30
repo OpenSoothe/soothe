@@ -86,3 +86,10 @@ agent:
       max_findings: 20
       max_effects: 50
       max_plan_steps: 30
+
+  # agent.loop: StrangeLoop execution controls. Only non-default overrides shown;
+  # see soothe.config.models.StrangeLoopConfig / LoopConcurrencyConfig for all fields.
+  loop:
+    concurrency:
+      max_parallel_steps: 3       # max concurrent plan steps per execute batch
+      global_max_llm_calls: 3     # max concurrent LLM streams (≤ max_parallel_steps; 0=unlimited)

@@ -35,6 +35,9 @@ agent:
 
   loop:
     final_response: always_synthesize
+    concurrency:
+      max_parallel_steps: 3       # max concurrent plan steps per execute batch
+      global_max_llm_calls: 3     # max concurrent LLM streams (≤ max_parallel_steps; 0=unlimited)
 
 cron: {}
 

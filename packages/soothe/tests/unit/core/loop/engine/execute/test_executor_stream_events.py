@@ -105,12 +105,9 @@ async def test_interrupt_resume_dispatch_idle_disabled_without_config(
             step_id: str | None = None,
             heartbeat_interval: float | None = None,
             idle_timeout: float | None = None,
-            tool_timeout: float | None = None,
-            max_heartbeats: int | None = None,
         ) -> None:
-            _ = step_id, heartbeat_interval, max_heartbeats
+            _ = step_id, heartbeat_interval
             self.idle_timeout = idle_timeout
-            self.tool_timeout = tool_timeout
 
         async def read_next(self) -> str:
             raise StopAsyncIteration
@@ -123,7 +120,6 @@ async def test_interrupt_resume_dispatch_idle_disabled_without_config(
     def _reader_factory(*args: object, **kwargs: object) -> _FakeReader:
         reader = _FakeReader(*args, **kwargs)
         captured["idle_timeout"] = reader.idle_timeout
-        captured["tool_timeout"] = reader.tool_timeout
         return reader
 
     monkeypatch.setattr(
@@ -149,7 +145,6 @@ async def test_interrupt_resume_dispatch_idle_disabled_without_config(
         await anext(stream)
 
     assert captured["idle_timeout"] == 0
-    assert captured["tool_timeout"] == 0
 
 
 @pytest.mark.asyncio
@@ -166,12 +161,9 @@ async def test_interrupt_resume_uses_config_dispatch_idle(
             step_id: str | None = None,
             heartbeat_interval: float | None = None,
             idle_timeout: float | None = None,
-            tool_timeout: float | None = None,
-            max_heartbeats: int | None = None,
         ) -> None:
-            _ = step_id, heartbeat_interval, max_heartbeats
+            _ = step_id, heartbeat_interval
             self.idle_timeout = idle_timeout
-            self.tool_timeout = tool_timeout
 
         async def read_next(self) -> str:
             raise StopAsyncIteration
@@ -184,7 +176,6 @@ async def test_interrupt_resume_uses_config_dispatch_idle(
     def _reader_factory(*args: object, **kwargs: object) -> _FakeReader:
         reader = _FakeReader(*args, **kwargs)
         captured["idle_timeout"] = reader.idle_timeout
-        captured["tool_timeout"] = reader.tool_timeout
         return reader
 
     monkeypatch.setattr(
@@ -201,7 +192,6 @@ async def test_interrupt_resume_uses_config_dispatch_idle(
     mock_agent.can_read_graph_state = False
     config = SootheConfig()
     config.agent.loop.dispatch_idle_seconds = 120
-    config.agent.loop.dispatch_tool_timeout_seconds = 0
     executor = Executor(mock_agent, config=config)
 
     stream = executor._core_agent_astream_with_interrupt_resume(
@@ -213,4 +203,3 @@ async def test_interrupt_resume_uses_config_dispatch_idle(
         await anext(stream)
 
     assert captured["idle_timeout"] == 120
-    assert captured["tool_timeout"] == 0

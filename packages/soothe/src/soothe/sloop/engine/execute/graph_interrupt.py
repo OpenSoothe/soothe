@@ -27,13 +27,6 @@ _MAX_INTERRUPT_ITERATIONS = 50
 # the stream alive and prevent client disconnects.
 _STREAM_HEARTBEAT_INTERVAL_S = 10.0
 
-# Secondary safety net — max heartbeat sentinels emitted while no
-# root-level tool is active. At the default 10s heartbeat interval,
-# 360 sentinels = 1 hour of inactivity. Suspended while tools are active
-# so long-running tools (task, browser_use, Gradle) are not killed; those
-# are bounded by agent.middleware.tool_timeout instead.
-_MAX_HEARTBEAT_SENTINELS = 360
-
 ChunkKind = Literal["sentinel", "tool_dispatch", "tool_result", "chunk"]
 
 
@@ -62,8 +55,6 @@ class DispatchTimeoutError(Exception):
     Attributes:
         timeout_seconds: The inactivity threshold that was exceeded.
         step_id: Optional step identifier for correlation.
-        reason: What kind of timeout fired (`"idle"`, `"tool_wall_clock"`,
-            `"sentinel_cap"`).
     """
 
     def __init__(
@@ -77,22 +68,10 @@ class DispatchTimeoutError(Exception):
         self.step_id = step_id
         self.reason = reason
         loc = f" (step={step_id})" if step_id else ""
-        if reason == "tool_wall_clock":
-            msg = (
-                f"Tool execution exceeded wall-clock cap of {timeout_seconds:.1f}s{loc}. "
-                f"The tool was active but produced no stream chunks within the deadline."
-            )
-        elif reason == "sentinel_cap":
-            msg = (
-                f"Heartbeat sentinel cap reached ({timeout_seconds:.1f}s of inactivity){loc}. "
-                f"The stream produced no real chunks within the sentinel safety limit."
-            )
-        else:
-            msg = (
-                f"Graph stream dispatch stalled: no chunks for {timeout_seconds:.1f}s{loc}. "
-                f"This indicates a deadlock between tool result and next LLM call."
-            )
-        super().__init__(msg)
+        super().__init__(
+            f"Graph stream dispatch stalled: no chunks for {timeout_seconds:.1f}s{loc}. "
+            f"This indicates a deadlock between tool result and next LLM call."
+        )
 
 
 def _is_root_stream_namespace(namespace: Any) -> bool:
@@ -188,13 +167,8 @@ class GraphStreamChunkReader:
     - **Idle timer** (`idle_timeout`): resets on every real chunk. Fires only
       when no root-level tools are pending — the deadlock gap after the last
       ToolMessage before the next LLM hop.
-    - **Tool wall-clock timer** (`tool_timeout`): starts when the first root
-      tool becomes pending, stops when the pending set empties. Optional; `0`
-      defers to `agent.middleware.tool_timeout` middleware.
     - **Pending-tool set**: root dispatches add tool_call ids; root ToolMessages
       remove them. Nested subgraph messages never clear parent activity.
-    - **Sentinel cap**: applies only while no root tools are pending, so
-      long-running tools are not killed by the idle safety net.
     """
 
     def __init__(
@@ -202,10 +176,8 @@ class GraphStreamChunkReader:
         chunk_iter: AsyncIterator[Any],
         *,
         idle_timeout: float | None = None,
-        tool_timeout: float | None = None,
         step_id: str | None = None,
         heartbeat_interval: float | None = None,
-        max_heartbeats: int | None = None,
     ) -> None:
         self._chunk_iter = chunk_iter
         self._step_id = step_id
@@ -213,16 +185,11 @@ class GraphStreamChunkReader:
         self._pending: asyncio.Task[Any] | None = None
 
         self._idle_timeout = max(0.0, float(idle_timeout)) if idle_timeout else 0.0
-        self._tool_timeout = max(0.0, float(tool_timeout)) if tool_timeout else 0.0
-        self._max_heartbeats = (
-            max(0, int(max_heartbeats)) if max_heartbeats is not None else _MAX_HEARTBEAT_SENTINELS
-        )
 
         self._idle_start = time.perf_counter()
         self._heartbeat_start = time.perf_counter()
         self._pending_tool_ids: set[str] = set()
         self._anonymous_active = 0
-        self._tool_wave_start: float | None = None
         self._heartbeat_sentinel_count = 0
 
     @property
@@ -258,8 +225,6 @@ class GraphStreamChunkReader:
             # Streaming/partial dispatch without ids yet — keep a soft hold so
             # idle does not fire between the first tool_call_chunk and id fill.
             self._anonymous_active = max(self._anonymous_active, 1)
-        if self._tools_active and self._tool_wave_start is None:
-            self._tool_wave_start = time.perf_counter()
 
     def _note_tool_result(self, tool_call_id: str | None) -> None:
         """Clear one root tool result from the pending set."""
@@ -268,7 +233,6 @@ class GraphStreamChunkReader:
         elif not self._pending_tool_ids and self._anonymous_active > 0:
             self._anonymous_active -= 1
         if not self._tools_active:
-            self._tool_wave_start = None
             self._anonymous_active = 0
 
     def _apply_chunk_classification(self, classification: StreamChunkClass) -> None:
@@ -282,41 +246,14 @@ class GraphStreamChunkReader:
             self._note_tool_result(classification.result_tool_call_id)
 
     def _check_watchdogs(self) -> DispatchTimeoutError | None:
-        """Return an error if any watchdog threshold is exceeded, else None."""
-        now = time.perf_counter()
-        tools_active = self._tools_active
-
-        if self._tool_timeout > 0 and self._tool_wave_start is not None and tools_active:
-            tool_elapsed = now - self._tool_wave_start
-            if tool_elapsed >= self._tool_timeout:
-                return DispatchTimeoutError(
-                    self._tool_timeout,
-                    step_id=self._step_id,
-                    reason="tool_wall_clock",
-                )
-
-        if self._idle_timeout > 0 and not tools_active:
-            idle_elapsed = now - self._idle_start
+        """Return an error if the idle watchdog is exceeded, else None."""
+        if self._idle_timeout > 0 and not self._tools_active:
+            idle_elapsed = time.perf_counter() - self._idle_start
             if idle_elapsed >= self._idle_timeout:
                 return DispatchTimeoutError(
                     self._idle_timeout,
                     step_id=self._step_id,
-                    reason="idle",
                 )
-
-        # Sentinel cap only when no root tools are pending — long tools rely on
-        # middleware / optional tool_timeout instead of this idle safety net.
-        if (
-            not tools_active
-            and self._max_heartbeats > 0
-            and self._heartbeat_sentinel_count >= self._max_heartbeats
-        ):
-            return DispatchTimeoutError(
-                self._heartbeat_sentinel_count * self._heartbeat_interval,
-                step_id=self._step_id,
-                reason="sentinel_cap",
-            )
-
         return None
 
     async def read_next(self) -> Any:
@@ -482,7 +419,6 @@ def build_clarification_resume_payload(
 
 __all__ = [
     "StreamChunkClass",
-    "_MAX_HEARTBEAT_SENTINELS",
     "_MAX_INTERRUPT_ITERATIONS",
     "_STREAM_HEARTBEAT_INTERVAL_S",
     "_STREAM_HEARTBEAT_SENTINEL",
