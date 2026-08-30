@@ -23,7 +23,7 @@ from unittest.mock import patch
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.sloop.clarification.capture import ClarificationCapture, ResumeTicket
+from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import LoopStateView
@@ -158,7 +158,7 @@ class TestAskUserInterruptCase:
         returns early (no auto-resume) — the clarification relay owns the pause."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["Approve design?"]),))
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -176,9 +176,9 @@ class TestAskUserInterruptCase:
         _ = [c async for c in stream]
 
         # Captured → the relay has the request
-        assert capture.pending_request is not None
-        assert capture.pending_request.origin_node == ORIGIN_EXECUTE
-        assert capture.pending_request.questions == ("Approve design?",)
+        assert capture.head is not None
+        assert capture.head.origin_node == ORIGIN_EXECUTE
+        assert capture.head.questions == ("Approve design?",)
         # Stream returned early — no second astream() call (no auto-resume)
         assert len(core.calls) == 1
 
@@ -193,7 +193,7 @@ class TestAskUserInterruptCase:
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
-            clarification_capture=ClarificationCapture(),
+            clarification_capture=ClarificationQueue(),
             clarification_loop_state_view=_view(),
         )
         resume_payload = {"i1": {"answers": ["Option C"]}}
@@ -266,7 +266,7 @@ class TestInterruptOnCase:
         it (tool_approval origin) and returns early — no auto-resume."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_action_approval_interrupt("edit_file"),))
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -283,8 +283,8 @@ class TestInterruptOnCase:
         )
         _ = [c async for c in stream]
 
-        assert capture.pending_request is not None
-        assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
+        assert capture.head is not None
+        assert capture.head.origin_node == ORIGIN_TOOL_APPROVAL
         # No auto-resume (only 1 astream call)
         assert len(core.calls) == 1
 
@@ -353,7 +353,7 @@ class TestAskUserRoundTripCase:
         core.queue([], state_interrupts=(_ask_user_interrupt(["Which DB?"], interrupt_id="i1"),))
         # Wave 2: resume with answer → no more interrupts → done
         core.queue([])
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -371,7 +371,7 @@ class TestAskUserRoundTripCase:
             origin_node=ORIGIN_EXECUTE,
         )
         _ = [c async for c in stream]
-        assert capture.pending_request is not None
+        assert capture.head is not None
         assert len(core.calls) == 1
 
         # Simulate the policy answering + the graph re-entering with resume
@@ -408,7 +408,7 @@ class TestInterruptOnRoundTripCase:
         )
         # Wave 2: resume with approve decision → done
         core.queue([])
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -426,8 +426,8 @@ class TestInterruptOnRoundTripCase:
             origin_node=ORIGIN_EXECUTE,
         )
         _ = [c async for c in stream]
-        assert capture.pending_request is not None
-        assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
+        assert capture.head is not None
+        assert capture.head.origin_node == ORIGIN_TOOL_APPROVAL
         assert len(core.calls) == 1
 
         # Simulate the policy approving + graph re-entering
@@ -451,7 +451,7 @@ class TestInterruptOnRoundTripCase:
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_action_approval_interrupt("delete", interrupt_id="i2"),))
         core.queue([])
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -468,7 +468,7 @@ class TestInterruptOnRoundTripCase:
             origin_node=ORIGIN_EXECUTE,
         )
         _ = [c async for c in stream]
-        assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
+        assert capture.head.origin_node == ORIGIN_TOOL_APPROVAL
 
         # Reject resume
         resume_payload = build_tool_approval_resume_payload("i2", decisions=[{"type": "reject"}])
@@ -612,7 +612,7 @@ class TestStepIdentityCaptureCase:
         """A GraphInterrupt during a step's stream captures step_id + description."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["Approve design?"]),))
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -631,11 +631,11 @@ class TestStepIdentityCaptureCase:
         )
         _ = [c async for c in stream]
 
-        assert capture.pending_request is not None
-        assert capture.resume_ticket is not None
-        assert capture.resume_ticket.thread_id == "loop-1__abc"
-        assert capture.resume_ticket.step_id == "step-42"
-        assert capture.resume_ticket.step_description == "Refactor auth module"
+        assert capture.head is not None
+        assert capture.head_ticket is not None
+        assert capture.head_ticket.thread_id == "loop-1__abc"
+        assert capture.head_ticket.step_id == "step-42"
+        assert capture.head_ticket.step_description == "Refactor auth module"
 
     @pytest.mark.asyncio
     async def test_tool_approval_capture_records_step_identity(self) -> None:
@@ -645,7 +645,7 @@ class TestStepIdentityCaptureCase:
             [],
             state_interrupts=(_action_approval_interrupt("edit_file", interrupt_id="iTA"),),
         )
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -664,12 +664,12 @@ class TestStepIdentityCaptureCase:
         )
         _ = [c async for c in stream]
 
-        assert capture.pending_request is not None
-        assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
-        assert capture.resume_ticket is not None
-        assert capture.resume_ticket.thread_id == "loop-1__def"
-        assert capture.resume_ticket.step_id == "step-7"
-        assert capture.resume_ticket.step_description == "Write the migration script"
+        assert capture.head is not None
+        assert capture.head.origin_node == ORIGIN_TOOL_APPROVAL
+        assert capture.head_ticket is not None
+        assert capture.head_ticket.thread_id == "loop-1__def"
+        assert capture.head_ticket.step_id == "step-7"
+        assert capture.head_ticket.step_description == "Write the migration script"
 
     @pytest.mark.asyncio
     async def test_no_step_id_leaves_resume_step_fields_none(self) -> None:
@@ -678,7 +678,7 @@ class TestStepIdentityCaptureCase:
         resume path falls back to the CE root."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["q?"]),))
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -695,10 +695,10 @@ class TestStepIdentityCaptureCase:
         )
         _ = [c async for c in stream]
 
-        assert capture.resume_ticket is not None
-        assert capture.resume_ticket.thread_id == "t"
-        assert capture.resume_ticket.step_id is None
-        assert capture.resume_ticket.step_description is None
+        assert capture.head_ticket is not None
+        assert capture.head_ticket.thread_id == "t"
+        assert capture.head_ticket.step_id is None
+        assert capture.head_ticket.step_description is None
 
 
 # ===========================================================================
@@ -714,8 +714,8 @@ class TestCapturedClarificationScoringCase:
 
     @staticmethod
     def _executor_with_capture(
-        capture: ClarificationCapture,
-    ) -> tuple[Executor, ClarificationCapture]:
+        capture: ClarificationQueue,
+    ) -> tuple[Executor, ClarificationQueue]:
         executor = _make_executor(
             _StubCoreAgent(),
             clarification_detector=ClarificationDetector(),
@@ -736,7 +736,7 @@ class TestCapturedClarificationScoringCase:
         from soothe.sloop.engine.execute.step_wave_types import _StreamCollectChunk
         from soothe.sloop.state.schemas import StepAction
 
-        capture = ClarificationCapture()
+        capture = ClarificationQueue()
         executor, capture = self._executor_with_capture(capture)
         executor.core_agent = MagicMock()
         executor.core_agent.can_read_graph_state = False

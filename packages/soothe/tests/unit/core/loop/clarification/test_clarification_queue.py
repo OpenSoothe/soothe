@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from soothe.sloop.clarification.capture import (
-    ClarificationCapture,
     ClarificationQueue,
     QueuedClarification,
     ResumeTicket,
@@ -113,44 +112,6 @@ class TestClarificationQueueFIFO:
             raise AssertionError("should not be settable")
         except AttributeError:
             pass
-
-
-class TestClarificationCaptureBackcompat:
-    """The deprecated ClarificationCapture alias still works as a queue."""
-
-    def test_capture_is_queue_subclass(self) -> None:
-        assert issubclass(ClarificationCapture, ClarificationQueue)
-
-    def test_capture_set_first_wins_shim(self) -> None:
-        """set() emulates first-wins for unmigrated callers — only the first survives."""
-        c = ClarificationCapture()
-        r1 = _request("iii-1")
-        r2 = _request("iii-2")
-        c.set(r1)
-        c.set(r2)  # dropped (back-compat first-wins)
-        assert len(c) == 1
-        assert c.head is r1
-
-    def test_capture_pending_request_alias(self) -> None:
-        """pending_request is a back-compat alias for head."""
-        c = ClarificationCapture()
-        assert c.pending_request is None
-        c.enqueue(
-            _request("iii-1"),
-            resume_ticket=ResumeTicket(thread_id="t1"),
-        )
-        assert c.pending_request is not None
-        assert c.pending_request.origin_interrupt_id == "iii-1"
-
-    def test_capture_resume_ticket_alias(self) -> None:
-        """resume_ticket is a back-compat alias for head_ticket."""
-        c = ClarificationCapture()
-        c.enqueue(
-            _request("iii-1"),
-            resume_ticket=ResumeTicket(thread_id="t1"),
-        )
-        assert c.resume_ticket is not None
-        assert c.resume_ticket.thread_id == "t1"
 
 
 class TestQueuedClarificationDataclass:

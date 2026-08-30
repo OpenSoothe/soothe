@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from langgraph.types import Interrupt
 
-from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.capture import ClarificationQueue
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import LoopStateView
@@ -230,7 +230,7 @@ async def test_tool_approval_captured_when_relay_active() -> None:
     """action_requests is captured into the relay (always-on; never auto-resumed)."""
     core = _StubCoreAgent()
     core.queue([], state_interrupts=(_tool_approval_interrupt(),))
-    capture = ClarificationCapture()
+    capture = ClarificationQueue()
     executor = _make_executor(
         core,
         clarification_detector=ClarificationDetector(),
@@ -247,7 +247,7 @@ async def test_tool_approval_captured_when_relay_active() -> None:
     )
     _ = [c async for c in stream]
 
-    assert capture.pending_request is not None
-    assert capture.pending_request.origin_node == ORIGIN_TOOL_APPROVAL
+    assert capture.head is not None
+    assert capture.head.origin_node == ORIGIN_TOOL_APPROVAL
     # Stream returned early (captured), no second call (no auto-resume)
     assert len(core.calls) == 1

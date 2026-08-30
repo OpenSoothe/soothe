@@ -788,8 +788,8 @@ class Executor:
           the stream alive and prevent client disconnects during slow tool
           execution (browser_use, long searches).
         - When `step_start_perf` is set, the elapsed wall-clock at interrupt
-          time is recorded on ``capture.resume_ticket.prior_duration_ms`` so
-          the resume pass can accumulate it into the final ``duration_ms``.
+          time is recorded on the enqueued entry's ``resume_ticket.prior_duration_ms``
+          so the resume pass can accumulate it into the final ``duration_ms``.
         """
         interrupt_iterations = 0
         current_input: dict[str, Any] | Command = (

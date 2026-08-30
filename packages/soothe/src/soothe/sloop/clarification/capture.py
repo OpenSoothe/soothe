@@ -43,7 +43,7 @@ class QueuedClarification:
 class ClarificationQueue:
     """Per-loop FIFO queue of captured clarification requests.
 
-    Never drops interrupts — every ``ask_user`` / ``tool_approval`` interrupt
+    Never drops interrupts. Every ``ask_user`` / ``tool_approval`` interrupt
     from every step enters via :meth:`enqueue`. The originating step halts
     (its CoreAgent thread is checkpointed with the pending LangGraph interrupt)
     and resumes via ``Command(resume=...)`` when its entry reaches the head
@@ -96,40 +96,11 @@ class ClarificationQueue:
         """Resume ticket for the head entry, or ``None`` if empty."""
         return self.peek().resume_ticket if self._entries else None
 
-    @property
-    def resume_ticket(self) -> ResumeTicket | None:
-        """Alias for :attr:`head_ticket`."""
-        return self.head_ticket
-
     def __len__(self) -> int:
         return len(self._entries)
 
     def __bool__(self) -> bool:
         return bool(self._entries)
 
-    def set(self, request: ClarificationRequest) -> None:
-        """Back-compat: enqueue only when empty (first-wins emulation).
 
-        New call sites should call :meth:`enqueue` directly.
-        """
-        if self._entries:
-            logger.warning(
-                "[ClarificationQueue] back-compat set() dropping secondary "
-                "interrupt (use enqueue()); kept=%s dropped=%s",
-                self.head.origin_interrupt_id[:16] if self.head else "?",
-                request.origin_interrupt_id[:16],
-            )
-            return
-        self.enqueue(request, resume_ticket=ResumeTicket())
-
-    @property
-    def pending_request(self) -> ClarificationRequest | None:
-        """Back-compat alias for :attr:`head`."""
-        return self.head
-
-
-class ClarificationCapture(ClarificationQueue):
-    """Deprecated alias for :class:`ClarificationQueue`."""
-
-
-__all__ = ["ClarificationCapture", "ClarificationQueue", "QueuedClarification", "ResumeTicket"]
+__all__ = ["ClarificationQueue", "QueuedClarification", "ResumeTicket"]

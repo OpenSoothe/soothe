@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.sloop.clarification.capture import ClarificationCapture
+from soothe.sloop.clarification.capture import ClarificationQueue
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import Executor
@@ -96,7 +96,7 @@ def _action_approval_interrupt(interrupt_id: str = "i2") -> Interrupt:
 async def test_ask_user_interrupt_captured_and_stream_stops() -> None:
     core = _StubCoreAgent()
     core.queue([], state_interrupts=(_ask_user_interrupt("iX"),))
-    capture = ClarificationCapture()
+    capture = ClarificationQueue()
 
     executor = _make_executor(
         core,
@@ -115,9 +115,9 @@ async def test_ask_user_interrupt_captured_and_stream_stops() -> None:
     chunks = [c async for c in stream]
 
     assert len(chunks) == 0
-    assert capture.pending_request is not None
-    assert capture.pending_request.origin_interrupt_id == "iX"
-    assert capture.pending_request.questions == ("What aspect?",)
+    assert capture.head is not None
+    assert capture.head.origin_interrupt_id == "iX"
+    assert capture.head.questions == ("What aspect?",)
     assert len(core.calls) == 1
 
 
@@ -132,7 +132,7 @@ async def test_empty_ask_user_does_not_auto_resume_spin() -> None:
     # Only one scripted stream turn — a spin would try to call astream again
     # and raise IndexError on _scripts.pop(0).
     core.queue([], state_interrupts=(empty_ask,))
-    capture = ClarificationCapture()
+    capture = ClarificationQueue()
 
     executor = _make_executor(
         core,
@@ -150,7 +150,7 @@ async def test_empty_ask_user_does_not_auto_resume_spin() -> None:
     )
     _ = [c async for c in stream]
 
-    assert capture.pending_request is None
+    assert capture.head is None
     assert len(core.calls) == 1
 
 
@@ -158,7 +158,7 @@ async def test_empty_ask_user_does_not_auto_resume_spin() -> None:
 async def test_resume_answer_payload_cleared_after_use() -> None:
     core = _StubCoreAgent()
     core.queue([])
-    capture = ClarificationCapture()
+    capture = ClarificationQueue()
     payload = {"iX": {"answers": ["auth flows"]}}
     executor = _make_executor(
         core,
@@ -189,7 +189,7 @@ async def test_action_requests_captured_as_tool_approval_when_relay_active() -> 
     not auto-resumed. The relay owns the pause."""
     core = _StubCoreAgent()
     core.queue([], state_interrupts=(_action_approval_interrupt("iA"),))
-    capture = ClarificationCapture()
+    capture = ClarificationQueue()
 
     executor = _make_executor(
         core,
@@ -207,8 +207,8 @@ async def test_action_requests_captured_as_tool_approval_when_relay_active() -> 
     )
     _ = [c async for c in stream]
 
-    assert capture.pending_request is not None
-    assert capture.pending_request.origin_node == "tool_approval"
+    assert capture.head is not None
+    assert capture.head.origin_node == "tool_approval"
     assert len(core.calls) == 1  # no auto-resume
 
 
@@ -216,7 +216,7 @@ async def test_action_requests_captured_as_tool_approval_when_relay_active() -> 
 async def test_resume_answer_payload_is_used_for_first_call() -> None:
     core = _StubCoreAgent()
     core.queue([])
-    capture = ClarificationCapture()
+    capture = ClarificationQueue()
 
     payload = {"iX": {"answers": ["auth flows"]}}
     executor = _make_executor(

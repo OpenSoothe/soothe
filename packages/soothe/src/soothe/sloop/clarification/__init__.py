@@ -1,10 +1,9 @@
-"""Clarification relay: routes structured `ask_user` interrupts through a clarification policy and resumes the loop with the answer."""
+"""Clarification relay: routes structured ask_user interrupts through a clarification policy and resumes the loop with the answer."""
 
 from __future__ import annotations
 
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.sloop.clarification.capture import (
-    ClarificationCapture,
     ClarificationQueue,
     QueuedClarification,
     ResumeTicket,
@@ -15,7 +14,6 @@ from soothe.sloop.clarification.tool_approval_pipeline import ToolApprovalPipeli
 
 __all__ = [
     "AutoClarificationPolicy",
-    "ClarificationCapture",
     "ClarificationQueue",
     "ClarificationDetector",
     "InteractiveClarificationPolicy",
