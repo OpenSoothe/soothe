@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.2] - 2026-08-30
+
 ### Changed
 - StrangeLoop dispatch watchdog simplified to a single idle timer: removed `dispatch_tool_timeout_seconds` and the heartbeat sentinel cap (`_MAX_HEARTBEAT_SENTINELS`), leaving `dispatch_idle_seconds` as the sole deadlock detector. Long-running tools are now bounded only by `agent.middleware.tool_timeout`.
 - `LoopConcurrencyConfig.global_max_llm_calls` default lowered from `8` to `3` and repurposed as a concurrent-LLM-stream gate (≤ `max_parallel_steps`); the executor now enforces it via an `asyncio.Semaphore` around each step stream to prevent `dispatch_idle_seconds` false positives from LLM scheduling latency.
 - Added `dispatch_retry_max` (default `3`): when `dispatch_idle_seconds` fires, the step retries up to N times reusing the LangGraph checkpoint before failing. Replaces the removed `dispatch_tool_timeout_seconds` retry path.
+
+### Fixed
+- Patch version bump to 1.0.2 across all monorepo-owned packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`). The `soothe-sdk` package remains on its independent 1.x version line.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.1...v1.0.2
 
 ## [v1.0.1] - 2026-08-30
 
