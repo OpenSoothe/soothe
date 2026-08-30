@@ -22,15 +22,8 @@ DEFAULT_MAX_ITERATIONS = 99
 # Simple tasks may decompose mid-step: the model gathers evidence, then invokes
 # decompose_task to fan out subtasks when the goal is bigger than one step. 500
 # gives room for that explore→decompose trajectory; the iteration budget
-# (DEFAULT_MAX_ITERATIONS), consecutive rate-limit gate, and read-only-streak
-# circuit breaker (DEFAULT_READ_ONLY_STREAK_LIMIT) still bound runaway.
+# (DEFAULT_MAX_ITERATIONS) and consecutive rate-limit gate still bound runaway.
 DEFAULT_MAX_TOOL_CALLS_PER_STEP = 500
-
-# Consecutive read-only tool calls (grep/glob/read_file/ls) without a mutating
-# call (edit/write/delete/run_command/decompose_task) before the Act stream is
-# stopped. Prevents infinite evidence-gathering loops where the model keeps
-# searching without ever acting (loop a85d: 666 read-only calls, no mutating).
-DEFAULT_READ_ONLY_STREAK_LIMIT = 50
 
 # ============================================================================
 # Prompt / Render Character-Cap Registry

@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage
 
-from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP, DEFAULT_READ_ONLY_STREAK_LIMIT
+from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
 from soothe.sloop.state.schemas import StepAction, StepExecutionRecord
 
 # ``task`` tool return text cap per invocation before joining (delegate finals).
@@ -53,13 +53,10 @@ class _ActStreamBudget:
 
     max_subagent_tasks_per_wave: int = 0
     max_tool_calls_per_step: int = DEFAULT_MAX_TOOL_CALLS_PER_STEP
-    max_read_only_streak: int = DEFAULT_READ_ONLY_STREAK_LIMIT
     subagent_task_completions: int = 0
     tool_call_count: int = 0
-    consecutive_read_only: int = 0
     hit_subagent_cap: bool = False
     hit_tool_budget: bool = False
-    hit_read_only_streak: bool = False
 
 
 @dataclass(frozen=True, slots=True)

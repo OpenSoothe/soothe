@@ -72,7 +72,6 @@ from soothe_nano.config.models import (
 from soothe.config.constants import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
-    DEFAULT_READ_ONLY_STREAK_LIMIT,
     GOAL_COMPLETION_REPORT_MAX_CHARS,
     GOAL_COMPLETION_REPORT_MAX_MESSAGES,
     GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS,
@@ -1052,18 +1051,6 @@ class StrangeLoopConfig(BaseModel):
         ),
         ge=0,
         le=10_000,
-    )
-
-    read_only_streak_limit: int = Field(
-        default=DEFAULT_READ_ONLY_STREAK_LIMIT,
-        description=(
-            "Max consecutive read-only tool calls (grep/glob/read_file/ls) "
-            "without a mutating call (edit/write/delete/run_command/"
-            "decompose_task) before the Act stream is stopped. Prevents "
-            "infinite evidence-gathering loops (a85d: 666 read-only calls)."
-        ),
-        ge=10,
-        le=500,
     )
 
     @model_validator(mode="before")
