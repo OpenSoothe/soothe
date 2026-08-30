@@ -44,30 +44,30 @@ def test_token_budget_suffix_formats_counts() -> None:
     card = CognitionStepMessage("TKN-03", "Format", id="stp-tkn-fmt")
     card.record_token_usage(1500, 300)
     suffix = card._token_budget_suffix()
-    assert suffix == " · in:1.5K out:300"
+    assert suffix == " · ↑1.5K ↓300"
 
 
 def test_token_budget_suffix_formats_large_counts() -> None:
     card = CognitionStepMessage("TKN-04", "Large", id="stp-tkn-large")
     card.record_token_usage(2_500_000, 100_000)
     suffix = card._token_budget_suffix()
-    assert suffix == " · in:2.5M out:100.0K"
+    assert suffix == " · ↑2.5M ↓100.0K"
 
 
 def test_token_budget_suffix_input_only() -> None:
     card = CognitionStepMessage("TKN-05", "InputOnly", id="stp-tkn-in")
     card.record_token_usage(500, 0)
     suffix = card._token_budget_suffix()
-    assert "in:500" in suffix
-    assert "out:0" in suffix
+    assert "↑500" in suffix
+    assert "↓0" in suffix
 
 
 def test_token_budget_suffix_output_only() -> None:
     card = CognitionStepMessage("TKN-06", "OutputOnly", id="stp-tkn-out")
     card.record_token_usage(0, 200)
     suffix = card._token_budget_suffix()
-    assert "in:0" in suffix
-    assert "out:200" in suffix
+    assert "↑0" in suffix
+    assert "↓200" in suffix
 
 
 def test_record_token_usage_refreshes_running_title_meta() -> None:
@@ -107,5 +107,5 @@ def test_subagent_completion_status_includes_token_suffix() -> None:
     card._detail_widget = MagicMock()
     card.set_complete(True, 5000, 2, "Done")
     text = _extract_content_text(card._status_widget.update.call_args[0][0])
-    assert "in:900" in text
-    assert "out:120" in text
+    assert "↑900" in text
+    assert "↓120" in text

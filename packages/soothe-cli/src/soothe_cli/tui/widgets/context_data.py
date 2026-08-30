@@ -138,7 +138,7 @@ def format_token_usage(snapshot: TokenUsageSnapshot) -> str:
     formatted = format_token_count(count)
     usage = f"{formatted}{suffix} tokens used this loop"
     if in_count > 0 or out_count > 0:
-        usage += f" (in: {format_token_count(in_count)} · out: {format_token_count(out_count)})"
+        usage += f" (↑{format_token_count(in_count)} · ↓{format_token_count(out_count)})"
 
     msg = f"{usage} · {model_name}" if model_name else usage
 

@@ -251,14 +251,14 @@ class CognitionStepMessage(Vertical):
             self._sync_step_card_surface()
 
     def _token_budget_suffix(self) -> str:
-        """Token budget suffix for status lines, e.g. `in:1.2K out:345`."""
+        """Token budget suffix for status lines, e.g. `↑1.2K ↓345`."""
         if not (self._input_tokens or self._output_tokens):
             return ""
         from soothe_cli.runtime.state.session_stats import format_token_count
 
         parts: list[str] = []
-        parts.append(f"in:{format_token_count(self._input_tokens)}")
-        parts.append(f"out:{format_token_count(self._output_tokens)}")
+        parts.append(f"↑{format_token_count(self._input_tokens)}")
+        parts.append(f"↓{format_token_count(self._output_tokens)}")
         return " · " + " ".join(parts)
 
     def _compact_title_meta_suffix(self) -> str:

@@ -324,14 +324,14 @@ def test_goal_tree_done_footer_includes_token_suffix() -> None:
         completion_summary="All good",
         total_steps=1,
     )
-    assert "in:1.5K" in tree._footer_plain
-    assert "out:300" in tree._footer_plain
+    assert "↑1.5K" in tree._footer_plain
+    assert "↓300" in tree._footer_plain
     # Token suffix sits after the summary, joined by the middot separator.
-    assert "All good · in:1.5K out:300" in tree._footer_plain
+    assert "All good · ↑1.5K ↓300" in tree._footer_plain
 
     content = tree.plan_quick_view_content()
-    assert "in:1.5K" in content.plain
-    assert "out:300" in content.plain
+    assert "↑1.5K" in content.plain
+    assert "↓300" in content.plain
 
 
 def test_goal_tree_done_footer_omits_tokens_when_zero() -> None:
@@ -345,8 +345,8 @@ def test_goal_tree_done_footer_omits_tokens_when_zero() -> None:
         completion_summary="All good",
         total_steps=1,
     )
-    assert "in:" not in tree._footer_plain
-    assert "out:" not in tree._footer_plain
+    assert "↑" not in tree._footer_plain
+    assert "↓" not in tree._footer_plain
 
 
 def test_goal_tree_done_footer_includes_goal_level_orphan_tokens() -> None:
@@ -362,8 +362,8 @@ def test_goal_tree_done_footer_includes_goal_level_orphan_tokens() -> None:
         completion_summary="All good",
         total_steps=0,
     )
-    assert "in:2.2K" in tree._footer_plain
-    assert "out:450" in tree._footer_plain
+    assert "↑2.2K" in tree._footer_plain
+    assert "↓450" in tree._footer_plain
 
 
 def test_overlay_toggle_expands_and_collapses() -> None:
@@ -754,8 +754,8 @@ def test_plan_quick_view_completed_step_shows_in_out_tokens() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "in:1.5K" in content.plain
-    assert "out:300" in content.plain
+    assert "↑1.5K" in content.plain
+    assert "↓300" in content.plain
 
 
 def test_plan_quick_view_running_step_shows_in_out_tokens() -> None:
@@ -768,8 +768,8 @@ def test_plan_quick_view_running_step_shows_in_out_tokens() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "in:800" in content.plain
-    assert "out:120" in content.plain
+    assert "↑800" in content.plain
+    assert "↓120" in content.plain
 
 
 def test_plan_quick_view_step_hides_tokens_when_zero() -> None:
@@ -779,8 +779,8 @@ def test_plan_quick_view_step_hides_tokens_when_zero() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "in:" not in content.plain
-    assert "out:" not in content.plain
+    assert "↑" not in content.plain
+    assert "↓" not in content.plain
 
 
 def test_plan_panel_header_includes_goal_token_totals() -> None:
@@ -806,15 +806,15 @@ def test_plan_panel_header_includes_goal_token_totals() -> None:
     )
 
     suffix = tree.goal_token_suffix()
-    assert "in:1.5K" in suffix
-    assert "out:300" in suffix
+    assert "↑1.5K" in suffix
+    assert "↓300" in suffix
 
     header = _plan_quick_view_header(
         "019f17e6-1234-5678-9abc-def012346543",
         tokens=suffix,
     )
-    assert "in:1.5K" in header.plain
-    assert "out:300" in header.plain
+    assert "↑1.5K" in header.plain
+    assert "↓300" in header.plain
 
 
 def test_plan_panel_header_omits_tokens_when_empty() -> None:
@@ -826,8 +826,8 @@ def test_plan_panel_header_omits_tokens_when_empty() -> None:
         "019f17e6-1234-5678-9abc-def012346543",
         tokens=tree.goal_token_suffix(),
     )
-    assert "in:" not in header.plain
-    assert "out:" not in header.plain
+    assert "↑" not in header.plain
+    assert "↓" not in header.plain
 
 
 def test_goal_tree_snapshot_round_trips_token_fields() -> None:

@@ -37,7 +37,7 @@ def _plan_quick_view_title(
     elapsed: str | None = None,
     tokens: str | None = None,
 ) -> str:
-    """Compose the panel title: `Orchestrating [8d26] · complex · 37s · in:1.2K out:345`."""
+    """Compose the panel title: `Orchestrating [8d26] · complex · 37s · ↑1.2K ↓345`."""
     title = "Orchestrating"
     short_id = compact_id_suffix(loop_id or "")
     if short_id:

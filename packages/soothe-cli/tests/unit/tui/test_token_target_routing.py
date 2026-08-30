@@ -129,8 +129,8 @@ def test_resolve_token_target_card_returns_none_for_unbound_parallel_wave() -> N
     # Simulate the adapter fallback: orphan chunk routed to the goal tree.
     tree.record_goal_token_usage(2200, 450)
     assert tree.goal_token_totals() == (2200, 450)
-    assert "in:2.2K" in tree.goal_token_suffix()
-    assert "out:450" in tree.goal_token_suffix()
+    assert "↑2.2K" in tree.goal_token_suffix()
+    assert "↓450" in tree.goal_token_suffix()
 
 
 def test_resolve_token_target_card_extracts_step_id_from_message_tool_calls() -> None:

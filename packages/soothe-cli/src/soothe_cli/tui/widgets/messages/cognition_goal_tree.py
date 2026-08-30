@@ -331,7 +331,7 @@ class CognitionGoalTreeMessage(Vertical):
         self._goal_out_tokens += out_t
 
     def goal_token_suffix(self) -> str:
-        """Compact `in:1.2K out:345` suffix for the plan panel title.
+        """Compact `↑1.2K ↓345` suffix for the plan panel title.
 
         Returns an empty string when no step has recorded any tokens.
         """
@@ -340,7 +340,7 @@ class CognitionGoalTreeMessage(Vertical):
             return ""
         from soothe_cli.runtime.state.session_stats import format_token_count
 
-        return f"in:{format_token_count(total_in)} out:{format_token_count(total_out)}"
+        return f"↑{format_token_count(total_in)} ↓{format_token_count(total_out)}"
 
     def mark_loop_started(self, started_at: float | None = None) -> None:
         """Anchor plan-level elapsed time (matches thinking-row turn start)."""
@@ -390,14 +390,14 @@ class CognitionGoalTreeMessage(Vertical):
 
     @staticmethod
     def _step_token_parts(st: _StepLineState) -> list[str]:
-        """In/out token labels for a step row, e.g. `in:1.2K out:345`."""
+        """Arrow token labels for a step row, e.g. `↑1.2K ↓345`."""
         if not (st.input_tokens or st.output_tokens):
             return []
         from soothe_cli.runtime.state.session_stats import format_token_count
 
         return [
-            f"in:{format_token_count(st.input_tokens)}",
-            f"out:{format_token_count(st.output_tokens)}",
+            f"↑{format_token_count(st.input_tokens)}",
+            f"↓{format_token_count(st.output_tokens)}",
         ]
 
     def _step_summary_suffix(self, st: _StepLineState) -> str:

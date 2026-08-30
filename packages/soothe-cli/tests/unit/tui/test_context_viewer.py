@@ -68,8 +68,8 @@ def test_format_token_usage_includes_breakdown() -> None:
     rendered = context_data.format_token_usage(snapshot)
     assert "test-model" in rendered
     assert "tokens used this loop" in rendered
-    assert "in:" in rendered
-    assert "out:" in rendered
+    assert "↑" in rendered
+    assert "↓" in rendered
     assert "Conversation (est.)" in rendered
 
 
