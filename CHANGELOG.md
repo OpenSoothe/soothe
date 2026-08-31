@@ -8,7 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- _Nothing yet._
+
+## [v1.0.3] - 2026-08-31
+
+### Added
 - StrangeLoop `root_eval` now retries failed steps in read-only interaction modes (`plan`, `ask`) before finalizing, gated by `agent.loop.max_step_retries` (default `2`). `StepNode.retry_count` tracks attempts; exhausted steps fall through to finalize.
+
+### Fixed
+- Patch version bump to 1.0.3 across all monorepo-owned packages (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`). The `soothe-sdk` package remains on its independent 1.x version line.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.2...v1.0.3
 
 ## [v1.0.2] - 2026-08-30
 
