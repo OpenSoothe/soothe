@@ -269,13 +269,52 @@ def _message_has_tool_invocation_metadata(msg: object) -> bool:
     return False
 
 
+def _message_has_usage_metadata(msg: object) -> bool:
+    """True when an AI message carries provider token usage (``usage_metadata``).
+
+    Providers (Anthropic, OpenAI-compatible) may emit a final stream chunk that
+    carries *only* ``usage_metadata`` — no text, no tool calls, no loop phase.
+    Without this check, :func:`_ai_chunk_has_actionable_payload` drops such
+    chunks at the runner, so token usage never reaches the TUI and step cards
+    show ``↑0 ↓0``. Mirrors the CLI-side filter in ``chunk_filter.py``.
+    """
+    from langchain_core.messages import AIMessage, AIMessageChunk
+
+    if isinstance(msg, (AIMessage, AIMessageChunk)):
+        usage = getattr(msg, "usage_metadata", None)
+        return isinstance(usage, dict) and bool(usage)
+    if isinstance(msg, dict):
+        raw_type = msg.get("type")
+        if not isinstance(raw_type, str):
+            return False
+        if raw_type not in ("ai", "AIMessage", "AIMessageChunk") and not raw_type.endswith(
+            "AIMessageChunk"
+        ):
+            return False
+        body = msg.get("data") if isinstance(msg.get("data"), dict) else msg
+        if not isinstance(body, dict):
+            return False
+        usage = body.get("usage_metadata")
+        if isinstance(usage, dict) and usage:
+            return True
+        response = body.get("response_metadata")
+        if isinstance(response, dict):
+            for key in ("token_usage", "usage"):
+                nested = response.get(key)
+                if isinstance(nested, dict) and nested:
+                    return True
+    return False
+
+
 def _ai_chunk_has_actionable_payload(msg: object) -> bool:
-    """True when an AI message should be forwarded (text, tools, or loop phase)."""
+    """True when an AI message should be forwarded (text, tools, usage, or loop phase)."""
     from langchain_core.messages import AIMessage, AIMessageChunk
 
     if loop_message_assistant_output_phase(msg) is not None:
         return True
     if _message_has_tool_invocation_metadata(msg):
+        return True
+    if _message_has_usage_metadata(msg):
         return True
     if isinstance(msg, (AIMessage, AIMessageChunk)):
         text = extract_text_from_message_content(msg.content)
@@ -284,6 +323,8 @@ def _ai_chunk_has_actionable_payload(msg: object) -> bool:
         if loop_message_assistant_output_phase(msg) is not None:
             return True
         if _message_has_tool_invocation_metadata(msg):
+            return True
+        if _message_has_usage_metadata(msg):
             return True
         from soothe_sdk.display.text_extract import extract_text_from_ai_message
 

@@ -194,6 +194,70 @@ def test_empty_ai_chunk_not_forwarded() -> None:
     assert _forward_messages_chunk(chunk) is False
 
 
+def test_usage_only_ai_chunk_forwarded() -> None:
+    """Providers emit a final chunk carrying only usage_metadata (no text/tools).
+
+    Dropping it at the runner starves the TUI's per-step token accumulators so
+    step cards and plan-panel rows show ``↑0 ↓0``.
+    """
+    from soothe.runner._runner_strange_loop import (
+        _ai_chunk_has_actionable_payload,
+        _message_has_usage_metadata,
+    )
+
+    msg = AIMessage(
+        content="",
+        usage_metadata={"input_tokens": 1500, "output_tokens": 300, "total_tokens": 1800},
+    )
+    chunk = ((), "messages", (msg, {}))
+    assert _message_has_usage_metadata(msg) is True
+    assert _ai_chunk_has_actionable_payload(msg) is True
+    assert _is_ai_messages_stream_chunk(chunk) is True
+    assert _forward_messages_chunk(chunk) is True
+
+
+def test_usage_only_chunk_dict_forwarded() -> None:
+    """Wire-dict form of a usage-only chunk (flat and OpenAI-style)."""
+    from soothe.runner._runner_strange_loop import (
+        _ai_chunk_has_actionable_payload,
+        _message_has_usage_metadata,
+    )
+
+    # Flat LangChain-style usage_metadata
+    flat = {
+        "type": "AIMessageChunk",
+        "content": "",
+        "usage_metadata": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+    }
+    assert _message_has_usage_metadata(flat) is True
+    assert _ai_chunk_has_actionable_payload(flat) is True
+    assert _forward_messages_chunk(((), "messages", (flat, {}))) is True
+
+    # OpenAI-style response_metadata.token_usage
+    openai_style = {
+        "type": "AIMessageChunk",
+        "content": "",
+        "response_metadata": {
+            "token_usage": {"prompt_tokens": 200, "completion_tokens": 80, "total_tokens": 280}
+        },
+    }
+    assert _message_has_usage_metadata(openai_style) is True
+    assert _ai_chunk_has_actionable_payload(openai_style) is True
+    assert _forward_messages_chunk(((), "messages", (openai_style, {}))) is True
+
+    # Enveloped form {type, data: body}
+    enveloped = {
+        "type": "AIMessageChunk",
+        "data": {
+            "content": "",
+            "usage_metadata": {"input_tokens": 7, "output_tokens": 3, "total_tokens": 10},
+        },
+    }
+    assert _message_has_usage_metadata(enveloped) is True
+    assert _ai_chunk_has_actionable_payload(enveloped) is True
+    assert _forward_messages_chunk(((), "messages", (enveloped, {}))) is True
+
+
 def test_empty_ai_chunk_with_tool_calls_still_forwarded() -> None:
     msg = AIMessage(
         content="",
