@@ -941,6 +941,10 @@ class _ExecutionMixin:
                         )
                     )
                     return
+                except Exception as exc:
+                    logger.warning("Unexpected error connecting to daemon", exc_info=True)
+                    await self._mount_message(ErrorMessage(f"Unexpected connection error. {exc}"))
+                    return
             self._agent_running = True
 
             # Stop passive reads so active turn streaming has sole websocket access.
@@ -1093,6 +1097,11 @@ class _ExecutionMixin:
                             continue
                         except (ConnectionError, OSError, TimeoutError):
                             pass
+                        except Exception:
+                            logger.debug(
+                                "Unexpected error during daemon reconnect retry",
+                                exc_info=True,
+                            )
                     raise
         except Exception as e:  # Resilient tool rendering
             # Attach-only idle timeout is benign: the prior turn had already
