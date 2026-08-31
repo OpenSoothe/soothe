@@ -63,12 +63,12 @@ def test_plan_review_refine_wire_content_with_comments() -> None:
 # ---------------------------------------------------------------------------
 
 _PLAN_REVIEW_Q = {
-    "question": "Action for this plan: Approve, Refine, or Reject?",
+    "question": "Action for this plan: Approve, Reject, or Refine?",
     "header": "Plan review",
     "options": [
         {"label": "Approve", "description": "Accept the plan and proceed."},
-        {"label": "Refine", "description": "Request changes with refinement instructions."},
         {"label": "Reject", "description": "Reject the plan and terminate this goal."},
+        {"label": "Refine", "description": "Request changes with refinement instructions."},
     ],
 }
 
@@ -89,7 +89,7 @@ def _make_plan_review_widget(**kwargs) -> StructuredAskUserWidget:
         questions=[_PLAN_REVIEW_Q],
         origin_node="plan_mode_review",
         allow_custom=False,
-        comment_option_index=1,
+        comment_option_index=2,
     )
     defaults.update(kwargs)
     return StructuredAskUserWidget(**defaults)
@@ -234,9 +234,8 @@ async def test_plan_review_reject_submits_immediately() -> None:
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
         await pilot.pause()
-        # Navigate to Reject (option 2) and confirm.
-        widget.action_next_option()  # highlight 1 (Refine)
-        widget.action_next_option()  # highlight 2 (Reject)
+        # Navigate to Reject (option 1) and confirm.
+        widget.action_next_option()  # highlight 1 (Reject)
         widget.action_confirm()
         await pilot.pause()
         assert len(app.submitted) == 1
@@ -252,8 +251,9 @@ async def test_plan_review_refine_with_comments() -> None:
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
         await pilot.pause()
-        # Navigate to Refine (option 1).
-        widget.action_next_option()  # highlight 1 (Refine)
+        # Navigate to Refine (option 2).
+        widget.action_next_option()  # Reject
+        widget.action_next_option()  # Refine
         widget.action_confirm()  # selects Refine → focuses comment input
         await pilot.pause()
         assert len(app.submitted) == 0  # not submitted yet
@@ -288,9 +288,9 @@ async def test_comment_input_inline_beside_refine_option() -> None:
         parent = comment_input.parent
         assert isinstance(parent, Horizontal)
         assert parent.has_class("saq-option-with-comment")
-        # The option Static (saq-opt-1 = Refine) is a sibling in the same row.
-        opt_1 = w.query_one("#saq-opt-1")
-        assert opt_1.parent is parent
+        # The option Static (saq-opt-2 = Refine) is a sibling in the same row.
+        opt_2 = w.query_one("#saq-opt-2")
+        assert opt_2.parent is parent
 
 
 # ---------------------------------------------------------------------------

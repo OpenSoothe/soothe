@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 _PLAN_MODE_REVIEW_QUESTIONS: tuple[dict, ...] = (
     {
-        "question": "Action for this plan: Approve, Refine, or Reject?",
+        "question": "Action for this plan: Approve, Reject, or Refine?",
         "header": "Plan review",
         "options": [
             {
@@ -40,12 +40,12 @@ _PLAN_MODE_REVIEW_QUESTIONS: tuple[dict, ...] = (
                 "description": "Accept the plan and proceed to implementation.",
             },
             {
-                "label": "Refine",
-                "description": "Request changes with refinement instructions.",
-            },
-            {
                 "label": "Reject",
                 "description": "Reject the plan and terminate this goal.",
+            },
+            {
+                "label": "Refine",
+                "description": "Request changes with refinement instructions.",
             },
         ],
     },

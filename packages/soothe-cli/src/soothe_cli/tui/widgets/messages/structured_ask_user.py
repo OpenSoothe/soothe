@@ -2,7 +2,7 @@
 
 Unifies the generic ``ask_user`` (execute origin) and the HITL plan-review /
 tool-approval origins into one widget. HITL origins differ only in that their
-options are system-prefilled (Approve / Refine or Edit / Reject), the ``Other``
+options are system-prefilled (Approve / Reject / Refine or Edit), the ``Other``
 free-text row is suppressed, and the Refine/Edit option shows a comment input.
 """
 
@@ -216,22 +216,18 @@ class StructuredAskUserWidget(Vertical):
 
     /* ── Inline option inputs (shared by custom + comment) ────────── */
 
-    /* Borderless underline only — matches the option-row line height and
-    reads as a continuation of the highlighted `❯` row, not a separate
-    boxed widget.  `!important` beats Textual's default `Input` `:focus`
-    border + `height: 3`. */
+    /* `!important` beats Textual's default Input `:focus` border + height. */
     StructuredAskUserWidget .saq-inline-input {
         margin: 0;
         width: 1fr;
-        height: 1 !important;
+        height: auto !important;
         padding: 0 !important;
         border: none !important;
-        border-bottom: solid $primary 60% !important;
         background: transparent !important;
+        color: $foreground !important;
     }
 
     StructuredAskUserWidget .saq-inline-input:disabled {
-        border-bottom: solid $primary 20% !important;
         color: $text-muted;
     }
 
@@ -359,7 +355,8 @@ class StructuredAskUserWidget(Vertical):
     StructuredAskUserWidget.is-submitted .saq-footer,
     StructuredAskUserWidget.is-submitted .saq-hint,
     StructuredAskUserWidget.is-submitted .saq-recap,
-    StructuredAskUserWidget.is-submitted .saq-separator {
+    StructuredAskUserWidget.is-submitted .saq-separator,
+    StructuredAskUserWidget.is-submitted .saq-body-path {
         display: none;
     }
 
@@ -428,7 +425,7 @@ class StructuredAskUserWidget(Vertical):
         width: auto;
         height: 1;
         padding: 0;
-        margin: 0 0 0 1;
+        margin: 0 1 0 1;
         color: $primary;
         visibility: hidden;
     }
@@ -445,6 +442,11 @@ class StructuredAskUserWidget(Vertical):
         text-style: italic;
         padding: 0;
         margin: 0;
+    }
+
+    /* After submit, hide the plan body preview unless expanded via toggle. */
+    StructuredAskUserWidget.is-submitted .saq-body-box {
+        display: none;
     }
 
     StructuredAskUserWidget.is-submitted .saq-body-box.is-expanded {

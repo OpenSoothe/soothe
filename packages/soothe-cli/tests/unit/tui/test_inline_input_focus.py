@@ -24,12 +24,12 @@ from soothe_cli.tui.widgets.messages.structured_ask_user import (
 # ---------------------------------------------------------------------------
 
 _PLAN_REVIEW_Q = {
-    "question": "Action for this plan: Approve, Refine, or Reject?",
+    "question": "Action for this plan: Approve, Reject, or Refine?",
     "header": "Plan review",
     "options": [
         {"label": "Approve", "description": "Accept the plan and proceed."},
-        {"label": "Refine", "description": "Request changes with refinement instructions."},
         {"label": "Reject", "description": "Reject the plan and terminate this goal."},
+        {"label": "Refine", "description": "Request changes with refinement instructions."},
     ],
 }
 
@@ -49,7 +49,7 @@ def _make_plan_review_widget(**kwargs) -> StructuredAskUserWidget:
         questions=[_PLAN_REVIEW_Q],
         origin_node="plan_mode_review",
         allow_custom=False,
-        comment_option_index=1,
+        comment_option_index=2,
     )
     defaults.update(kwargs)
     return StructuredAskUserWidget(**defaults)
@@ -99,7 +99,8 @@ async def test_comment_input_focuses_when_refine_highlighted() -> None:
         # Highlight starts at 0 (Approve) — input disabled.
         assert comment_input.disabled
 
-        widget.action_next_option()  # highlight 1 (Refine)
+        widget.action_next_option()  # Reject
+        widget.action_next_option()  # Refine
         await pilot.pause()
 
         assert not comment_input.disabled
@@ -116,24 +117,25 @@ async def test_arrows_remain_free_while_comment_input_focused() -> None:
         await pilot.pause()
         comment_input = widget.query_one("#saq-comment-input", Input)
 
-        widget.action_next_option()  # → Refine
+        widget.action_next_option()  # Reject
+        widget.action_next_option()  # Refine
         await pilot.pause()
         assert app.focused is comment_input
 
-        widget.action_prev_option()  # → Approve
+        widget.action_prev_option()  # Reject
         await pilot.pause()
         assert comment_input.disabled  # left Refine → disabled
-        assert widget._highlighted == 0
+        assert widget._highlighted == 1
 
         widget.action_next_option()  # back to Refine
         await pilot.pause()
         assert not comment_input.disabled  # reactivated
         assert app.focused is comment_input
 
-        widget.action_next_option()  # → Reject
+        widget.action_next_option()  # wrap to Approve
         await pilot.pause()
         assert comment_input.disabled
-        assert widget._highlighted == 2
+        assert widget._highlighted == 0
         assert len(app.submitted) == 0  # never submitted
 
 
@@ -144,6 +146,7 @@ async def test_comment_input_displays_typed_text() -> None:
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
         await pilot.pause()
+        widget.action_next_option()  # Reject
         widget.action_next_option()  # Refine
         await pilot.pause()
         comment_input = widget.query_one("#saq-comment-input", Input)
@@ -153,12 +156,32 @@ async def test_comment_input_displays_typed_text() -> None:
 
 
 @pytest.mark.asyncio
+async def test_comment_input_renders_typed_text() -> None:
+    """Typed text actually renders (height:1 + border:none clipped to 0 rows)."""
+    widget = _make_plan_review_widget(id="clarify-render")
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        widget.action_next_option()  # Reject
+        widget.action_next_option()  # Refine
+        await pilot.pause()
+        comment_input = widget.query_one("#saq-comment-input", Input)
+        for ch in "hello":
+            await pilot.press(ch)
+        await pilot.pause()
+        # height:1 + border:none + padding:0 made Textual compute height=0,
+        # so content never rendered.  height:auto fixes it.
+        assert comment_input.size.height > 0
+
+
+@pytest.mark.asyncio
 async def test_first_keystroke_not_lost_after_refine_highlight() -> None:
     """First char typed right after highlighting Refine is not dropped."""
     widget = _make_plan_review_widget(id="clarify-firstchar")
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
         await pilot.pause()
+        widget.action_next_option()  # Reject
         widget.action_next_option()  # highlight Refine — no pause
         for ch in "hello":
             await pilot.press(ch)
@@ -174,6 +197,7 @@ async def test_enter_on_refine_with_empty_comment_keeps_focus() -> None:
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
         await pilot.pause()
+        widget.action_next_option()  # Reject
         widget.action_next_option()  # highlight Refine
         await pilot.pause()
         comment_input = widget.query_one("#saq-comment-input", Input)
@@ -200,6 +224,7 @@ async def test_refine_submit_via_comment_input_enter() -> None:
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
         await pilot.pause()
+        widget.action_next_option()  # Reject
         widget.action_next_option()  # highlight Refine
         await pilot.pause()
         comment_input = widget.query_one("#saq-comment-input", Input)
@@ -269,7 +294,7 @@ async def test_arrow_to_approve_reject_does_not_scroll_to_plan_header() -> None:
                     questions=[_PLAN_REVIEW_Q],
                     origin_node="plan_mode_review",
                     allow_custom=False,
-                    comment_option_index=1,
+                    comment_option_index=2,
                     body_markdown=plan,
                     id="clarify-scroll",
                 )
@@ -289,11 +314,11 @@ async def test_arrow_to_approve_reject_does_not_scroll_to_plan_header() -> None:
         # jump to the plan header.  The regression: disabling the comment
         # input on Refine→Reject dropped focus to None, the 200 ms guard
         # recaptured via set_focus(self), and Textual scrolled to the top.
-        await pilot.press("down")  # Refine
-        await pilot.pause()
         await pilot.press("down")  # Reject
         await pilot.pause()
-        await pilot.press("up")  # Refine
+        await pilot.press("down")  # Refine
+        await pilot.pause()
+        await pilot.press("up")  # Reject
         await pilot.pause()
         await pilot.press("up")  # Approve
         await pilot.pause()

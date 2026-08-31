@@ -282,7 +282,7 @@ def test_plan_approval_does_not_mount_confirmation_message() -> None:
 
     event = StructuredAskUserWidget.Submitted(
         step_id="plan_mode_review",
-        questions=["Action for this plan: Approve, Refine, or Reject"],
+        questions=["Action for this plan: Approve, Reject, or Refine"],
         answers=["Approve", ""],
         widget_id="clarify-approve",
     )
@@ -333,7 +333,7 @@ def test_plan_refine_does_not_mount_confirmation_message() -> None:
 
     event = StructuredAskUserWidget.Submitted(
         step_id="plan_mode_review",
-        questions=["Action for this plan: Approve, Refine, or Reject"],
+        questions=["Action for this plan: Approve, Reject, or Refine"],
         answers=["Refine", "tighten scope to auth"],
         widget_id="clarify-refine",
     )

@@ -155,14 +155,14 @@ def message_to_widget(data: MessageData) -> Widget:
             is_tool_approval = origin == "tool_approval"
             refine_label = "Edit" if is_tool_approval else "Refine"
             question_spec = {
-                "question": "Action for this plan: Approve, Refine, or Reject?"
+                "question": "Action for this plan: Approve, Reject, or Refine?"
                 if not is_tool_approval
                 else "Approve this tool call?",
                 "header": "Plan review" if not is_tool_approval else "Tool approval",
                 "options": [
                     {"label": "Approve", "description": "Accept and proceed."},
-                    {"label": refine_label, "description": "Request changes."},
                     {"label": "Reject", "description": "Reject."},
+                    {"label": refine_label, "description": "Request changes."},
                 ],
             }
             w = StructuredAskUserWidget(
@@ -261,7 +261,7 @@ def message_from_widget(widget: Widget) -> MessageData:
         # Awaiting state for HITL origins.
         if is_hitl and not widget._submitted:  # noqa: SLF001
             if is_plan_review:
-                content = "Plan review: awaiting Approve / Refine / Reject"
+                content = "Plan review: awaiting Approve / Reject / Refine"
             else:
                 content = "Tool approval: awaiting Approve / Edit / Reject"
             return MessageData(type=MessageType.APP, content=content, id=widget_id)

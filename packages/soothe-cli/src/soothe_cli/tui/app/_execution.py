@@ -341,6 +341,10 @@ class _ExecutionMixin:
         # next pauses, which freezes scrolling and chat-input focus.
         await self._send_to_agent(payload_text)
 
+        # Return focus to the chat input so the user can type immediately.
+        with suppress(Exception):
+            self.focus_primary_input()
+
     async def _resolve_default_clarification_mode(self) -> str:
         """Fetch the daemon's default clarification mode for plan approval.
 
