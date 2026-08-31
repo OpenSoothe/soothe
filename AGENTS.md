@@ -167,13 +167,39 @@ Good: `Add \`persistence.default_backend\` validation that rejects mixed sqlite/
 Bad: `This PR updates the persistence layer to add a check for the default backend config so that users don't accidentally mix backends. See IG-612 for details. (#1234, authored by...)`
 
 ### 14. Release (MUST)
-A **release** = publishing a new version of a Soothe package on PyPI via the GitHub release workflow. Before cutting any release:
+A **release** = cutting a new version across the monorepo-owned packages and publishing it to PyPI + the container registry **via the GitHub release workflows** — not by manual `twine upload`, `docker push`, or local builds. The trigger is a **GitHub Release object** on a version tag, not a bare git tag.
+
+#### Pre-release gates (before tagging)
 
 1. **Verify upstream libs** — check whether `soothe-sdk`, `soothe-client-python` (submodule), `soothe-deepagents`, and `soothe-nano` require updating. Bump submodule pins / PyPI floors when consuming new upstream versions; release those packages from their own repositories first, then pin a compatible version range here.
-2. **Default to patch** — release a **patch** bump (e.g. `0.x.y → 0.x.y+1`). Do **not** cut minor/major unless explicitly approved; those require a documented breaking change and sign-off.
-3. **Release = PyPI via GitHub workflow** — publishing happens through `.github/workflows/`, not a manual `twine upload` or local build. Tag the release and let CI publish.
-4. **Verify before release** — `./scripts/verify_finally.sh` MUST pass (zero lint errors, all tests green) on the commit being tagged. Pre-release CI MUST also pass before the publish job runs. Do not tag or release off a red build.
-5. **PyPI-only deps must be live before releasing owned packages** — before tagging any owned package release (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`), verify that the PyPI-only dependencies (`soothe-nano`, `soothe-deepagents`) have their latest versions already published on PyPI **and** that the monorepo's pinned floors (`packages/*/pyproject.toml`) match or are below the latest PyPI version. Query `https://pypi.org/pypi/<pkg>/json` for each. If a pinned floor exceeds what is live on PyPI, the release will be uninstallable — release the upstream package from its own repo first, then proceed.
+2. **Default to patch** — release a **patch** bump (e.g. `1.0.y → 1.0.y+1`). Do **not** cut minor/major unless explicitly approved; those require a documented breaking change and sign-off.
+3. **Verify before release** — `./scripts/verify_finally.sh` MUST pass (zero lint errors, all tests green) on the commit being tagged. Pre-release CI MUST also pass before the publish job runs. Do not tag or release off a red build.
+4. **PyPI-only deps must be live before releasing owned packages** — before tagging any owned package release (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`), verify that the PyPI-only dependencies (`soothe-nano`, `soothe-deepagents`) have their latest versions already published on PyPI **and** that the monorepo's pinned floors (`packages/*/pyproject.toml`) match or are below the latest PyPI version. Query `https://pypi.org/pypi/<pkg>/json` for each. If a pinned floor exceeds what is live on PyPI, the release will be uninstallable — release the upstream package from its own repo first, then proceed.
+
+#### Version bump + changelog
+
+5. **Bump the root `VERSION` file** — `soothe`, `soothe-autopilot`, `soothe-daemon`, and `soothe-cli` all read from the root `VERSION` (via `tool.hatch.version` → `../../VERSION`). `soothe-sdk` keeps its own `packages/soothe-sdk/VERSION` on an independent 1.x line and is **not** touched by monorepo releases unless the SDK itself is being released.
+6. **Promote the `[Unreleased]` block** in `CHANGELOG.md` into a dated `## [vX.Y.Z] - YYYY-MM-DD` entry with a `[Compare with previous version]` link, and reset `[Unreleased]` to empty. Follow the Keep a Changelog format (§13).
+7. **Commit the bump** — e.g. `chore(release): bump to X.Y.Z` touching only `VERSION` + `CHANGELOG.md`.
+
+#### Tag + GitHub Release (the trigger)
+
+8. **Tag the release commit** — `git tag -a vX.Y.Z <sha> -m "vX.Y.Z"`. If the tag name was previously used by an SDK-only release, force-move it onto the new monorepo commit (`git tag -f -a vX.Y.Z <sha>`); SDK releases are preserved by their `soothe-sdk-v*` tags.
+9. **Push the tag** — `git push origin vX.Y.Z --force` (force only if re-tagging).
+10. **Create the GitHub Release object** — `gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file <release-notes.md> --latest`. **This is the trigger.** A bare git tag does NOT fire the workflows — only the `release: published` event does.
+    - If a stale Release object exists on the tag (e.g. an old SDK release), delete it first with `gh release delete vX.Y.Z --cleanup-tag=false --yes`, then create the fresh one. The `release: published` event only fires on a *newly published* release, not on a tag force-move.
+
+#### What the workflows do (do not replicate manually)
+
+11. **`release.yml` ("Release Soothe Packages")** fires on `release: published`. It builds each owned package, runs tests, and publishes to PyPI via trusted publishing. Each job is **idempotent** — it checks `pip index versions <pkg>` and skips publishing if the version already exists on PyPI. Do not pre-publish manually; if you do, the workflow will simply skip the upload.
+12. **`release-docker.yml` ("Release Docker Image")** fires on `workflow_run` of "Release Soothe Packages" completing successfully. It waits for `soothe==X.Y.Z` and `soothe-daemon==X.Y.Z` on PyPI, resolves them together, then builds and pushes the multi-arch `soothed` image to the container registry. It does not run if the PyPI workflow failed.
+13. **Do not publish to PyPI or the registry by hand.** The only exception is recovering from a transient PyPI 500/timeout on a package the workflow skipped or failed to upload — in that case, `uv build` + `uv publish dist/* --system-certs` for the affected package only, then re-trigger or let the next release confirm.
+
+#### Verify the release landed
+
+14. **Confirm on PyPI** — `curl -sL https://pypi.org/pypi/<pkg>/json` shows `X.Y.Z` as latest for `soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`. PyPI's JSON API can lag ~60s behind upload confirmations.
+15. **Confirm the workflows ran green** — `gh run list --repo mirasoth/soothe --limit 5`; both "Release Soothe Packages" and "Release Docker Image" must show `success`.
+16. **Confirm the GitHub Release** — `gh release view vX.Y.Z` shows `published` and `isLatest: true`.
 
 ### 15. Reentrant Loop State (MUST)
 
