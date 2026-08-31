@@ -127,6 +127,7 @@ class StepNode(BaseModel):
     kind: StepKind = "action"
     close_report: StepCloseReport | None = None
     task_complexity: str | None = None
+    retry_count: int = 0
 
 
 class StepDAG(BaseModel):
@@ -202,15 +203,7 @@ class StepDAG(BaseModel):
             node.status = "superseded"
 
     def reset_failed_step(self, step_id: str) -> bool:
-        """Reset a failed step back to pending for retry.
-
-        Used by the Auto-to-Manual fallback in `root_eval`: when all
-        action steps have failed and the loop is in auto clarification mode
-        with a human attached, the failed step is reset so it can be
-        re-dispatched under the newly-switched manual policy.
-
-        Returns `True` when the step was failed and is now pending.
-        """
+        """Reset a failed step to pending for retry. Returns True if reset."""
         node = self.nodes.get(step_id)
         if node is not None and node.status == "failed":
             node.status = "pending"

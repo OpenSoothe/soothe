@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- StrangeLoop `root_eval` now retries failed steps in read-only interaction modes (`plan`, `ask`) before finalizing, gated by `agent.loop.max_step_retries` (default `2`). `StepNode.retry_count` tracks attempts; exhausted steps fall through to finalize.
+
 ## [v1.0.2] - 2026-08-30
 
 ### Changed

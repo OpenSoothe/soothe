@@ -1033,6 +1033,13 @@ class StrangeLoopConfig(BaseModel):
         le=20,
     )
 
+    max_step_retries: int = Field(
+        default=2,
+        description="Max retries for steps that fail with all-tool-outcomes-error in read-only modes (plan, ask). 0 disables.",
+        ge=0,
+        le=10,
+    )
+
     general_purpose_subagent: GeneralPurposeSubagentMode = Field(
         default="off",
         description=(

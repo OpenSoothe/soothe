@@ -30,8 +30,7 @@ def _try_auto_to_manual_fallback(
 ) -> NodeResult | None:
     """Reset failed steps and switch to manual clarification when possible.
 
-    Only fires when auto-clarification mode is active with a human attached.
-    Returns a NodeResult routing to dispatch, or None when not applicable.
+    Returns a dispatch NodeResult, or None when not applicable.
     """
     policy = getattr(ctx, "clarification_policy", None)
     if policy is None:
@@ -58,6 +57,43 @@ def _try_auto_to_manual_fallback(
         "[root_eval] auto→manual fallback: reset %d failed step(s), routing to dispatch",
         len(failed_steps),
     )
+    return NodeResult(payload={"root_eval_route": "dispatch"})
+
+
+def _try_readonly_step_retry(
+    ctx: LoopRuntimeContext,
+    goal: Any,
+) -> NodeResult | None:
+    """Retry failed steps in read-only modes before finalize/plan-review.
+
+    Returns a dispatch NodeResult if any failed step was reset, else None.
+    """
+    max_retries = ctx.strange_loop.config.agent.loop.max_step_retries
+    if max_retries <= 0:
+        return None
+
+    failed_steps = [n for n in goal.steps.nodes.values() if n.status == "failed"]
+    retried: list[Any] = []
+    for n in failed_steps:
+        if n.retry_count >= max_retries:
+            continue
+        goal.steps.reset_failed_step(n.id)
+        n.retry_count += 1
+        retried.append(n)
+        logger.info(
+            "[root_eval] read-only retry: reset %s (retry_count=%d/%d)",
+            n.id,
+            n.retry_count,
+            max_retries,
+        )
+    if not retried:
+        if failed_steps:
+            logger.warning(
+                "[root_eval] retry budget exhausted for %d failed step(s)",
+                len(failed_steps),
+            )
+        return None
+    ctx.ce.defer_save()
     return NodeResult(payload={"root_eval_route": "dispatch"})
 
 
@@ -106,6 +142,13 @@ class RootEvalNode(LoopNode):
         messages: list,
     ) -> NodeResult:
         if getattr(ctx, "interaction_mode", None) in _READONLY_MODES:
+            # Retry failed steps before finalizing in read-only modes.
+            if ctx.ce is not None and ctx.ce_goal_id:
+                goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
+                if goal is not None:
+                    retry_result = _try_readonly_step_retry(ctx, goal)
+                    if retry_result is not None:
+                        return retry_result
             logger.info(
                 "[root_eval] %s interaction mode; skip Eval; finalize",
                 ctx.interaction_mode,

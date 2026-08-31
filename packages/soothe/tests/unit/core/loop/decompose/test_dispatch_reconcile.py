@@ -33,6 +33,7 @@ def _ctx_with_ce(ce: ContextEngine, goal_id: str, *, goal: str = "do work") -> L
                 loop=SimpleNamespace(
                     decompose=DecomposeLoopConfig(),
                     eval=EvalLoopConfig(),
+                    max_step_retries=2,
                 )
             )
         )
