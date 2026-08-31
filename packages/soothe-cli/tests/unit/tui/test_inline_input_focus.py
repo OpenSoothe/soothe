@@ -153,6 +153,25 @@ async def test_comment_input_displays_typed_text() -> None:
 
 
 @pytest.mark.asyncio
+async def test_first_keystroke_not_lost_after_refine_highlight() -> None:
+    """The first char typed right after highlighting Refine is not dropped.
+
+    Regression: ``call_after_refresh`` deferral let the first keypress arrive
+    before focus moved to the input, so it was swallowed by the container.
+    """
+    widget = _make_plan_review_widget(id="clarify-firstchar")
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        widget.action_next_option()  # highlight Refine — no pause
+        for ch in "hello":
+            await pilot.press(ch)
+        await pilot.pause()
+        comment_input = widget.query_one("#saq-comment-input", Input)
+        assert comment_input.value == "hello"
+
+
+@pytest.mark.asyncio
 async def test_refine_submit_via_comment_input_enter() -> None:
     """Refine + comment via Enter on the input, bypassing action_confirm."""
     widget = _make_plan_review_widget(id="clarify-refine-enter")

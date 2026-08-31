@@ -1290,11 +1290,19 @@ class StructuredAskUserWidget(Vertical):
         return None
 
     def _focus_inline_input_or_container(self) -> None:
-        """Focus the highlighted option's inline input, else the container."""
+        """Focus the highlighted option's inline input, else the container.
+
+        Synchronous so the first keystroke after arrowing onto Refine/Other
+        isn't lost, and a stale deferred container-focus from a prior arrow
+        move can't steal focus back from the input.
+        """
         target = self._inline_input_for_highlight()
         if target is None or target.disabled:
             target = self
-        self._schedule_focus(target)
+        try:
+            self.app.set_focus(target)
+        except Exception:  # noqa: BLE001
+            self._schedule_focus(target)
 
     def _update_tab_highlight(self) -> None:
         """Update tab labels to reflect current question and answered state."""
