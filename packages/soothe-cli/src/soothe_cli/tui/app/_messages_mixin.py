@@ -793,19 +793,21 @@ class _MessagesMixin:
     def action_quit_or_interrupt(self) -> None:
         """Handle Ctrl+C — clear input, interrupt work, or exit on double-press.
 
-        Priority order when a task is running (agent/shell):
-        1. If input has pending text, clear it (first Ctrl+C).
-        2. If input is empty, interrupt the running task.
-        Interrupting a task resets the idle double-press exit state.
-
-        When idle, Ctrl+C arms a double-press exit:
-        1. First press clears any pending draft and shows a hint.
-        2. Second press within the timeout window exits the TUI.
-
-        Note: Copying selected text is bound to Ctrl+Y (`action_copy_selection`)
-        so Ctrl+C is reserved for interrupt/exit behavior.
+        Priority order: HITL review card (abandon + focus chat) → running
+        task (clear input, then interrupt) → idle double-press exit.
+        Ctrl+Y copies selection, so Ctrl+C stays reserved for this path.
         """
         current_time = time.monotonic()
+
+        # HITL review card (plan/tool): abandon and return focus to chat.
+        if self._has_active_qa_widget():
+            widget = self._active_plan_review_widget()
+            if widget is not None and not getattr(widget, "_submitted", False):
+                widget._abandon()
+                self._ctrl_c_pressed_time = None
+                if self._chat_input:
+                    self._chat_input.focus_input()
+                return
 
         # Check if input has pending content (text, mode, or completion).
         has_pending_input = self._has_pending_chat_input()
@@ -1072,25 +1074,21 @@ class _MessagesMixin:
                 inputs.append(inp)
         return inputs
 
-    def _active_plan_review_action_focus(self) -> Widget | None:
-        """Prefer the Approve button when a plan-review or tool-approval card is active."""
+    def _active_plan_review_widget(self) -> Widget | None:
+        """Return the active unsubmitted HITL review card, if any."""
         adapter = getattr(self, "_ui_adapter", None)
         if adapter is None:
             return None
         by_step = getattr(adapter, "_clarification_input_by_step", None) or {}
-        # Both option-selector origins render Approve / Refine(Edit) / Reject buttons.
         for message in by_step.values():
             if getattr(message, "_submitted", False):
                 continue
             # String compare — avoid MagicMock truthiness on property access in tests.
-            if getattr(message, "_origin_node", None) not in ("plan_mode_review", "tool_approval"):
-                continue
-            buttons = getattr(message, "_action_buttons", None) or {}
-            if not isinstance(buttons, dict):
-                continue
-            approve = buttons.get("approve")
-            if approve is not None and not getattr(approve, "disabled", False):
-                return approve
+            if getattr(message, "_origin_node", None) in (
+                "plan_mode_review",
+                "tool_approval",
+            ):
+                return message
         return None
 
     def _non_chat_focusable_inputs(self) -> list[Input]:
@@ -1107,17 +1105,12 @@ class _MessagesMixin:
         """Return the single input that should receive typing focus, if unambiguous.
 
         When an inline clarification card is active, its answer field takes
-        precedence over the bottom chat prompt. Planner-subagent review
-        focuses the Approve action. On modal screens, a lone
+        precedence over the bottom chat prompt. On modal screens, a lone
         filter box is focused automatically.
         """
         clar_inputs = self._active_clarification_inputs()
         if clar_inputs:
             return clar_inputs[0]
-
-        plan_action = self._active_plan_review_action_focus()
-        if plan_action is not None:
-            return plan_action
 
         non_chat = self._non_chat_focusable_inputs()
         if len(non_chat) == 1:

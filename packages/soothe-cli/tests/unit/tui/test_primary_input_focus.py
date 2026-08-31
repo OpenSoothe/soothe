@@ -137,42 +137,46 @@ def test_is_input_focused_includes_clarification_field() -> None:
     assert app._is_input_focused() is True
 
 
-def test_primary_text_input_targets_approve_for_tool_approval() -> None:
-    """A tool-approval (option-selector) card focuses the Approve action, not chat."""
-    approve = MagicMock()
-    approve.disabled = False
+def test_primary_text_input_falls_through_for_tool_approval() -> None:
+    """A tool-approval card no longer routes focus via the app layer.
+
+    The widget's on_mount owns the focus story; _primary_text_input no
+    longer special-cases an _action_buttons["approve"] target that was
+    never populated. With no lone non-chat input, it returns None and
+    falls through to chat — the widget recaptures focus itself.
+    """
     tool_message = MagicMock()
     tool_message._submitted = False
     tool_message._origin_node = "tool_approval"
     tool_message._inputs = []
-    tool_message._action_buttons = {"approve": approve, "reject": MagicMock()}
 
     app = _FocusAppStub()
     app._ui_adapter = MagicMock()
     app._ui_adapter._clarification_input_by_step = {"step-1": tool_message}
+    # No lone non-chat Input on the mocked screen → _primary_text_input
+    # returns None rather than a phantom Approve target.
+    app.screen.query = MagicMock(return_value=[])
 
-    assert app._primary_text_input() is approve
+    assert app._primary_text_input() is None
 
 
-def test_focus_primary_input_targets_approve_for_tool_approval() -> None:
-    """Tool-approval popups schedule focus on Approve instead of the chat prompt."""
-    approve = MagicMock()
-    approve.disabled = False
-    approve.focus = MagicMock()
+def test_focus_primary_input_falls_through_for_tool_approval() -> None:
+    """With no app-level Approve target, focus lands on the chat prompt."""
     tool_message = MagicMock()
     tool_message._submitted = False
     tool_message._origin_node = "tool_approval"
     tool_message._inputs = []
-    tool_message._action_buttons = {"approve": approve, "reject": MagicMock()}
 
     app = _FocusAppStub()
     app._ui_adapter = MagicMock()
     app._ui_adapter._clarification_input_by_step = {"step-1": tool_message}
+    app.screen.query = MagicMock(return_value=[])
 
     app.focus_primary_input()
 
-    app.set_focus.assert_called_once_with(approve)
-    app._chat_input.focus_input.assert_not_called()
+    # No app-level set_focus on a phantom Approve; chat prompt focused.
+    app.set_focus.assert_not_called()
+    app._chat_input.focus_input.assert_called_once()
 
 
 def test_has_active_qa_widget_true_when_unsubmitted() -> None:

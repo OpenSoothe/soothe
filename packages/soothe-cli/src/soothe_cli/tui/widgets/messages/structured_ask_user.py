@@ -214,16 +214,19 @@ class StructuredAskUserWidget(Vertical):
         display: none;
     }
 
-    StructuredAskUserWidget .saq-custom-input {
-        margin: 0 0 0 2;
+    /* ── Inline option inputs (shared by custom + comment) ────────── */
+
+    /* `height: auto` — Input doesn't auto-grow, so `height: 1` clipped text. */
+    StructuredAskUserWidget .saq-inline-input {
+        margin: 0 0 0 1;
         width: 1fr;
-        height: 1;
+        height: auto;
         padding: 0 1;
+        border: round $primary 30%;
         background: $surface;
-        border: none;
     }
 
-    StructuredAskUserWidget .saq-custom-input:disabled {
+    StructuredAskUserWidget .saq-inline-input:disabled {
         opacity: 0.5;
     }
 
@@ -412,19 +415,6 @@ class StructuredAskUserWidget(Vertical):
     StructuredAskUserWidget .saq-option-with-comment .saq-option-row {
         width: auto;
         min-width: 0;
-    }
-
-    StructuredAskUserWidget .saq-comment-input {
-        margin: 0;
-        width: 1fr;
-        height: 1;
-        padding: 0 1;
-        background: $surface;
-        border: none;
-    }
-
-    StructuredAskUserWidget .saq-comment-input:disabled {
-        opacity: 0.5;
     }
 
     /* ── HITL: expand/collapse plan body in answered view ──────────── */
@@ -773,7 +763,7 @@ class StructuredAskUserWidget(Vertical):
                             self._comment_input = Input(
                                 placeholder=comment_placeholder,
                                 id="saq-comment-input",
-                                classes="saq-comment-input",
+                                classes="saq-inline-input",
                                 disabled=True,
                             )
                             yield self._comment_input
@@ -804,7 +794,7 @@ class StructuredAskUserWidget(Vertical):
                     self._custom_input = Input(
                         placeholder="Type a custom answer…",
                         id="saq-custom-input",
-                        classes="saq-custom-input",
+                        classes="saq-inline-input",
                         disabled=_has_renderable_opts,
                     )
                     yield self._custom_input
@@ -1075,16 +1065,12 @@ class StructuredAskUserWidget(Vertical):
         self._toggle_body_expanded()
 
     def on_descendant_focus(self, event: DescendantFocus) -> None:
-        """Guard: the HITL comment input may only hold focus when the
-        Refine/Edit option is the selected action."""
-        if (
-            self._comment_input is not None
-            and event.widget is self._comment_input
-            and self._comment_option_index is not None
-        ):
-            sel = self._selected.get(self._current_q)
-            if sel != self._comment_option_index:
-                self.screen.set_focus(self)
+        """An inline input holds focus only while its option is highlighted."""
+        allowed = self._inline_input_for_highlight()
+        if allowed is not None and event.widget is allowed:
+            return
+        if event.widget in self._inline_inputs():
+            self.screen.set_focus(self)
 
     # ── Rendering updates ──────────────────────────────────────────
 
@@ -1244,12 +1230,36 @@ class StructuredAskUserWidget(Vertical):
             pass
 
     def _update_comment_input_state(self) -> None:
-        """Enable/disable the HITL comment input based on the selected option."""
+        """Enable the comment input when Refine/Edit is highlighted."""
         if self._comment_input is None or self._comment_option_index is None:
             return
-        sel = self._selected.get(self._current_q)
-        should_enable = sel is not None and sel == self._comment_option_index
-        self._comment_input.disabled = not should_enable
+        self._comment_input.disabled = self._highlighted != self._comment_option_index
+
+    # ── Inline-input helpers (shared by custom + comment) ───────────
+
+    def _inline_inputs(self) -> tuple[Input, ...]:
+        """Existing inline `Input`s attached to option rows."""
+        return tuple(inp for inp in (self._custom_input, self._comment_input) if inp is not None)
+
+    def _inline_input_for_highlight(self) -> Input | None:
+        """The inline input whose option is highlighted, else None."""
+        if (
+            self._comment_option_index is not None
+            and self._highlighted == self._comment_option_index
+        ):
+            return self._comment_input
+        if self._allow_custom:
+            custom_idx = len(self._question_options(self._current_q))
+            if self._highlighted == custom_idx:
+                return self._custom_input
+        return None
+
+    def _focus_inline_input_or_container(self) -> None:
+        """Focus the highlighted option's inline input, else the container."""
+        target = self._inline_input_for_highlight()
+        if target is None or target.disabled:
+            target = self
+        self._schedule_focus(target)
 
     def _update_tab_highlight(self) -> None:
         """Update tab labels to reflect current question and answered state."""
@@ -1444,6 +1454,7 @@ class StructuredAskUserWidget(Vertical):
         total = num_opts + (1 if self._allow_custom else 0)
         self._highlighted = (self._highlighted - 1) % total
         self._update_option_highlight()
+        self._focus_inline_input_or_container()
 
     def action_next_option(self) -> None:
         if self._degraded or self._submitted or self._submit_review_open:
@@ -1452,6 +1463,7 @@ class StructuredAskUserWidget(Vertical):
         total = num_opts + (1 if self._allow_custom else 0)
         self._highlighted = (self._highlighted + 1) % total
         self._update_option_highlight()
+        self._focus_inline_input_or_container()
 
     def action_confirm(self) -> None:
         """Enter: select highlighted option, or finalize submit review."""
