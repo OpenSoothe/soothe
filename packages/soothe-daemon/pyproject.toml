@@ -68,9 +68,13 @@ dev = [
     "soothe-cli>=0.10.33",  # For CLI integration tests (PyPI)
     "soothe-client-python>=1.0.18,<2.0.0",  # WS test helpers only; matched to client-python latest release v1.0.18
 ]
+acp = [
+    "agent-client-protocol>=0.3.0,<1.0.0",
+]
 
 [project.scripts]
 soothed = "soothe_daemon.cli:app"
+soothe-acp = "soothe_daemon.cli:run_acp"
 
 [project.urls]
 Homepage = "https://github.com/mirasoth/soothe"

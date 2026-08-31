@@ -24,6 +24,14 @@ channels:
   send_tool_hints: false
   show_reasoning: true
   send_max_retries: 3
+  # ACP (Agent Client Protocol) — stdio JSON-RPC server for editor/IDE integration
+  # Enable for standalone ACP mode (run `soothe-acp`); disable WebSocket when ACP is sole channel
+  acp:
+    enabled: false
+    agent_name: "Soothe"
+    agent_description: "Soothe autonomous agent"
+    default_model: null
+    session_timeout_seconds: 3600
 
 # Concurrency
 max_concurrent_threads: 100

@@ -687,5 +687,22 @@ def _status_meets_or_exceeds(status: str, threshold: str) -> bool:
     return severity[status] >= severity[threshold]
 
 
+def run_acp() -> None:
+    """Start the daemon in standalone ACP mode (stdio, no WebSocket).
+
+    Boots a daemon process with the ACP channel as the sole transport,
+    listening for JSON-RPC 2.0 over stdin/stdout. WebSocket is disabled
+    so no HTTP server is created.
+    """
+    from soothe_daemon.bootstrap.entrypoint import run_daemon
+    from soothe_daemon.config import SootheDaemonConfig
+    from soothe_daemon.config.models import ACPConfig
+
+    cfg = SootheDaemonConfig()
+    cfg.transports.websocket.enabled = False
+    cfg.channels.acp = ACPConfig(enabled=True)
+    run_daemon(daemon_config=cfg)
+
+
 if __name__ == "__main__":
     app()

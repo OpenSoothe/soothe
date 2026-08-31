@@ -144,13 +144,13 @@ class TestChannelManager:
 
     @pytest.mark.asyncio
     async def test_manager_websocket_required(self, config: SootheDaemonConfig) -> None:
-        """Manager fails when WebSocket is disabled."""
+        """Manager fails when no transport channel is enabled."""
         from soothe_daemon.event import EventBus
 
         manager = ChannelManager(config, EventBus())
         manager.set_message_handler(lambda _client_id, _msg: None)
 
-        with pytest.raises(RuntimeError, match="WebSocket channel is required"):
+        with pytest.raises(RuntimeError, match="At least one transport channel"):
             await manager.start_all()
 
     @pytest.mark.asyncio

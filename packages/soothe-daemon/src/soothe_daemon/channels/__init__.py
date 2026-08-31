@@ -93,6 +93,11 @@ try:
 except ImportError:
     MSTeamsChannel = None  # type: ignore[misc,assignment]
 
+try:
+    from soothe_daemon.channels.acp import ACPChannel
+except ImportError:
+    ACPChannel = None  # type: ignore[misc,assignment]
+
 __all__ = [
     # Base
     "Channel",
@@ -122,6 +127,7 @@ __all__ = [
     "WeixinChannel",
     "WecomChannel",
     "MSTeamsChannel",
+    "ACPChannel",
     # Registry
     "discover_all",
     "discover_channel_names",

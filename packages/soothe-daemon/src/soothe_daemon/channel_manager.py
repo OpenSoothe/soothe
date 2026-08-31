@@ -176,43 +176,56 @@ class ChannelManager:
         # Use new Channel implementations
         from soothe_daemon.channels.websocket import WebSocketChannel
 
-        # Check WebSocket config
-        if not self._config.transports.websocket.enabled:
-            raise RuntimeError("WebSocket channel is required - enable it in configuration")
-
-        # Create unified FastAPI app for WebSocket
-        self._unified_app = FastAPI(
-            title="Soothe Daemon",
-            description="WebSocket API for Soothe",
-            version="1.0.0",
-            docs_url=None,
-            redoc_url=None,
-            openapi_url=None,
+        # Check if at least one transport channel is enabled
+        acp_enabled = (
+            getattr(self._config.channels, "acp", None) is not None
+            and self._config.channels.acp.enabled
         )
+        if not self._config.transports.websocket.enabled and not acp_enabled:
+            raise RuntimeError("At least one transport channel (websocket or acp) must be enabled")
 
-        # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
-        # Returns HTTP 200 with {"status": "ok"} immediately - no dependencies
-        @self._unified_app.get("/healthz")
-        async def docker_healthcheck() -> dict[str, str]:
-            """Simple health check for Docker healthcheck.
+        # Create unified FastAPI app for WebSocket (only when WebSocket is enabled)
+        if self._config.transports.websocket.enabled:
+            self._unified_app = FastAPI(
+                title="Soothe Daemon",
+                description="WebSocket API for Soothe",
+                version="1.0.0",
+                docs_url=None,
+                redoc_url=None,
+                openapi_url=None,
+            )
 
-            Returns immediately without checking any dependencies.
-            Used by Docker to verify the server is listening.
-            """
-            return {"status": "ok"}
+            # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
+            # Returns HTTP 200 with {"status": "ok"} immediately - no dependencies
+            @self._unified_app.get("/healthz")
+            async def docker_healthcheck() -> dict[str, str]:
+                """Simple health check for Docker healthcheck.
 
-        # Create WebSocket channel
-        ws_channel = WebSocketChannel(
-            self._config.transports.websocket,
-            manager=self,
-            unified_app=self._unified_app,
-            session_manager=self._session_manager,
-            autopilot_service=self._autopilot_service,
-            cron_service=self._cron_service,
-            memory_profiler=self._memory_profiler,
-        )
-        self._channels["websocket"] = ws_channel
-        logger.debug("Configured WebSocket channel")
+                Returns immediately without checking any dependencies.
+                Used by Docker to verify the server is listening.
+                """
+                return {"status": "ok"}
+
+            # Create WebSocket channel
+            ws_channel = WebSocketChannel(
+                self._config.transports.websocket,
+                manager=self,
+                unified_app=self._unified_app,
+                session_manager=self._session_manager,
+                autopilot_service=self._autopilot_service,
+                cron_service=self._cron_service,
+                memory_profiler=self._memory_profiler,
+            )
+            self._channels["websocket"] = ws_channel
+            logger.debug("Configured WebSocket channel")
+
+        # Create ACP channel (when enabled)
+        if acp_enabled:
+            from soothe_daemon.channels.acp import ACPChannel
+
+            acp_channel = ACPChannel(self._config.channels.acp, manager=self)
+            self._channels["acp"] = acp_channel
+            logger.debug("Configured ACP channel")
 
         # Apply global channel settings to all channels
         for channel in self._channels.values():
@@ -280,7 +293,7 @@ class ChannelManager:
 
         try:
             await asyncio.gather(*start_tasks)
-            if self._unified_app is not None:
+            if self._unified_app is not None and self._config.transports.websocket.enabled:
                 await self._start_unified_listener()
             self._started = True
             logger.debug(

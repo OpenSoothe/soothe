@@ -45,6 +45,21 @@ class TransportConfig(BaseModel):
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
 
 
+class ACPConfig(BaseModel):
+    """ACP (Agent Client Protocol) channel configuration.
+
+    ACP provides a stdio JSON-RPC server for editor/IDE integration.
+    When enabled as the sole channel (WebSocket disabled), the daemon
+    runs in standalone ACP mode via the ``soothe-acp`` console script.
+    """
+
+    enabled: bool = False
+    agent_name: str = "Soothe"
+    agent_description: str = "Soothe autonomous agent"
+    default_model: str | None = None
+    session_timeout_seconds: int = 3600
+
+
 class ChannelsConfig(BaseModel):
     """Unified channel configuration with built-in WebSocket and external plugins."""
 
@@ -52,6 +67,9 @@ class ChannelsConfig(BaseModel):
 
     # Built-in WebSocket channel config
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
+
+    # ACP (Agent Client Protocol) channel config
+    acp: ACPConfig = Field(default_factory=ACPConfig)
 
     # Global channel settings
     send_progress: bool = Field(default=True, description="Show progress indicators")
