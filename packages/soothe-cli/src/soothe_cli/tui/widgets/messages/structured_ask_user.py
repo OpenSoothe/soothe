@@ -216,18 +216,23 @@ class StructuredAskUserWidget(Vertical):
 
     /* ── Inline option inputs (shared by custom + comment) ────────── */
 
-    /* `height: auto` — Input doesn't auto-grow, so `height: 1` clipped text. */
+    /* Borderless underline only — matches the option-row line height and
+    reads as a continuation of the highlighted `❯` row, not a separate
+    boxed widget.  `!important` beats Textual's default `Input` `:focus`
+    border + `height: 3`. */
     StructuredAskUserWidget .saq-inline-input {
-        margin: 0 0 0 1;
+        margin: 0;
         width: 1fr;
-        height: auto;
-        padding: 0 1;
-        border: round $primary 30%;
-        background: $surface;
+        height: 1 !important;
+        padding: 0 !important;
+        border: none !important;
+        border-bottom: solid $primary 60% !important;
+        background: transparent !important;
     }
 
     StructuredAskUserWidget .saq-inline-input:disabled {
-        opacity: 0.5;
+        border-bottom: solid $primary 20% !important;
+        color: $text-muted;
     }
 
     StructuredAskUserWidget .saq-custom-hint {
@@ -415,6 +420,21 @@ class StructuredAskUserWidget(Vertical):
     StructuredAskUserWidget .saq-option-with-comment .saq-option-row {
         width: auto;
         min-width: 0;
+    }
+
+    /* `❯` prefix before the comment input — same line height as the row.
+    Hidden unless the Refine/Edit option is highlighted. */
+    StructuredAskUserWidget .saq-comment-prefix {
+        width: auto;
+        height: 1;
+        padding: 0;
+        margin: 0 0 0 1;
+        color: $primary;
+        visibility: hidden;
+    }
+
+    StructuredAskUserWidget .saq-comment-prefix.is-visible {
+        visibility: visible;
     }
 
     /* ── HITL: expand/collapse plan body in answered view ──────────── */
@@ -755,6 +775,12 @@ class StructuredAskUserWidget(Vertical):
                                 f"  {j + 1}. {label}",
                                 id=f"saq-opt-{j}",
                                 classes="saq-option-row",
+                                markup=False,
+                            )
+                            yield Static(
+                                "❯",
+                                id="saq-comment-prefix",
+                                classes="saq-comment-prefix",
                                 markup=False,
                             )
                             comment_placeholder = (
@@ -1183,6 +1209,15 @@ class StructuredAskUserWidget(Vertical):
         # HITL: enable/disable comment input based on the selected option.
         if self._comment_input is not None and self._comment_option_index is not None:
             self._update_comment_input_state()
+            # Show the `❯` prefix only when the comment option is highlighted.
+            try:
+                prefix = self.query_one("#saq-comment-prefix", Static)
+                if self._highlighted == self._comment_option_index:
+                    prefix.add_class("is-visible")
+                else:
+                    prefix.remove_class("is-visible")
+            except Exception:  # noqa: BLE001
+                pass
 
     def _update_custom_row_highlight(self, custom_idx: int) -> None:
         """Apply highlight/selected classes and refresh the custom-row text."""
@@ -1613,6 +1648,8 @@ class StructuredAskUserWidget(Vertical):
         if event.input is self._comment_input:
             event.stop()
             self._comment_text = str(event.input.value or "").strip()
+            # Select Refine/Edit so _answers_collected appends the comment.
+            self._selected[self._current_q] = self._comment_option_index
             self._finalize()
             return
         if self._degraded:

@@ -152,6 +152,26 @@ async def test_comment_input_displays_typed_text() -> None:
         assert comment_input.value == "narrow scope to auth"
 
 
+@pytest.mark.asyncio
+async def test_refine_submit_via_comment_input_enter() -> None:
+    """Refine + comment via Enter on the input, bypassing action_confirm."""
+    widget = _make_plan_review_widget(id="clarify-refine-enter")
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        widget.action_next_option()  # highlight Refine
+        await pilot.pause()
+        comment_input = widget.query_one("#saq-comment-input", Input)
+        comment_input.value = "narrow scope to auth"
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert len(app.submitted) == 1
+        assert app.submitted[0].answers[0] == "Refine"
+        assert "narrow scope to auth" in app.submitted[0].answers[1]
+
+
 # ---------------------------------------------------------------------------
 # Generic ask_user: the "Other" custom input follows the same rules
 # ---------------------------------------------------------------------------
