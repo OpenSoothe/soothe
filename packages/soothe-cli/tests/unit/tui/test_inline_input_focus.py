@@ -154,11 +154,7 @@ async def test_comment_input_displays_typed_text() -> None:
 
 @pytest.mark.asyncio
 async def test_first_keystroke_not_lost_after_refine_highlight() -> None:
-    """The first char typed right after highlighting Refine is not dropped.
-
-    Regression: ``call_after_refresh`` deferral let the first keypress arrive
-    before focus moved to the input, so it was swallowed by the container.
-    """
+    """First char typed right after highlighting Refine is not dropped."""
     widget = _make_plan_review_widget(id="clarify-firstchar")
     app = _WidgetApp(widget)
     async with app.run_test() as pilot:
@@ -169,6 +165,32 @@ async def test_first_keystroke_not_lost_after_refine_highlight() -> None:
         await pilot.pause()
         comment_input = widget.query_one("#saq-comment-input", Input)
         assert comment_input.value == "hello"
+
+
+@pytest.mark.asyncio
+async def test_enter_on_refine_with_empty_comment_keeps_focus() -> None:
+    """Enter on Refine with no comment keeps focus on the input, not submit."""
+    widget = _make_plan_review_widget(id="clarify-empty-enter")
+    app = _WidgetApp(widget)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        widget.action_next_option()  # highlight Refine
+        await pilot.pause()
+        comment_input = widget.query_one("#saq-comment-input", Input)
+        assert app.focused is comment_input
+
+        # Enter with empty comment — must not submit, focus must stay.
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert len(app.submitted) == 0
+        assert app.focused is comment_input
+
+        # Typing still works after Enter.
+        for ch in "hi":
+            await pilot.press(ch)
+        await pilot.pause()
+        assert comment_input.value == "hi"
 
 
 @pytest.mark.asyncio
@@ -228,6 +250,55 @@ async def test_custom_input_displays_typed_text() -> None:
         custom_input.value = "ap-southeast-2"
         await pilot.pause()
         assert custom_input.value == "ap-southeast-2"
+
+
+@pytest.mark.asyncio
+async def test_arrow_to_approve_reject_does_not_scroll_to_plan_header() -> None:
+    """Highlighting Approve/Reject must not scroll to the plan header."""
+    from textual.containers import VerticalScroll
+    from textual.widgets import Static
+
+    plan = "# Plan\n\n" + "\n\nParagraph of plan content.\n" * 30
+
+    class _ScrollApp(App[None]):
+        def compose(self) -> ComposeResult:
+            with VerticalScroll(id="chat"):
+                yield Static("transcript above\n" * 10, id="above")
+                yield StructuredAskUserWidget(
+                    step_id="plan_mode_review",
+                    questions=[_PLAN_REVIEW_Q],
+                    origin_node="plan_mode_review",
+                    allow_custom=False,
+                    comment_option_index=1,
+                    body_markdown=plan,
+                    id="clarify-scroll",
+                )
+
+    app = _ScrollApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        w = pilot.app.query_one(StructuredAskUserWidget)
+        chat = pilot.app.query_one("#chat", VerticalScroll)
+        # Scroll so the options menu is visible (bottom of card).
+        w.query_one(".saq-option-list").scroll_visible()
+        await pilot.pause()
+        y_before = chat.scroll_offset.y
+        assert y_before > 0  # scrolled past the plan header
+
+        # Cycle through all options with real keypresses — scroll must not
+        # jump to the plan header.  The regression: disabling the comment
+        # input on Refine→Reject dropped focus to None, the 200 ms guard
+        # recaptured via set_focus(self), and Textual scrolled to the top.
+        await pilot.press("down")  # Refine
+        await pilot.pause()
+        await pilot.press("down")  # Reject
+        await pilot.pause()
+        await pilot.press("up")  # Refine
+        await pilot.pause()
+        await pilot.press("up")  # Approve
+        await pilot.pause()
+
+        assert chat.scroll_offset.y >= y_before
 
 
 # ---------------------------------------------------------------------------

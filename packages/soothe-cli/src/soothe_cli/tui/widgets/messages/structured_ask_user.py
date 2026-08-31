@@ -978,8 +978,6 @@ class StructuredAskUserWidget(Vertical):
     def _start_focus_guard(self) -> None:
         """Poll every 200 ms and recapture focus if it drifted from the widget.
 
-        Scrollbar clicks, hydration re-layouts, and lifecycle events can
-        move focus to the chat input, the scroll container, or ``None``.
         Stopped on submit/abandon.
         """
 
@@ -990,16 +988,9 @@ class StructuredAskUserWidget(Vertical):
                 focused = self.app.focused
             except Exception:  # noqa: BLE001
                 return
-            # Recapture whenever focus has left the widget and its
-            # descendants.  The chat input is the most common culprit, but
-            # scrollbar clicks, hydration re-layouts, and other events can
-            # also move focus to None or the scroll container.
             if not self._focus_drifted(focused):
                 return
-            try:
-                self.app.set_focus(self)
-            except Exception:  # noqa: BLE001
-                pass
+            self._refocus_self_no_scroll()
 
         try:
             self._focus_guard_timer = self.set_interval(0.2, _tick)
@@ -1017,12 +1008,7 @@ class StructuredAskUserWidget(Vertical):
             self._focus_guard_timer = None
 
     def _schedule_robust_focus(self) -> None:
-        """Pin focus to the widget for ~600 ms after mount.
-
-        Textual's post-mount layout can re-focus the chat input after
-        `call_after_refresh` fires; staggered re-focus calls win that race
-        so arrow keys / Enter work immediately on appear.
-        """
+        """Pin focus to the widget for ~600 ms after mount."""
 
         def _refocus() -> None:
             try:
@@ -1033,16 +1019,20 @@ class StructuredAskUserWidget(Vertical):
                     return
             except Exception:  # noqa: BLE001
                 pass
-            try:
-                self.app.set_focus(self)
-            except Exception:  # noqa: BLE001
-                pass
+            self._refocus_self_no_scroll()
 
         try:
             self.set_timer(0.05, _refocus)
             self.set_timer(0.15, _refocus)
             self.set_timer(0.30, _refocus)
             self.set_timer(0.60, _refocus)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _refocus_self_no_scroll(self) -> None:
+        """Focus the container without scrolling (prevents plan-header jump)."""
+        try:
+            self.app.set_focus(self, scroll_visible=False)
         except Exception:  # noqa: BLE001
             pass
 
@@ -1290,19 +1280,22 @@ class StructuredAskUserWidget(Vertical):
         return None
 
     def _focus_inline_input_or_container(self) -> None:
-        """Focus the highlighted option's inline input, else the container.
+        """Focus the highlighted option's inline input, or the container.
 
-        Synchronous so the first keystroke after arrowing onto Refine/Other
-        isn't lost, and a stale deferred container-focus from a prior arrow
-        move can't steal focus back from the input.
+        When leaving an inline input (Refine→Approve/Reject), the input is
+        disabled by `_update_comment_input_state`, which makes Textual drop
+        focus to None.  Proactively re-focus the container without scrolling
+        so the 200 ms guard doesn't recapture and scroll to the plan header.
         """
         target = self._inline_input_for_highlight()
-        if target is None or target.disabled:
-            target = self
-        try:
-            self.app.set_focus(target)
-        except Exception:  # noqa: BLE001
-            self._schedule_focus(target)
+        if target is not None and not target.disabled:
+            try:
+                self.app.set_focus(target)
+                return
+            except Exception:  # noqa: BLE001
+                pass
+        # No inline input — keep focus on the container without scrolling.
+        self._refocus_self_no_scroll()
 
     def _update_tab_highlight(self) -> None:
         """Update tab labels to reflect current question and answered state."""
@@ -1526,7 +1519,10 @@ class StructuredAskUserWidget(Vertical):
         if self._allow_custom and self._highlighted == custom_idx:
             # Custom row — focus the input if not yet selected
             if self._custom_input is not None and not self._custom_input.disabled:
-                self._schedule_focus(self._custom_input)
+                try:
+                    self.app.set_focus(self._custom_input)
+                except Exception:  # noqa: BLE001
+                    self._schedule_focus(self._custom_input)
             return
         # Select the highlighted option
         self._selected[self._current_q] = self._highlighted
@@ -1539,7 +1535,10 @@ class StructuredAskUserWidget(Vertical):
             and self._highlighted == self._comment_option_index
             and self._comment_input is not None
         ):
-            self._schedule_focus(self._comment_input)
+            try:
+                self.app.set_focus(self._comment_input)
+            except Exception:  # noqa: BLE001
+                self._schedule_focus(self._comment_input)
             return
         # HITL: immediate submit on action selection (Approve/Reject).
         if self._is_hitl:
@@ -1655,7 +1654,10 @@ class StructuredAskUserWidget(Vertical):
         # HITL: comment input — Enter submits with the comment.
         if event.input is self._comment_input:
             event.stop()
-            self._comment_text = str(event.input.value or "").strip()
+            text = str(event.input.value or "").strip()
+            if not text:
+                return
+            self._comment_text = text
             # Select Refine/Edit so _answers_collected appends the comment.
             self._selected[self._current_q] = self._comment_option_index
             self._finalize()
