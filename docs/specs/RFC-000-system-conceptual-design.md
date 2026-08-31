@@ -172,7 +172,7 @@ Controls parallel execution of plan steps, subagents, and tools. Steps declare d
 5. Every tool call and subagent spawn passes through `PolicyProtocol` before execution.
 6. Agent state (including context ledger) is persistable via `DurabilityProtocol`; production deployments MUST enable persistence.
 7. Subagents receive a permission set that is a subset of their parent's.
-8. Remote agents are indistinguishable from local subagents at the delegation interface. Current deviation: remote agents are accessed via direct protocol. Planned: wrap as `CompiledSubAgent` when ACP/A2A implementations are added, preserving the uniform delegation envelope.
+8. Remote agents are indistinguishable from local subagents at the delegation interface. Current deviation: remote agents are accessed via direct protocol. ACP integration is analyzed and designed (IG-770): ACP-Client will wrap external ACP agents as `CompiledSubAgent`, preserving the uniform delegation envelope; the deviation note will be removed when the ACP-Client implementation lands.
 9. `PlannerProtocol` is optional -- simple queries bypass it and use deepagents' standard agent loop.
 10. Conversation history compression is handled by deepagents' `SummarizationMiddleware`; cognitive context accumulation is handled by `ContextProtocol`. These are complementary, not overlapping.
 11. MCP session lifecycle is managed alongside thread lifecycle (created on thread start, cleaned up on suspend/archive).
