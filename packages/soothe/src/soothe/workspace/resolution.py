@@ -137,8 +137,38 @@ def translate_container_path_to_client(
     return host / relative
 
 
+# ---------------------------------------------------------------------------
+# Remote workspace URI classification (RFC-906 §51)
+# ---------------------------------------------------------------------------
+
+# S8: Explicit scheme allowlist — NOT a substring check on '://'.
+# Only remote object-store schemes are permitted from user input.
+# This prevents SSRF via file://, sftp://, http://, ftp://, etc.
+_REMOTE_SYNC_SCHEMES: frozenset[str] = frozenset({"s3", "gs", "az"})
+
+
+def is_remote_workspace_uri(value: str) -> bool:
+    """Check if ``value`` is a remote object-store URI (s3://, gs://, az://).
+
+    Uses an explicit scheme allowlist — NOT a substring check on '://'.
+    This prevents SSRF via ``file://``, ``sftp://``, ``http://``,
+    ``ftp://``, etc.
+
+    Args:
+        value: The string to check.
+
+    Returns:
+        ``True`` if ``value`` is a URI with a scheme in the allowlist.
+    """
+    if "://" not in value:
+        return False
+    scheme = value.split("://", 1)[0].lower()
+    return scheme in _REMOTE_SYNC_SCHEMES
+
+
 __all__ = [
     "cleanup_anonymous_workspaces",
+    "is_remote_workspace_uri",
     "resolve_daemon_workspace",
     "translate_client_path_to_container",
     "translate_container_path_to_client",

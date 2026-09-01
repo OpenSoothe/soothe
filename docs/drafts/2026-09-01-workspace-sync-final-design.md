@@ -1,7 +1,7 @@
 # Workspace Sync: Materialization and Incremental Persistence — Final Design
 
-**Status:** Final (consolidated design — supersedes all prior workspace-sync drafts)
-**Version:** 2.0
+**Status:** Final (consolidated design — supersedes all prior workspace-sync drafts; security fixes integrated from theoretical analysis)
+**Version:** 2.1
 **Date:** 2026-09-01
 **Scope:** Filesystem-native agent runtime with multi-backend durable object storage (S3, GCS, Azure, local), local filesystem workspace, incremental materialization, dirty tracking, checkpointing, and incremental persistence.
 
@@ -386,10 +386,13 @@ async def put_manifest(self, run_id, manifest, *, if_match=None):
     return manifest
 ```
 
-**Caveat:** This is a race condition — between the read and the write, another worker could update the manifest. For S3 backends, a fast-path using S3 conditional writes via `s3fs` internals is available. For other backends without conditional writes (local FS, SFTP), the race window is acceptable because:
+**Caveat:** This is a race condition — between the read and the write, another worker could update the manifest. The mitigation is backend-specific:
 
-- Workspaces are owned by exactly one run (Invariant 3, §45).
-- Concurrent manifest writes only happen during crash recovery, which is designed to anchor on the latest snapshot (§14a recovery algorithm).
+- **S3 backends (default path):** Use `s3fs` internals to issue native S3 `If-Match` ETag conditional writes. This is the **default** for S3, not an optional fast-path. The conditional write is atomic at the object-store level — if the ETag doesn't match, S3 returns `412 PreconditionFailed` and the manifest is not written.
+- **Local FS backends:** Use atomic rename with a version-stamped temp file: write to `manifest.{N+1}.tmp`, then `os.rename()` to `manifest.json`. On local filesystems, `rename` is atomic. If the target was updated by another writer between read and rename, the rename still succeeds (last-writer-wins on local FS) but the version check before the rename detects the conflict.
+- **Backends without conditional writes (SFTP, WebDAV):** The read-then-write guard is the only option. Document that concurrent manifest writes are unsafe on these backends and enforce single-writer semantics via a lock blob with lease timeout, or accept that crash recovery must use fencing tokens.
+
+The race window is acceptable because workspaces are owned by exactly one run (Invariant 3, §45). Concurrent manifest writes only happen during crash recovery, which is designed to anchor on the latest snapshot (§14a recovery algorithm).
 
 ### Content-addressed write-once semantics
 
@@ -398,6 +401,11 @@ Blobs are immutable (Invariant 1, §45). `put_blob` must be idempotent — writi
 ```python
 async def put_blob(self, sha256: str, data: bytes) -> None:
     path = self._blob_path(sha256)
+    # Verify content hash before storing (S7: integrity on write).
+    # This prevents a corrupted or tampered upload from being stored
+    # under a mismatched hash key.
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise IntegrityError(f"content hash mismatch for blob {sha256[:8]}")
     if await asyncio.to_thread(self._fs.exists, path):
         return  # idempotent — blob already stored
     await asyncio.to_thread(self._fs.pipe, path, data)
@@ -409,16 +417,41 @@ The protocol is content-addressed (`sha256`), but fsspec is path-based. The back
 
 ```python
 def _blob_path(self, sha256: str) -> str:
+    _validate_id(sha256, label="sha256")  # hex, 64 chars, no separators
     return f"{self._root}/blobs/sha256/{sha256[:2]}/{sha256}"
 
 def _manifest_path(self, run_id: str) -> str:
+    _validate_id(run_id, label="run_id")  # alphanumeric + hyphens, max 128
     return f"{self._root}/runs/{run_id}/manifest.json"
 
 def _checkpoint_path(self, checkpoint_id: str) -> str:
+    _validate_id(checkpoint_id, label="checkpoint_id")
     return f"{self._root}/runs/{checkpoint_id.rsplit('-', 1)[0]}/checkpoints/{checkpoint_id}.json"
 
 def _artifact_path(self, artifact_path: str) -> str:
+    _validate_relative_path(artifact_path, label="artifact_path")
     return f"{self._root}/artifacts/{artifact_path}"
+```
+
+**Path sanitization (security — S1):** All path-construction methods validate their inputs to prevent path traversal attacks. `_validate_id` rejects any value containing `..`, path separators (`/`), null bytes, or non-alphanumeric characters beyond hyphens. `_validate_relative_path` normalizes the path via `posixpath.normpath()` and verifies the result stays within the expected prefix (no `..` escape, no absolute paths). This prevents an agent or compromised resource from injecting `../../runs/<victim-run-id>/manifest.json` as an artifact path to overwrite another run's manifest.
+
+```python
+import posixpath, re
+
+_ID_RE = re.compile(r'^[a-zA-Z0-9-]{1,128}$')
+
+def _validate_id(value: str, *, label: str) -> None:
+    """Reject path-traversal vectors in server-generated IDs."""
+    if not _ID_RE.match(value):
+        raise ValueError(f"invalid {label}: {value!r}")
+
+def _validate_relative_path(value: str, *, label: str) -> None:
+    """Reject absolute paths, '..' traversal, and null bytes."""
+    if not value or value.startswith('/') or '\x00' in value:
+        raise ValueError(f"invalid {label}: {value!r}")
+    normalized = posixpath.normpath(value)
+    if normalized.startswith('..') or '/..' in normalized:
+        raise ValueError(f"path traversal in {label}: {value!r}")
 ```
 
 ### Streaming support
@@ -428,31 +461,53 @@ fsspec supports chunked reads via `cat_file(..., start=, end=)` and `open(path, 
 ```python
 async def stream_blob(self, sha256: str) -> AsyncIterator[bytes]:
     path = self._blob_path(sha256)
-    f = await asyncio.to_thread(self._fs.open, path, "rb")
-    try:
-        while chunk := await asyncio.to_thread(f.read, 8192):
-            yield chunk
-    finally:
-        await asyncio.to_thread(f.close)
+    # Read entire blob in a single thread call, then yield from buffer.
+    # This avoids per-chunk thread submissions (P1: ~6,100 to_thread calls
+    # for a 50 MB blob at 8 KB chunks). For very large blobs, use
+    # cat_file with explicit start/end ranges.
+    data = await asyncio.to_thread(self._fs.cat_file, path)
+    chunk_size = 65536
+    for offset in range(0, len(data), chunk_size):
+        yield data[offset:offset + chunk_size]
 ```
+
+> **P1 mitigation:** The streaming API reads the entire blob in a single `to_thread` call rather than submitting one thread call per chunk. The `FsspecSyncBackend` uses a dedicated `ThreadPoolExecutor` (configurable `max_workers`, defaulting to the §31 worker count) instead of the default executor, preventing thread-pool saturation under concurrent runs.
 
 ### URI factory
 
 The `construct_sync_backend(uri, config)` factory becomes trivially generic with fsspec:
 
 ```python
+# Security: explicit scheme allowlist (S8). Only remote object-store
+# schemes are permitted from user-supplied URIs. file://, sftp://,
+# http://, ftp:// are rejected to prevent SSRF / local file read.
+_ALLOWED_SYNC_SCHEMES = frozenset({"s3", "gs", "az"})
+
 def construct_sync_backend(uri: str, config) -> WorkspaceSyncBackend:
-    fs, root = fsspec.url_to_fs(uri, **_resolve_storage_options(uri, config))
+    scheme = uri.split("://", 1)[0].lower()
+    if scheme not in _ALLOWED_SYNC_SCHEMES:
+        raise ValueError(
+            f"unsupported workspace_sync_source scheme: {scheme!r}. "
+            f"Allowed: {sorted(_ALLOWED_SYNC_SCHEMES)}"
+        )
+    storage_options = _resolve_storage_options(uri, config)
+    # Security: disable fsspec global filesystem cache (S3). Without this,
+    # fsspec caches the filesystem instance (with embedded credentials) in
+    # a process-global registry keyed by (cls, storage_options_hash).
+    # Any code in the same process — including the agent — could retrieve
+    # the cached instance and inspect storage_options for AWS keys.
+    fs, root = fsspec.url_to_fs(uri, **storage_options)
+    fs.use_cache = False  # disable instance caching for this filesystem
     return FsspecSyncBackend(fs=fs, root=root)
 
 # s3://bucket/prefix  → s3.S3FileSystem
 # gs://bucket/prefix  → gcs.GCSFileSystem
 # az://container/pfx  → adl.AzureBlobFileSystem
-# file:///path/to/dir → LocalFileSystem
-# memory://test       → MemoryFileSystem
+# file:// and memory:// are NOT constructible via this factory — they are
+# test-only and must be instantiated directly in test code.
 ```
 
-This eliminates per-scheme `if/elif` dispatch and makes the system work with any fsspec-supported backend with zero code changes.
+This eliminates per-scheme `if/elif` dispatch and makes the system work with any fsspec-supported backend with zero code changes. The scheme allowlist ensures only approved remote object-store backends are reachable from user input.
 
 ---
 
@@ -544,6 +599,8 @@ If the agent modifies the file, the filesystem handles copy-on-write behavior.
 
 > **Cross-filesystem caveat:** reflink (`FICLONE`) and hardlinks require source and destination on the same filesystem. If the CAS cache and the workspace root are on different volumes, the implementation MUST fall back to copy. The fallback chain is probed once at workspace open and cached for the run.
 
+> **Symlink policy (security — S2):** Symlinks pointing outside the workspace root are **forbidden**. An agent that creates a symlink to `/etc/passwd` inside `input/` or `working/` could cause the checkpoint path to read and hash arbitrary host files into the object store (data exfiltration). At workspace open, scan for existing symlinks and remove any that resolve outside the workspace root. During checkpoint, before reading a dirty file, check `os.path.islink(path)` — reject symlinks whose targets escape the workspace root. Symlinks within the workspace are allowed (resolved at checkpoint). See §12 and §35 for enforcement details.
+
 ---
 
 ## 11. Lazy materialization (deferred — not in MVP)
@@ -601,6 +658,8 @@ deleted_files = {
 
 **Delete tracking:** deletions are recorded separately from modifications so the checkpoint knows to remove entries from the remote manifest.
 
+**Symlink detection (security — S2):** The tracker uses `os.lstat()` instead of `os.stat()` when recording file metadata. This detects symlinks without following them. If a dirty file is a symlink, the tracker checks whether its target resolves within the workspace root. Symlinks escaping the workspace root are marked with `status='rejected_symlink'` and excluded from checkpointing — they are never read or hashed, preventing host-file exfiltration.
+
 ### 12.4 Exclusions
 
 The watcher ignores the `.workspace/` directory (runtime-owned, not agent-written). Only `input/`, `working/`, and `output/` are observed.
@@ -608,6 +667,8 @@ The watcher ignores the `.workspace/` directory (runtime-owned, not agent-writte
 ### 12.5 Graceful degradation
 
 If a native watcher fails to initialize (e.g. permission denied, resource limit), the tracker falls back to stat-scan polling with a configurable interval. A warning is logged. The poll interval MUST be ≤ the debounce window (§13) to avoid starving the checkpoint cycle.
+
+**Runtime watch exhaustion (P7):** `inotify` can fail *mid-run*, not just at initialization. Each `inotify_add_watch` call can return `-1` with `errno=ENOSPC` when `fs.inotify.max_user_watches` is exhausted (default: 8,192 on many Linux distributions). The implementation MUST check the return value of every `add_watch` call. On `ENOSPC`, log a warning and switch that specific subtree to stat-scan polling mode (hybrid per-subtree, not all-or-nothing). At workspace open, probe `/proc/sys/fs/inotify/max_user_watches` and pre-warn if the workspace file count is likely to exceed it. Recommended production setting: `fs.inotify.max_user_watches=524288`.
 
 Only dirty files are considered during checkpointing.
 
@@ -1076,6 +1137,14 @@ CHECK LOCAL CACHE
              CLEANUP
 ```
 
+> **Cleanup sequence (S10):** Cleanup is not a single delete — it is a multi-step drain to prevent loss of pending checkpoints while the background uploader (§32) is still active:
+> 1. Stop the dirty tracker (no new dirty events).
+> 2. Flush the debouncer (force a final checkpoint).
+> 3. Wait for the background uploader to drain (`list_pending_checkpoints()` returns empty).
+> 4. Delete the workspace.
+>
+> The workspace is marked as `closing` (no new checkpoints accepted) during step 2–3. This prevents the cleanup race where the state DB is deleted mid-transaction.
+
 ---
 
 ## 26. Crash recovery
@@ -1200,6 +1269,8 @@ upload workers:   4–16
 
 depending on network and storage-backend capacity.
 
+> **Dedicated thread pool (P1):** The `FsspecSyncBackend` uses a dedicated `ThreadPoolExecutor` with a configurable `max_workers` (matching the download/upload worker counts above), not the default `asyncio` executor. The default executor (`min(32, os.cpu_count() + 4)` workers) is shared across all `asyncio.to_thread()` calls in the process — under concurrent runs, fsspec calls compete with other thread submissions and saturate the pool. A dedicated pool isolates fsspec I/O and prevents the streaming API (§6c) from starving other async work.
+
 ---
 
 ## 32. Backpressure
@@ -1223,6 +1294,11 @@ agent → local checkpoint queue → continue
 The local checkpoint becomes durable on local disk first. The uploader asynchronously persists it to the storage backend.
 
 > **Local durability mechanism (dual-backend):** The checkpoint payload is written to the workspace `WorkspaceStateStore` (§21) with `status='pending_upload'`. This is the same state store that tracks dirty files and blob cache — whether it's a SQLite file (`.workspace/state.db`) or PostgreSQL tables (`ws_checkpoints` in `soothe_metadata`), the checkpoint is durably recorded before the background uploader attempts the remote push. The uploader queries `list_pending_checkpoints()` (FIFO order), uploads blobs first, then the manifest, and finally calls `update_checkpoint_status(id, 'uploaded')`. If the process crashes, recovery scans for `status='pending_upload'` rows and re-attempts. This follows the same pattern as the StrangeLoop async checkpoint worker (RFC-803) and the cron store's pending-job queue.
+
+> **Queue backpressure (P10):** If the storage backend is slow (S3 throttling, network congestion), checkpoints accumulate in the state DB faster than the uploader can drain them. To prevent unbounded growth:
+> - A `max_pending_checkpoints` threshold (default: 20) is enforced. When exceeded, the debouncer blocks new checkpoints (or increases the debounce window) until the queue drains.
+> - The debouncer is aware of the uploader's drain rate and adaptively increases the debounce window if the queue is growing.
+> - On recovery, the pending queue is drained before the agent resumes — documented as a recovery cost proportional to queue depth.
 
 ---
 
@@ -1271,15 +1347,127 @@ Requirements:
 - controlled filesystem permissions
 - object-store credentials unavailable to the agent
 - object-store credentials held only by Workspace Manager
-- path traversal protection
-- symlink policy
+- path traversal protection (backend-internal and agent-facing)
+- symlink policy (no symlinks escaping workspace root)
 - resource size limits
 - disk quotas
 - cleanup after completion
+- URI scheme allowlist for `workspace_sync_source` input
+- CAS blob integrity verification
 
 The agent should never receive `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`, AWS credentials, or equivalent storage credentials.
 
 > **Relationship to RFC-102:** path traversal protection, workspace boundary enforcement, and file-type restrictions are already specified by RFC-102's `SecureFilesystemBackend` and `SecurityConfig`. The Workspace Manager should **compose** `SecureFilesystemBackend` for the agent-facing filesystem boundary rather than reimplement path validation. The `.workspace/` directory is enforced as off-limits via the existing path blacklist mechanism.
+
+### 35a. Path traversal protection in backend path construction (S1)
+
+**Threat:** The `FsspecSyncBackend` constructs storage paths from `artifact_path`, `run_id`, and `checkpoint_id`. If any of these contain `..` segments, absolute paths, or null bytes, the resulting path can escape the intended prefix and overwrite manifests, checkpoints, or blobs of other runs.
+
+**Mitigation:** All path construction methods in `FsspecSyncBackend` MUST validate their inputs:
+
+```python
+import posixpath
+import re
+
+# Reject path traversal, absolute paths, and null bytes.
+_SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9._\-]+$")
+
+def _validate_path_component(component: str, name: str) -> str:
+    """Validate a path component (run_id, checkpoint_id, sha256)."""
+    if not component or "\x00" in component:
+        raise ValueError(f"invalid {name}: empty or contains null bytes")
+    if not _SAFE_ID_PATTERN.match(component):
+        raise ValueError(f"invalid {name}: contains path separators or special chars")
+    return component
+
+def _validate_relative_path(path: str) -> str:
+    """Validate a relative path (artifact_path). Reject traversal."""
+    if not path or "\x00" in path:
+        raise ValueError("invalid artifact_path: empty or contains null bytes")
+    if path.startswith("/"):
+        raise ValueError("invalid artifact_path: absolute paths not allowed")
+    normalized = posixpath.normpath(path)
+    if normalized.startswith(".."):
+        raise ValueError(f"invalid artifact_path: path traversal detected in {path!r}")
+    return normalized
+```
+
+Applied to `_artifact_path`, `_blob_path`, `_manifest_path`, `_checkpoint_path`. The `run_id` and `checkpoint_id` are validated at the protocol boundary (alphanumeric + hyphens + dots only, max 128 chars).
+
+### 35b. Symlink escape prevention (S2)
+
+**Threat:** An agent creates a symlink inside the workspace pointing to a path outside the workspace root (e.g., `ln -s /etc/passwd input/secret`). At checkpoint time, the Workspace Manager reads and hashes the file — exfiltrating sensitive host files into the durable object store.
+
+**Mitigation:**
+
+1. **At workspace open:** Scan `input/`, `working/`, `output/` for existing symlinks. Remove or reject any whose targets resolve outside the workspace root.
+2. **In the dirty tracker (§12.3):** Use `os.lstat()` instead of `os.stat()` to detect symlinks without following them. Mark symlinks escaping the workspace root as `status='rejected_symlink'` — they are never read or hashed.
+3. **At checkpoint time:** Before reading a dirty file, check `os.path.islink(path)`. If it is a symlink, resolve the target via `os.readlink()` and verify it is within the workspace root using `os.path.realpath()`. Reject if outside.
+4. **Policy:** Symlinks within the workspace are allowed (resolved at checkpoint). Symlinks pointing outside the workspace root are forbidden and silently excluded from checkpointing.
+
+### 35c. Credential isolation from fsspec cache (S3)
+
+**Threat:** fsspec caches filesystem instances in a process-global registry keyed by `(cls, storage_options_hash)`. If `storage_options` contain AWS credentials, they are stored in the cache for the process lifetime. Any code in the same process — including the agent — can retrieve the cached instance and inspect `storage_options`.
+
+**Mitigation:**
+
+1. **Disable fsspec instance caching:** The `construct_sync_backend` factory (§6c) sets `fs.use_cache = False` after construction, preventing the instance from being registered in the global cache.
+2. **Clear storage_options after construction:** After the `FsspecSyncBackend` is initialized, clear the `storage_options` dict on the filesystem instance (`fs.storage_options = {}`). fsspec copies what it needs internally; the original credentials dict is no longer reachable.
+3. **Prefer environment variables / IAM roles:** Use environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) or instance metadata (IAM roles) instead of explicit `storage_options` for credentials, so they are never passed as Python objects.
+4. **Agent import sandboxing:** The agent's tool execution environment must not have `fsspec` importable. Since `fsspec` is a host-only dependency (§50), the agent's subprocess or tool execution context must not expose the host's Python import path.
+
+### 35d. URI scheme allowlist for `workspace_sync_source` (S8)
+
+**Threat:** The daemon router (§51) reads `workspace_sync_source` from the `loop_new` message — which is user-controlled. A user can submit `file:///etc/` to materialize host files into the workspace, or `sftp://` / `http://` to access internal services (SSRF). The `is_remote_workspace_uri()` check (`"://" in value and not value.startswith("file://")`) is insufficient — it allows arbitrary schemes.
+
+**Mitigation:**
+
+1. **Explicit scheme allowlist:** Only `s3://`, `gs://`, `az://` are permitted from user-supplied `workspace_sync_source` values. The `construct_sync_backend` factory (§6c) enforces this via `_ALLOWED_SYNC_SCHEMES = frozenset({"s3", "gs", "az"})`.
+2. **Reject `file://`, `memory://`, `sftp://`, `http://`, `ftp://`** from user input. These schemes are test-only and must be instantiated directly in test code, not via the factory.
+3. **`is_remote_workspace_uri()` (§51) uses the same allowlist:** `uri.split("://")[0].lower() in {"s3", "gs", "az"}` — not a substring check.
+4. **Configurable bucket/prefix allowlist (future):** The daemon config may specify allowed S3 buckets, GCS projects, etc. URIs pointing to unconfigured backends are rejected.
+
+### 35e. Untrusted object key validation in manifest synthesis (S4)
+
+**Threat:** When synthesizing a manifest from a prefix listing (§49 Q8), object keys from `fs.ls()` are used as `path` values. A crafted key like `../../runs/<victim-run-id>/manifest.json` causes path traversal during materialization.
+
+**Mitigation:**
+
+1. During manifest synthesis, strip the prefix from each object key and validate the resulting relative path: reject `..` segments, absolute paths, and null bytes (same validation as §35a).
+2. Reject object keys containing path separators that escape the prefix.
+3. Log and skip any object key that fails validation.
+
+### 35f. CAS blob integrity verification (S7)
+
+**Threat:** A blob stored under `sha256/<hash>` may not match its hash key — due to a corrupted upload, disk corruption, or object-store tampering. On CAS cache hit, the blob is used without verification.
+
+**Mitigation:**
+
+1. **On write (§6c `put_blob`):** Verify `hashlib.sha256(data).hexdigest() == sha256` before storing. Reject mismatches with `IntegrityError`.
+2. **On first download from object store (§9):** Verify SHA-256 after download (already specified — ensure enforced).
+3. **On CAS cache hit:** For large blobs, full-hash verification on every access is expensive. Instead:
+   - Store a `.sha256` sidecar file alongside each CAS blob, or use extended attributes (xattrs) to store the hash.
+   - Verify the sidecar hash matches the expected hash key on access (cheap metadata read).
+   - Run a periodic background integrity scan (hash all CAS blobs, compare to stored hash, evict corrupted ones).
+4. **On hash mismatch:** Delete the corrupted blob from CAS and re-download from the object store (§36 failure table: "Corrupted CAS blob → verify checksum and redownload").
+
+### 35g. Cleanup race prevention (S10)
+
+**Threat:** If the workspace directory is deleted while the background uploader (§32) is still draining the pending checkpoint queue, the state DB is deleted mid-transaction. Pending checkpoints are lost.
+
+**Mitigation:**
+
+The cleanup sequence MUST be:
+
+```text
+1. Stop the dirty tracker (no new dirty events)
+2. Flush the debouncer (force a final checkpoint)
+3. Wait for the background uploader to drain
+   (list_pending_checkpoints() returns empty)
+4. Delete the workspace
+```
+
+This is a two-phase cleanup: first, mark the workspace as `closing` (no new checkpoints accepted), then drain the pending queue, then delete. The cleanup is asynchronous and may take time proportional to the pending queue depth. Document this as a recovery cost.
 
 ---
 
@@ -1732,7 +1920,7 @@ Confirm that RFC-102's `SecurityConfig` path blacklist can hide a subdirectory (
 
 ### Q7 — `gs://` and other URI schemes (formerly open in the `s3://` URI draft)
 
-**Resolved: All fsspec-supported schemes work out of the box.** The `construct_sync_backend(uri, config)` factory uses `fsspec.url_to_fs(uri)` — no per-scheme dispatch code needed. `s3://`, `gs://`, `az://`, `file://`, and `memory://` all work with zero additional code. See §6c.
+**Resolved: All fsspec-supported schemes work at the transport level, but only `s3://`, `gs://`, `az://` are permitted from user input (S8).** The `construct_sync_backend(uri, config)` factory uses `fsspec.url_to_fs(uri)` — no per-scheme dispatch code needed. However, the factory enforces an explicit scheme allowlist (§6c, §35d) to prevent SSRF. `file://` and `memory://` are test-only — instantiated directly in test code, not via the factory.
 
 ### Q8 — Manifest synthesis from prefix listing (no `manifest.json`)
 
@@ -1745,6 +1933,22 @@ Confirm that RFC-102's `SecurityConfig` path blacklist can hide a subdirectory (
 ### Q10 — Re-sync on resume
 
 **Resolved: No.** On resume, use the local workspace state DB + last checkpoint. Only re-materialize from the object store if the local workspace is missing (crash recovery, §26).
+
+### Q11 — Path traversal in backend path construction (S1)
+
+**Resolved: All `FsspecSyncBackend` path methods validate inputs.** `_validate_path_component()` rejects non-alphanumeric characters in `run_id`, `checkpoint_id`, and `sha256`. `_validate_relative_path()` rejects `..`, absolute paths, and null bytes in `artifact_path`. See §35a.
+
+### Q12 — Symlink escape from workspace (S2)
+
+**Resolved: Symlinks escaping the workspace root are forbidden.** The dirty tracker uses `os.lstat()` to detect symlinks without following them (§12.3). At checkpoint, `os.path.islink()` is checked and targets are verified to be within the workspace root (§35b). Symlinks within the workspace are allowed.
+
+### Q13 — Credential leakage via fsspec cache (S3)
+
+**Resolved: fsspec instance caching is disabled.** The `construct_sync_backend` factory sets `fs.use_cache = False` and clears `fs.storage_options` after construction (§6c, §35c). Environment variables / IAM roles are preferred over explicit credential dicts. The agent's tool execution context must not have `fsspec` importable.
+
+### Q14 — URI injection via `workspace_sync_source` (S8)
+
+**Resolved: Explicit scheme allowlist.** Only `s3://`, `gs://`, `az://` are permitted from user input. The `is_remote_workspace_uri()` function uses `scheme in {"s3", "gs", "az"}` — not a substring check. The `construct_sync_backend` factory enforces the same allowlist. `file://`, `sftp://`, `http://`, `ftp://` are rejected. See §35d.
 
 ---
 
@@ -1807,9 +2011,20 @@ soothe/workspace/
 In `soothe/workspace/resolution.py`, add a URI classifier:
 
 ```python
+# Security (S8): explicit scheme allowlist, not substring check.
+# Only remote object-store schemes are permitted from user input.
+_REMOTE_SYNC_SCHEMES = frozenset({"s3", "gs", "az"})
+
 def is_remote_workspace_uri(value: str) -> bool:
-    """True if value is a remote URI (s3://, gs://, az://, etc.) not a local path."""
-    return "://" in value and not value.startswith("file://")
+    """True if value is a remote object-store URI (s3://, gs://, az://).
+
+    Uses an explicit scheme allowlist — NOT a substring check on '://'.
+    This prevents SSRF via file://, sftp://, http://, ftp://, etc.
+    """
+    if "://" not in value:
+        return False
+    scheme = value.split("://", 1)[0].lower()
+    return scheme in _REMOTE_SYNC_SCHEMES
 ```
 
 `validate_client_workspace` must reject remote URIs (it's for local paths only).
@@ -1820,12 +2035,19 @@ In the daemon router (`_handle_loop_new`), add URI-scheme detection before the e
 raw_workspace = msg.get("client_workspace") or msg.get("workspace")
 sync_source = msg.get("workspace_sync_source")  # NEW field
 
-if _is_remote_uri(raw_workspace):
+if is_remote_workspace_uri(raw_workspace):
     sync_source = raw_workspace
     raw_workspace = None  # don't treat as local path
+elif raw_workspace and "://" in raw_workspace:
+    # Reject any URI that isn't in the allowlist (S8: SSRF prevention)
+    scheme = raw_workspace.split("://", 1)[0].lower()
+    raise WorkspaceConfigError(
+        f"unsupported workspace URI scheme: {scheme!r}. "
+        f"Allowed: {sorted(_REMOTE_SYNC_SCHEMES)}"
+    )
 
 if sync_source:
-    # Materialize temp workspace from remote source
+    # construct_sync_backend enforces the scheme allowlist (§6c, §35d)
     backend = construct_sync_backend(sync_source, config)
     local_root = await _workspace_manager.open_from_uri(
         run_id=loop_id,
@@ -1863,10 +2085,10 @@ The agent **never sees `s3://`, `gs://`, or any remote URI**. The agent sees an 
 
 - **Agent behavior:** The agent sees a local path. No object-store awareness. No new tools needed.
 - **Materialization algorithm (§9):** Unchanged — manifest → CAS → hardlink/reflink.
-- **Dirty tracking (§12):** Unchanged — FS events → dirty set → debounce → checkpoint.
+- **Dirty tracking (§12):** Algorithm unchanged — FS events → dirty set → debounce → checkpoint. Added symlink detection (S2) and inotify ENOSPC handling (P7) as implementation details.
 - **Checkpoint/publish (§14, §15, §32):** Unchanged — local state DB → background uploader → object store.
 - **CAS dedup (§24):** Unchanged — content-addressed blobs shared across runs.
-- **Security (§35):** Unchanged — credentials stay in the backend, agent never sees them.
+- **Security (§35):** Expanded — the original requirements list is now backed by concrete mitigations (§35a–§35g) for path traversal (S1), symlink escape (S2), credential leakage (S3), URI injection (S8), object key injection (S4), blob integrity (S7), and cleanup race (S10). The `WorkspaceSyncBackend` protocol itself is unchanged.
 - **`WorkspaceSyncBackend` protocol:** Unchanged — stays in `soothe-sdk`.
 - **`WorkspaceManager`:** Unchanged — stays concrete in `soothe`, talks to the protocol.
 - **All 9 core invariants (§45):** Unchanged.

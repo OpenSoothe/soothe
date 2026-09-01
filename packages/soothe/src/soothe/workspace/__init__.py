@@ -33,6 +33,7 @@ from soothe.workspace.loop_workspace import (
 )
 from soothe.workspace.resolution import (
     cleanup_anonymous_workspaces,
+    is_remote_workspace_uri,
     resolve_daemon_workspace,
     translate_client_path_to_container,
     translate_container_path_to_client,
@@ -54,6 +55,7 @@ __all__ = [
     "get_virtual_home_relative_path",
     "get_virtual_mode",
     "get_workspace_backend",
+    "is_remote_workspace_uri",
     "normalize_user_id",
     "resolve_daemon_workspace",
     "resolve_loop_workspace",
