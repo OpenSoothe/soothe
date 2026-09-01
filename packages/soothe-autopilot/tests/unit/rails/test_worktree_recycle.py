@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from soothe_autopilot.rails import worktree_ops
+from soothe.rails import worktree_ops
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:

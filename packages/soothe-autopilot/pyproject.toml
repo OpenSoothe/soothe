@@ -49,39 +49,15 @@ Repository = "https://github.com/mirasoth/soothe"
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe_autopilot"]
 
-# Ship prompt XML fragments and builtin rail YML (non-.py package data) in the wheel.
+# Ship prompt XML fragments (non-.py package data) in the wheel.
 [tool.hatch.build.targets.wheel.force-include]
 "src/soothe_autopilot/prompts/fragments/consensus/judge_instructions.xml" = "soothe_autopilot/prompts/fragments/consensus/judge_instructions.xml"
 "src/soothe_autopilot/prompts/fragments/maturity/assess_closing.xml" = "soothe_autopilot/prompts/fragments/maturity/assess_closing.xml"
 "src/soothe_autopilot/prompts/fragments/maturity/assess_instructions.xml" = "soothe_autopilot/prompts/fragments/maturity/assess_instructions.xml"
-"src/soothe_autopilot/prompts/fragments/rail/autoresearch_loop.xml" = "soothe_autopilot/prompts/fragments/rail/autoresearch_loop.xml"
-"src/soothe_autopilot/prompts/fragments/rail/debug.xml" = "soothe_autopilot/prompts/fragments/rail/debug.xml"
-"src/soothe_autopilot/prompts/fragments/rail/evals.xml" = "soothe_autopilot/prompts/fragments/rail/evals.xml"
-"src/soothe_autopilot/prompts/fragments/rail/fix.xml" = "soothe_autopilot/prompts/fragments/rail/fix.xml"
-"src/soothe_autopilot/prompts/fragments/rail/guard_system.xml" = "soothe_autopilot/prompts/fragments/rail/guard_system.xml"
-"src/soothe_autopilot/prompts/fragments/rail/improve.xml" = "soothe_autopilot/prompts/fragments/rail/improve.xml"
-"src/soothe_autopilot/prompts/fragments/rail/learn.xml" = "soothe_autopilot/prompts/fragments/rail/learn.xml"
-"src/soothe_autopilot/prompts/fragments/rail/orchestrator_routing.xml" = "soothe_autopilot/prompts/fragments/rail/orchestrator_routing.xml"
-"src/soothe_autopilot/prompts/fragments/rail/plan.xml" = "soothe_autopilot/prompts/fragments/rail/plan.xml"
-"src/soothe_autopilot/prompts/fragments/rail/predict.xml" = "soothe_autopilot/prompts/fragments/rail/predict.xml"
-"src/soothe_autopilot/prompts/fragments/rail/probe.xml" = "soothe_autopilot/prompts/fragments/rail/probe.xml"
-"src/soothe_autopilot/prompts/fragments/rail/reason.xml" = "soothe_autopilot/prompts/fragments/rail/reason.xml"
-"src/soothe_autopilot/prompts/fragments/rail/regression.xml" = "soothe_autopilot/prompts/fragments/rail/regression.xml"
-"src/soothe_autopilot/prompts/fragments/rail/scenario.xml" = "soothe_autopilot/prompts/fragments/rail/scenario.xml"
-"src/soothe_autopilot/prompts/fragments/rail/security.xml" = "soothe_autopilot/prompts/fragments/rail/security.xml"
-"src/soothe_autopilot/prompts/fragments/rail/ship.xml" = "soothe_autopilot/prompts/fragments/rail/ship.xml"
 "src/soothe_autopilot/prompts/fragments/verify/backoff.xml" = "soothe_autopilot/prompts/fragments/verify/backoff.xml"
 "src/soothe_autopilot/prompts/fragments/verify/dag_health.xml" = "soothe_autopilot/prompts/fragments/verify/dag_health.xml"
 "src/soothe_autopilot/prompts/fragments/verify/goal_placement.xml" = "soothe_autopilot/prompts/fragments/verify/goal_placement.xml"
 "src/soothe_autopilot/prompts/fragments/verify/post_completion.xml" = "soothe_autopilot/prompts/fragments/verify/post_completion.xml"
-"src/soothe_autopilot/rails/builtin_rails/autoresearch.yml" = "soothe_autopilot/rails/builtin_rails/autoresearch.yml"
-"src/soothe_autopilot/rails/builtin_rails/feature-dev.yml" = "soothe_autopilot/rails/builtin_rails/feature-dev.yml"
-"src/soothe_autopilot/rails/builtin_rails/greenfield-system.yml" = "soothe_autopilot/rails/builtin_rails/greenfield-system.yml"
-"src/soothe_autopilot/rails/builtin_rails/hotfix.yml" = "soothe_autopilot/rails/builtin_rails/hotfix.yml"
-"src/soothe_autopilot/rails/builtin_rails/maker-checker.yml" = "soothe_autopilot/rails/builtin_rails/maker-checker.yml"
-"src/soothe_autopilot/rails/builtin_rails/pr-review.yml" = "soothe_autopilot/rails/builtin_rails/pr-review.yml"
-"src/soothe_autopilot/rails/builtin_rails/README.md" = "soothe_autopilot/rails/builtin_rails/README.md"
-"src/soothe_autopilot/rails/builtin_rails/spike.yml" = "soothe_autopilot/rails/builtin_rails/spike.yml"
 
 [tool.hatch.build.targets.sdist]
 include = ["src/soothe_autopilot/"]

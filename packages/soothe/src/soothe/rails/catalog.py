@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from soothe_autopilot.rails.builtins import get_rails_paths
+from soothe.rails.builtins import get_rails_paths
 
 # CE built-ins referenced by rail ``then:`` (LoopRail design draft §5).
 CE_RAIL_BUILTINS: frozenset[str] = frozenset(
@@ -202,7 +202,7 @@ def _normalize_auto_pick(raw: Any, *, path: Path) -> bool:
 
 def _normalize_verbs(raw: Any, *, path: Path) -> dict[str, dict[str, Any]]:
     """Validate optional `verbs:` catalog-verb body overrides."""
-    from soothe_autopilot.rails.l0_schema import normalize_do_steps
+    from soothe.rails.l0_schema import normalize_do_steps
 
     if raw is None:
         return {}

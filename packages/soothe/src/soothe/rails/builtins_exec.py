@@ -24,14 +24,13 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.context.engine import ContextEngine
 from soothe.context.models import TERMINAL_STATES, GoalNode
-
-from soothe_autopilot.rails import worktree_ops
-from soothe_autopilot.rails.pause_clarify import (
+from soothe.rails import worktree_ops
+from soothe.rails.pause_clarify import (
     PauseClarifyDecision,
     decision_to_audit,
     run_rail_pause_clarify,
 )
-from soothe_autopilot.rails.verb_defaults import (
+from soothe.rails.verb_defaults import (
     DEFAULT_VERB_ROLES,
     DEFAULT_VERB_TAGS,
     apply_maker_discipline,
@@ -44,7 +43,7 @@ from soothe_autopilot.rails.verb_defaults import (
     slice_maker_brief,
     waveplan_verify_existing_brief,
 )
-from soothe_autopilot.rails.wave_plan import (
+from soothe.rails.wave_plan import (
     WavePlan,
     apply_wave_plan_to_state_fields,
     build_wave_plan,
@@ -559,15 +558,23 @@ class RailBuiltinExecutor:
 
     def _acceptance_brief_for_job(self, job_id: str) -> str:
         """Acceptance contract blurb for QA/verify goal descriptions."""
-        from soothe_autopilot.verify.job_maturity import acceptance_contract_brief
-
         root = self._ce._dag.get_goal(job_id)
-        return acceptance_contract_brief(
-            verification_rules=root.verification_rules if root else None,
-            jobs_root=self._jobs_root,
-            job_id=job_id,
-            maturity=root.maturity if root else None,
-        )
+        verification_rules = root.verification_rules if root else None
+        maturity = root.maturity if root else None
+        parts: list[str] = []
+        if verification_rules and verification_rules.strip():
+            parts.append(f"verification_rules: {verification_rules.strip()[:25_000]}")
+        if maturity and isinstance(maturity, dict) and maturity.get("blockers"):
+            blockers = "; ".join(str(b) for b in maturity["blockers"][:5])
+            parts.append(f"Current maturity blockers: {blockers}")
+        if not parts:
+            return (
+                "Verify the job acceptance contract: deliverables and success "
+                "criteria in the job GOAL.md / verification_rules (or the job "
+                "description) must be satisfied for this workspace domain."
+            )
+        text = "\n\n".join(parts)
+        return text[: 25_000 - 3] + "..." if len(text) > 25_000 else text
 
     async def invoke(
         self,
@@ -597,7 +604,7 @@ class RailBuiltinExecutor:
                 if isinstance(raw_do, list) and raw_do:
                     steps = raw_do
             if steps is not None:
-                from soothe_autopilot.rails.recipe_exec import RecipeRunner
+                from soothe.rails.recipe_exec import RecipeRunner
 
                 return await RecipeRunner(self).run(
                     steps, job_id=job_id, trigger_goal_id=trigger_goal_id
@@ -608,7 +615,7 @@ class RailBuiltinExecutor:
                 and state.rail_id == "autoresearch"
                 and builtin == "plan_and_implement"
             ):
-                from soothe_autopilot.rails.autoresearch_exec import AutoresearchExec
+                from soothe.rails.autoresearch_exec import AutoresearchExec
 
                 return await AutoresearchExec(self).plan_and_implement(
                     job_id=job_id, trigger_goal_id=trigger_goal_id
@@ -1432,9 +1439,20 @@ class RailBuiltinExecutor:
                 detail=f"max_feedback_rounds={state.max_feedback_rounds} reached",
             )
         root = self._ce._dag.get_goal(job_id)
-        from soothe_autopilot.verify.job_maturity import latch_acceptance_met
 
-        if latch_acceptance_met(
+        def _latch_acceptance_met(
+            *,
+            rail_acceptance_met: bool = False,
+            maturity: dict[str, Any] | None = None,
+        ) -> bool:
+            """Resolve acceptance latch preferring CE maturity over rail_state."""
+            if rail_acceptance_met:
+                return True
+            if isinstance(maturity, dict) and maturity.get("acceptance_met"):
+                return True
+            return False
+
+        if _latch_acceptance_met(
             rail_acceptance_met=state.acceptance_met,
             maturity=root.maturity if root is not None else None,
         ):

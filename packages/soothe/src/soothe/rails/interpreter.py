@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe_autopilot.rails.builtins_exec import (
+from soothe.rails.builtins_exec import (
     BuiltinResult,
     RailBuiltinExecutor,
     RailJobState,
@@ -20,10 +20,9 @@ from soothe_autopilot.rails.builtins_exec import (
 if TYPE_CHECKING:
     from soothe.config.models import SootheConfig
 from soothe.context.engine import ContextEngine, InvalidGoalTransitionError
-
-from soothe_autopilot.rails.catalog import LoopRailCatalog, RailDefinition
-from soothe_autopilot.rails.guards import GuardContext, GuardEvaluator
-from soothe_autopilot.rails.trace_store import (
+from soothe.rails.catalog import LoopRailCatalog, RailDefinition
+from soothe.rails.guards import GuardContext, GuardEvaluator
+from soothe.rails.trace_store import (
     GuardResult,
     MemoryRailTraceStore,
     RailTraceStore,
@@ -369,7 +368,17 @@ class LoopRailInterpreter:
 
         from soothe.context.models import TERMINAL_STATES
 
-        from soothe_autopilot.verify.job_maturity import latch_acceptance_met
+        def _latch_acceptance_met(
+            *,
+            rail_acceptance_met: bool = False,
+            maturity: dict[str, Any] | None = None,
+        ) -> bool:
+            """Resolve acceptance latch preferring CE maturity over rail_state."""
+            if rail_acceptance_met:
+                return True
+            if isinstance(maturity, dict) and maturity.get("acceptance_met"):
+                return True
+            return False
 
         job_state = await self._builtins.job_state(event.job_id)
         below_slice_budget = True
@@ -406,7 +415,7 @@ class LoopRailInterpreter:
                     ttags = set(tann.tags or [])
                     trigger_is_merge_resolve = "resolve" in ttags and "merge" in ttags
         root = await self._ce.get_goal(event.job_id)
-        acceptance_met = latch_acceptance_met(
+        acceptance_met = _latch_acceptance_met(
             rail_acceptance_met=rail_acceptance,
             maturity=root.maturity if root is not None else None,
         )

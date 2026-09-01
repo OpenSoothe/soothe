@@ -40,7 +40,16 @@ MATURITY_ASSESS_CLOSING = _read("maturity/assess_closing.xml")
 # LoopRail guards
 # ---------------------------------------------------------------------------
 
-GUARD_SYSTEM_FRAGMENT = _read("rail/guard_system.xml")
+try:
+    GUARD_SYSTEM_FRAGMENT = _read("rail/guard_system.xml")
+except FileNotFoundError:
+    import soothe.rails as _rails_pkg
+
+    GUARD_SYSTEM_FRAGMENT = (
+        (Path(_rails_pkg.__file__).resolve().parent / "guard_system.xml")
+        .read_text(encoding="utf-8")
+        .strip()
+    )
 
 
 __all__ = [

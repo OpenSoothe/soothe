@@ -7,11 +7,10 @@ from pathlib import Path
 
 import pytest
 from soothe.context import ContextEngine
+from soothe.rails import LoopRailCatalog
+from soothe.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.rails.guards import GuardResult, _structural_short_circuit
 from support.rail_harness import catalog_rail_job_state
-
-from soothe_autopilot.rails import LoopRailCatalog
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe_autopilot.rails.guards import GuardResult, _structural_short_circuit
 
 
 def test_greenfield_system_rail_loads() -> None:
@@ -534,8 +533,8 @@ def test_legacy_wave_makers_done_guard_still_matches() -> None:
 @pytest.mark.asyncio
 async def test_pruned_makers_excluded_from_wave_completion() -> None:
     """Completed maker triggers host merge; pruned siblings do not block."""
-    from soothe_autopilot.rails.guards import LLMGuardEvaluator
-    from soothe_autopilot.rails.interpreter import LoopRailInterpreter, RailEvent
+    from soothe.rails.guards import LLMGuardEvaluator
+    from soothe.rails.interpreter import LoopRailInterpreter, RailEvent
 
     ce = ContextEngine()
     root = await ce.create_goal("Build system", priority=70, rail_id="greenfield-system")

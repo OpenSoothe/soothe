@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from soothe_autopilot.rails import (
+from soothe.rails import (
     LoopRailCatalog,
     RailCatalogError,
     get_builtin_rails_dir,

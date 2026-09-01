@@ -7,10 +7,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe_autopilot.jobs.rail_selection import write_rail_selection
-from soothe_autopilot.rails.catalog import LoopRailCatalog, RailDefinition, load_rail_file
-from soothe_autopilot.rails.selector import (
+from soothe.rails.catalog import LoopRailCatalog, RailDefinition, load_rail_file
+from soothe.rails.selector import (
     RailAutoPicker,
     RailAutoPickResponse,
     RailPickResult,
@@ -19,6 +17,7 @@ from soothe_autopilot.rails.selector import (
     resolve_rail_for_job,
     resolve_rail_id,
 )
+from soothe_autopilot.jobs.rail_selection import write_rail_selection
 
 
 def _fake_rail(

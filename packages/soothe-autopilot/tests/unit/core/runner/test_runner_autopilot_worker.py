@@ -160,7 +160,7 @@ class TestBuildContribution:
         bare = c.findings[0].summary
         assert "wave_slices" in bare
         assert "frontend" in bare
-        from soothe_autopilot.rails.wave_plan import parse_wave_plan_payload
+        from soothe.rails.wave_plan import parse_wave_plan_payload
 
         plan = parse_wave_plan_payload(bare)
         assert plan is not None
@@ -177,7 +177,7 @@ class TestBuildContribution:
         pr.full_output = None
         c = AutopilotSootheRunner._build_contribution(pr)
         assert c.findings
-        from soothe_autopilot.rails.wave_plan import parse_wave_plan_payload
+        from soothe.rails.wave_plan import parse_wave_plan_payload
 
         plan = parse_wave_plan_payload(c.findings[0].summary)
         assert plan is not None

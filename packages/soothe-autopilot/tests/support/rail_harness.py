@@ -10,8 +10,7 @@ from typing import Any
 
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
-
-from soothe_autopilot.rails import (
+from soothe.rails import (
     LoopRailCatalog,
     LoopRailInterpreter,
     MemoryRailTraceStore,
@@ -19,8 +18,8 @@ from soothe_autopilot.rails import (
     ScriptedGuardEvaluator,
     export_trace_evaluation,
 )
-from soothe_autopilot.rails.builtins_exec import RailJobState
-from soothe_autopilot.rails.guards import GuardResult
+from soothe.rails.builtins_exec import RailJobState
+from soothe.rails.guards import GuardResult
 
 OnReady = Callable[[GoalNode, int], Awaitable[None]]
 

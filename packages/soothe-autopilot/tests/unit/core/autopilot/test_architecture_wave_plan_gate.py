@@ -10,10 +10,10 @@ from soothe.config.models import AutopilotConfig
 from soothe.context import ContextEngine
 from soothe.events.internal_bus import InternalEventBus
 from soothe.goal_contracts import Finding, GoalDispatchContextContribution
+from soothe.rails.builtins_exec import RailBuiltinExecutor
 from support.rail_harness import catalog_rail_job_state
 
 from soothe_autopilot import AutopilotService
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor
 
 from .fakes import IdleFakeFactory
 

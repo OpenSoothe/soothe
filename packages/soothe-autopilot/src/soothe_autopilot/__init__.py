@@ -16,7 +16,7 @@ Import other types from one-level subpackages, e.g.:
     from soothe_autopilot.intake import absorb_user_guidance
     from soothe.goal_contracts import EvidenceBundle
     from soothe_autopilot.workers.pool import WorkerPool
-    from soothe_autopilot.rails import LoopRailInterpreter
+    from soothe.rails import LoopRailInterpreter
     from soothe_autopilot.prompts import build_consensus_prompt
 """
 

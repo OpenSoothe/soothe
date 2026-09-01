@@ -7,8 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- _Nothing yet._
+### Changed
+- Move the rail module from `soothe-autopilot` into the `soothe` package as `soothe.rails`, consolidating rail definitions, prompt fragments, and builtin rail YAMLs into the core package.
 
 ## [v1.0.4] - 2026-09-01
 

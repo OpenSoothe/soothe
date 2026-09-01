@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import pytest
 from soothe.context import ContextEngine
-
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe_autopilot.rails.guards import _structural_short_circuit
+from soothe.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.rails.guards import _structural_short_circuit
 
 
 @pytest.mark.asyncio

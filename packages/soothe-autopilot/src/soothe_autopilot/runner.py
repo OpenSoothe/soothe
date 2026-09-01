@@ -308,7 +308,7 @@ class AutopilotSootheRunner(SootheRunner):
         if plan_result is None:
             return GoalDispatchContextContribution()
 
-        from soothe_autopilot.rails.wave_plan import (
+        from soothe.rails.wave_plan import (
             WAVE_PLAN_FINDING_CAP,
             WavePlan,
             extract_wave_plan_from_plan_result_texts,

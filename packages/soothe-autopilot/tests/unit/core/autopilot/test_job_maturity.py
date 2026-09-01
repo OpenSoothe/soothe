@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from soothe.context import ContextEngine
+from soothe.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.rails.interpreter import RailEvent
 
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe_autopilot.rails.interpreter import RailEvent
 from soothe_autopilot.verify.goal_dag_verifier import GoalDAGVerifier
 from soothe_autopilot.verify.job_maturity import (
     JobMaturityAssessor,

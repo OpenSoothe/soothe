@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 RAIL_SELECTION_FILENAME = "rail_selection.json"
 
 if TYPE_CHECKING:
-    from soothe_autopilot.rails.selector import RailPickResult
+    from soothe.rails.selector import RailPickResult
 
 
 def write_rail_selection(

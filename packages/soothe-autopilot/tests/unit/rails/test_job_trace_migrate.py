@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from soothe_autopilot.rails.trace_store import GuardResult, JsonlRailTraceStore, RuleFireRecord
+from soothe.rails.trace_store import GuardResult, JsonlRailTraceStore, RuleFireRecord
 
 
 def _record() -> RuleFireRecord:

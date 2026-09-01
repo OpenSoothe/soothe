@@ -35,7 +35,7 @@ rail with `--rail` / `rail_id`, set `.rail-default`, or exclude ids via
 ### Maker / scout discipline (IG-737)
 
 Goal briefs from Rail Exec append shared SoT fragments in
-`soothe_autopilot.rails.verb_defaults`:
+`soothe.rails.verb_defaults`:
 
 - **Scouts** (`decompose_parallel`): systematic debugging — evidence only, no fixes
 - **Planners** (`plan_milestones` / plan goals): parallel dispatch — independent domains only

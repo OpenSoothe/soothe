@@ -11,15 +11,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from soothe.context.models import TERMINAL_STATES
-
-from soothe_autopilot.rails.builtins_exec import (
+from soothe.rails.builtins_exec import (
     BuiltinResult,
     RailBuiltinExecutor,
     RailJobState,
     _job_workspace,
 )
-from soothe_autopilot.rails.l0_schema import L0_OPS
-from soothe_autopilot.rails.verb_defaults import (
+from soothe.rails.l0_schema import L0_OPS
+from soothe.rails.verb_defaults import (
     apply_planner_waveplan_hints,
     interpolate_brief,
 )

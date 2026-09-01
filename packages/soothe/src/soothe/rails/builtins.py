@@ -7,7 +7,7 @@ Precedence (low → high, last wins on duplicate `id`):
 3. `<workspace>/.soothe/rails/` when a workspace is provided
 
 `BUILTIN_RAIL_IDS` (the set of shipped builtin rail ids) lives in
-`soothe_autopilot.rails.catalog` to avoid a circular import (catalog already
+`soothe.rails.catalog` to avoid a circular import (catalog already
 imports `get_rails_paths` from here).
 """
 

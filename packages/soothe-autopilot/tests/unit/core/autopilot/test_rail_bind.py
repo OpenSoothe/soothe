@@ -35,7 +35,7 @@ async def test_submit_auto_pick_binds_llm_rail(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """IG-728: submit without rail_id binds LLM pick before job_start."""
-    from soothe_autopilot.rails.selector import RailAutoPicker, RailAutoPickResponse
+    from soothe.rails.selector import RailAutoPicker, RailAutoPickResponse
 
     async def fake_pick(
         self: RailAutoPicker,
@@ -82,9 +82,9 @@ async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Pa
     Without ``soothe_config``, pause_for_user fails open to CE suspend (legacy
     operator path). Veritas auto-proceed is covered separately.
     """
-    from soothe_autopilot.rails.guards import ScriptedGuardEvaluator
-    from soothe_autopilot.rails.interpreter import LoopRailInterpreter
-    from soothe_autopilot.rails.trace_store import JsonlRailTraceStore
+    from soothe.rails.guards import ScriptedGuardEvaluator
+    from soothe.rails.interpreter import LoopRailInterpreter
+    from soothe.rails.trace_store import JsonlRailTraceStore
 
     data = tmp_path / "data"
     svc = AutopilotService(
@@ -136,11 +136,11 @@ async def test_spike_pause_resume_user_intervention_and_jsonl_trace(tmp_path: Pa
 @pytest.mark.asyncio
 async def test_spike_veritas_auto_proceed_completes_without_resume(tmp_path: Path) -> None:
     """IG-737: Veritas PROCEED on pause_for_user fires user_intervention → complete."""
-    from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor
-    from soothe_autopilot.rails.guards import ScriptedGuardEvaluator
-    from soothe_autopilot.rails.interpreter import LoopRailInterpreter
-    from soothe_autopilot.rails.pause_clarify import PauseClarifyDecision
-    from soothe_autopilot.rails.trace_store import JsonlRailTraceStore
+    from soothe.rails.builtins_exec import RailBuiltinExecutor
+    from soothe.rails.guards import ScriptedGuardEvaluator
+    from soothe.rails.interpreter import LoopRailInterpreter
+    from soothe.rails.pause_clarify import PauseClarifyDecision
+    from soothe.rails.trace_store import JsonlRailTraceStore
 
     data = tmp_path / "data"
     svc = AutopilotService(
@@ -202,8 +202,8 @@ async def test_spike_veritas_auto_proceed_completes_without_resume(tmp_path: Pat
 @pytest.mark.asyncio
 async def test_maker_checker_send_back_retries_branch() -> None:
     """Maker-checker: goal_send_back with recoverable guard → retry_branch."""
-    from soothe_autopilot.rails.guards import ScriptedGuardEvaluator
-    from soothe_autopilot.rails.interpreter import LoopRailInterpreter
+    from soothe.rails.guards import ScriptedGuardEvaluator
+    from soothe.rails.interpreter import LoopRailInterpreter
 
     svc = AutopilotService(
         ce=ContextEngine(),

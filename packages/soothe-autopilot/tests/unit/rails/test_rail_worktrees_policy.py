@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe_autopilot.rails.builtins_exec import RailJobState
-from soothe_autopilot.rails.catalog import _normalize_worktrees, load_rail_file
+from soothe.rails.builtins_exec import RailJobState
+from soothe.rails.catalog import _normalize_worktrees, load_rail_file
 
 
 def _write_rail(tmp_path: Path, body: str) -> Path:

@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from soothe.config.constants import DEFAULT_MAX_DESCRIPTION_CHARS, DEFAULT_MAX_FIELD_CHARS
 
-from soothe_autopilot.rails.catalog import LoopRailCatalog, RailCatalogError, RailDefinition
+from soothe.config.constants import DEFAULT_MAX_DESCRIPTION_CHARS, DEFAULT_MAX_FIELD_CHARS
+from soothe.rails.catalog import LoopRailCatalog, RailCatalogError, RailDefinition
 
 logger = logging.getLogger(__name__)
 

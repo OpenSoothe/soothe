@@ -4,10 +4,10 @@ This package merges the former split:
 
 - `soothe.rails`  — static catalog, path tiers, selector, L0 schema,
   verb defaults, and bundled builtin rail YAML.
-- `soothe_autopilot.rails` — runtime: interpreter, rail exec, guards,
+- `soothe.rails` — runtime: interpreter, rail exec, guards,
   wave plan, trace store, recipes, worktree ops.
 
-Both now live here as one one-level subpackage under `soothe_autopilot`.
+Both now live here as one one-level subpackage under `soothe`.
 The static/catalog layer (`catalog`, `builtins`,
 `selector`, `l0_schema`, `verb_defaults`, `builtin_rails/`) is the
 lower tier; the runtime layer (`interpreter`, `builtins_exec`,
@@ -20,21 +20,21 @@ AutopilotService binds `LoopRailInterpreter` on job submit when a
 
 from __future__ import annotations
 
-# --- runtime layer (was soothe_autopilot.rails) ---
-from soothe_autopilot.rails.autoresearch_exec import (
+# --- runtime layer (was soothe.rails) ---
+from soothe.rails.autoresearch_exec import (
     AUTORESEARCH_RAIL_ID,
     AutoresearchExec,
 )
 
 # --- static / catalog layer (was soothe.rails) ---
-from soothe_autopilot.rails.builtins import get_builtin_rails_dir, get_rails_paths
-from soothe_autopilot.rails.builtins_exec import (
+from soothe.rails.builtins import get_builtin_rails_dir, get_rails_paths
+from soothe.rails.builtins_exec import (
     BuiltinResult,
     GoalAnnotation,
     RailBuiltinExecutor,
     RailJobState,
 )
-from soothe_autopilot.rails.catalog import (
+from soothe.rails.catalog import (
     BUILTIN_RAIL_IDS,
     CE_RAIL_BUILTINS,
     LoopRailCatalog,
@@ -43,23 +43,23 @@ from soothe_autopilot.rails.catalog import (
     compute_rail_hash,
     load_rail_file,
 )
-from soothe_autopilot.rails.guards import (
+from soothe.rails.guards import (
     AlwaysMatchGuardEvaluator,
     GuardContext,
     GuardEvaluator,
     LLMGuardEvaluator,
     ScriptedGuardEvaluator,
 )
-from soothe_autopilot.rails.interpreter import LoopRailInterpreter, RailEvent
-from soothe_autopilot.rails.l0_schema import L0_OPS, normalize_do_steps
-from soothe_autopilot.rails.recipe_exec import RecipeRunner
-from soothe_autopilot.rails.selector import (
+from soothe.rails.interpreter import LoopRailInterpreter, RailEvent
+from soothe.rails.l0_schema import L0_OPS, normalize_do_steps
+from soothe.rails.recipe_exec import RecipeRunner
+from soothe.rails.selector import (
     RailAutoPicker,
     RailPickResult,
     resolve_rail_for_job,
     resolve_rail_id,
 )
-from soothe_autopilot.rails.trace_store import (
+from soothe.rails.trace_store import (
     GuardResult,
     JsonlRailTraceStore,
     MemoryRailTraceStore,
@@ -67,14 +67,14 @@ from soothe_autopilot.rails.trace_store import (
     RuleFireRecord,
     export_trace_evaluation,
 )
-from soothe_autopilot.rails.verb_defaults import (
+from soothe.rails.verb_defaults import (
     DEFAULT_VERB_BRIEFS,
     DEFAULT_VERB_ROLES,
     DEFAULT_VERB_TAGS,
     interpolate_brief,
     resolve_verb_brief,
 )
-from soothe_autopilot.rails.wave_plan import (
+from soothe.rails.wave_plan import (
     WavePlan,
     resolve_fanout_slices,
 )

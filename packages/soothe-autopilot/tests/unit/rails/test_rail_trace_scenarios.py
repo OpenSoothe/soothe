@@ -10,9 +10,8 @@ from pathlib import Path
 
 import pytest
 from soothe.context.models import GoalNode
+from soothe.rails.trace_store import export_trace_evaluation
 from support.rail_harness import RailHarness, write_evaluation_report
-
-from soothe_autopilot.rails.trace_store import export_trace_evaluation
 
 EVAL_REPORT_PATH = Path(__file__).resolve().parent / "evaluation_results.json"
 

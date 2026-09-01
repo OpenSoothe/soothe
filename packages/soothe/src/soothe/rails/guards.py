@@ -6,11 +6,21 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
-from soothe_autopilot.rails.trace_store import GuardResult
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+
+from soothe.rails.trace_store import GuardResult
 
 logger = logging.getLogger(__name__)
+
+_GUARD_SYSTEM_FRAGMENT = (
+    (Path(__file__).resolve().parent / "guard_system.xml").read_text(encoding="utf-8").strip()
+)
+
+_UNTRUSTED_OPEN = "<untrusted_data>"
+_UNTRUSTED_CLOSE = "</untrusted_data>"
 
 # Rate-limit "WavePlan missing" warnings per job.
 _WAVE_PLAN_MISSING_WARN_AT: dict[str, float] = {}
@@ -522,7 +532,39 @@ class LLMGuardEvaluator:
             ainvoke_structured_traced,
         )
 
-        from soothe_autopilot.prompts import build_guard_messages
+        def _build_guard_messages(
+            *,
+            event: str,
+            goal_id: str | None,
+            trigger_tags: list[str],
+            condition_name: str | None,
+            structural: dict[str, Any],
+            sibling_statuses: dict[str, str],
+            tags_by_goal: dict[str, list[str]],
+            retry_count: int,
+            condition_text: str,
+            goal_summary: str,
+        ) -> list[BaseMessage]:
+            trusted = (
+                f"Event: {event}\n"
+                f"Trigger goal_id: {goal_id}\n"
+                f"Trigger goal tags: {trigger_tags}\n"
+                f"Condition name: {condition_name or '(inline)'}\n"
+                f"STRUCTURAL FACTS: {structural}\n"
+                f"Sibling/descendant statuses (goal_id -> status): {sibling_statuses}\n"
+                f"Tags by goal: {tags_by_goal}\n"
+                f"Trigger goal retry_count: {retry_count}\n"
+            )
+            untrusted_body = (
+                f"Condition text:\n{condition_text}\n\n"
+                f"Trigger goal summary: {goal_summary or '(none)'}\n"
+            )
+            cleaned = untrusted_body if untrusted_body.endswith("\n") else f"{untrusted_body}\n"
+            user_prompt = f"{trusted}\n{_UNTRUSTED_OPEN}\n{cleaned}{_UNTRUSTED_CLOSE}"
+            return [
+                SystemMessage(content=_GUARD_SYSTEM_FRAGMENT),
+                HumanMessage(content=user_prompt),
+            ]
 
         class _GuardMatch(BaseModel):
             """Structured LLM guard-match result."""
@@ -552,7 +594,7 @@ class LLMGuardEvaluator:
                 self.short_circuit_calls += 1
                 return short
 
-        messages = build_guard_messages(
+        messages = _build_guard_messages(
             event=ctx.event,
             goal_id=ctx.goal_id,
             trigger_tags=trigger_tags,

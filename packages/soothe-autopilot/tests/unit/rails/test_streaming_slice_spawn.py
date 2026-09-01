@@ -5,10 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 from soothe.context import ContextEngine
-
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe_autopilot.rails.guards import GuardResult, _structural_short_circuit
-from soothe_autopilot.rails.wave_plan import WavePlan, apply_wave_plan_to_state_fields
+from soothe.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.rails.guards import GuardResult, _structural_short_circuit
+from soothe.rails.wave_plan import WavePlan, apply_wave_plan_to_state_fields
 
 
 def test_wave_plan_depends_on_accept() -> None:

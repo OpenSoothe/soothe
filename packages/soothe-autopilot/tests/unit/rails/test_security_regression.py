@@ -17,15 +17,14 @@ from pathlib import Path
 
 import pytest
 from soothe.context.engine import ContextEngine
-
-from soothe_autopilot.rails import (
+from soothe.rails import (
     LoopRailCatalog,
     RailCatalogError,
     compute_rail_hash,
     load_rail_file,
 )
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor
-from soothe_autopilot.rails.trace_store import (
+from soothe.rails.builtins_exec import RailBuiltinExecutor
+from soothe.rails.trace_store import (
     GuardResult,
     JsonlRailTraceStore,
     RuleFireRecord,
@@ -246,7 +245,7 @@ async def test_builtin_runtime_error_sanitize_detail() -> None:
     ce = ContextEngine()
     executor = RailBuiltinExecutor(ce)
     # Bind a job state so _require doesn't fail; _do_review will call CE
-    from soothe_autopilot.rails.builtins_exec import RailJobState
+    from soothe.rails.builtins_exec import RailJobState
 
     await executor.bind_job(RailJobState(job_id="job-x", rail_id="test", rail_version="1.0"))
     # _do_retry_branch iterates list_goals — if CE has no goals for this
@@ -270,7 +269,7 @@ def test_guard_error_reasoning_uses_type_name() -> None:
     # We verify by reading the source and asserting the pattern.
     import inspect
 
-    from soothe_autopilot.rails.guards import LLMGuardEvaluator
+    from soothe.rails.guards import LLMGuardEvaluator
 
     source = inspect.getsource(LLMGuardEvaluator)
     # Must NOT contain f"structured guard failed: {exc}"
@@ -304,7 +303,7 @@ def test_llm_guard_evaluator_delegates_to_prompt_builder() -> None:
     """LLMGuardEvaluator.evaluate must assemble prompts via build_guard_messages."""
     import inspect
 
-    from soothe_autopilot.rails.guards import LLMGuardEvaluator
+    from soothe.rails.guards import LLMGuardEvaluator
 
     source = inspect.getsource(LLMGuardEvaluator.evaluate)
     assert "build_guard_messages" in source, (

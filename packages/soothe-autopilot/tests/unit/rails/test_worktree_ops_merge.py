@@ -7,10 +7,9 @@ from pathlib import Path
 
 import pytest
 from soothe.context import ContextEngine
-
-from soothe_autopilot.rails import worktree_ops
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
-from soothe_autopilot.rails.guards import _structural_short_circuit
+from soothe.rails import worktree_ops
+from soothe.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.rails.guards import _structural_short_circuit
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -294,7 +293,7 @@ async def test_merge_branches_happy_path_marks_merged(tmp_path: Path) -> None:
 
 
 def test_greenfield_has_dag_idle_merge_rule() -> None:
-    from soothe_autopilot.rails import LoopRailCatalog
+    from soothe.rails import LoopRailCatalog
 
     rail = LoopRailCatalog().resolve("greenfield-system")
     idle_merge = [

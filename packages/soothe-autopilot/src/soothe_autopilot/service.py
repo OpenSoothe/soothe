@@ -290,11 +290,10 @@ class AutopilotService:
         try:
             from pathlib import Path
 
+            from soothe.rails.guards import LLMGuardEvaluator
+            from soothe.rails.interpreter import LoopRailInterpreter
+            from soothe.rails.trace_store import JsonlRailTraceStore
             from soothe_sdk.paths import SOOTHE_DATA_DIR
-
-            from soothe_autopilot.rails.guards import LLMGuardEvaluator
-            from soothe_autopilot.rails.interpreter import LoopRailInterpreter
-            from soothe_autopilot.rails.trace_store import JsonlRailTraceStore
 
             guards = None
             if self._consensus_model is not None:
@@ -611,13 +610,14 @@ class AutopilotService:
 
             resolved_workspace = str(validate_client_workspace(workspace))
 
-        from soothe_autopilot.jobs.rail_selection import write_rail_selection
-        from soothe_autopilot.rails.catalog import LoopRailCatalog
-        from soothe_autopilot.rails.selector import (
+        from soothe.rails.catalog import LoopRailCatalog
+        from soothe.rails.selector import (
             RailAutoPicker,
             RailPickResult,
             resolve_rail_for_job,
         )
+
+        from soothe_autopilot.jobs.rail_selection import write_rail_selection
 
         # Rail selection applies to job roots only (RFC-231 §10 / IG-728).
         rail_pick: RailPickResult | None = None
@@ -735,7 +735,7 @@ class AutopilotService:
         if self._rail_interpreter is None or not goal.rail_id:
             return
         try:
-            from soothe_autopilot.rails.interpreter import RailEvent
+            from soothe.rails.interpreter import RailEvent
 
             await self._rail_interpreter.bind_job(
                 goal.id,
@@ -793,7 +793,7 @@ class AutopilotService:
             `(ready, detail)` — ready when a usable wave plan is applied;
             `detail` is a parse/nesting reject reason when not ready.
         """
-        from soothe_autopilot.rails.wave_plan import diagnose_wave_plan_from_sources
+        from soothe.rails.wave_plan import diagnose_wave_plan_from_sources
 
         if self._rail_interpreter is None:
             return False, "rail interpreter unset"
@@ -921,7 +921,7 @@ class AutopilotService:
         if root is None or not root.rail_id:
             return None
 
-        from soothe_autopilot.rails.wave_plan import architecture_wave_plan_send_back_reason
+        from soothe.rails.wave_plan import architecture_wave_plan_send_back_reason
 
         if self._rail_interpreter is None:
             logger.warning(
@@ -1024,7 +1024,7 @@ class AutopilotService:
                 logger.debug("Rail rebind failed for %s", job_id, exc_info=True)
                 return
         try:
-            from soothe_autopilot.rails.interpreter import RailEvent
+            from soothe.rails.interpreter import RailEvent
 
             await self._rail_interpreter.handle(
                 RailEvent(
@@ -2163,7 +2163,7 @@ class AutopilotService:
         goal = await self._ce.get_goal(goal_id)
         if goal is not None and findings:
             try:
-                from soothe_autopilot.rails.wave_plan import (
+                from soothe.rails.wave_plan import (
                     WAVE_PLAN_FINDING_CAP,
                     parse_wave_plan_payload,
                 )
@@ -2849,7 +2849,7 @@ class AutopilotService:
 
     async def _reconcile_terminal_job_worktrees(self) -> int:
         """Recycle worktrees for terminal rail job roots (crash recovery)."""
-        from soothe_autopilot.rails import worktree_ops
+        from soothe.rails import worktree_ops
 
         recycled = 0
         try:

@@ -6,9 +6,8 @@ from pathlib import Path
 
 import pytest
 from soothe.context import ContextEngine
-
-from soothe_autopilot.rails import LoopRailCatalog, RailCatalogError, load_rail_file
-from soothe_autopilot.rails.builtins_exec import RailBuiltinExecutor, RailJobState
+from soothe.rails import LoopRailCatalog, RailCatalogError, load_rail_file
+from soothe.rails.builtins_exec import RailBuiltinExecutor, RailJobState
 
 
 @pytest.mark.asyncio

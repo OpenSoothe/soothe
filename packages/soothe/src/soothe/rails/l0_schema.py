@@ -1,8 +1,8 @@
 """Catalog-side L0 recipe schema.
 
-Lives in the static/catalog layer of `soothe_autopilot.rails` so catalog
+Lives in the static/catalog layer of `soothe.rails` so catalog
 validation does not import the runtime layer. Runtime execution lives in
-`soothe_autopilot.rails.recipe_exec` (imports `L0_OPS` from here).
+`soothe.rails.recipe_exec` (imports `L0_OPS` from here).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ L0_OPS: frozenset[str] = frozenset(
 
 def normalize_do_steps(raw: Any, *, path: Path, verb: str) -> list[dict[str, Any]]:
     """Validate and return a `do:` list for catalog loading."""
-    from soothe_autopilot.rails.catalog import RailCatalogError
+    from soothe.rails.catalog import RailCatalogError
 
     if not isinstance(raw, list) or not raw:
         raise RailCatalogError(f"{path}: verbs.{verb}.do must be a non-empty list")
