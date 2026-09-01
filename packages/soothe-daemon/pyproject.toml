@@ -66,7 +66,7 @@ dev = [
     "ruff>=0.12.0",
     "mypy>=1.0.0",
     "soothe-cli>=0.10.33",  # For CLI integration tests (PyPI)
-    "soothe-client-python>=1.0.18,<2.0.0",  # WS test helpers only; matched to client-python latest release v1.0.18
+    "soothe-client-python>=1.0.21,<2.0.0",  # WS test helpers only; matched to client-python latest release v1.0.21
 ]
 acp = [
     "agent-client-protocol>=0.3.0,<1.0.0",
