@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - _Nothing yet._
 
+## [v1.0.4] - 2026-09-01
+
+### Added
+- Bypass permissions mode: a new security mode that allows the StrangeLoop to proceed without triggering human-in-the-loop interrupts for tool calls, complementing the existing conditional `interrupt_on` behavior.
+- TUI thinking row now displays tip content, and `SootheConfig.resolve_model_specs` is synchronized to keep model role resolution consistent across the CLI and daemon.
+- Composer cycle reordered and plan-mode step prose suppressed in the CLI for cleaner output.
+
+### Changed
+- Bump `soothe-nano` floor to `1.2.21` (submodule pinned accordingly) and `soothe-client-python` floor to `1.0.21`.
+- Migrate deploy `nano.yml` into the `configs` folder and update multi-modal model configuration.
+
+### Fixed
+- Load `.env` on import and silence litellm debug noise in `soothe-nano`.
+- Plan panel defaults to hidden in the CLI; fix plan panel showing "Done" while an exec goal is still running.
+- Add a general `Exception` fallback to daemon reconnect handlers in the CLI to prevent crashes on unexpected reconnection errors.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.3...v1.0.4
+
 ## [v1.0.3] - 2026-08-31
 
 ### Added
