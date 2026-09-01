@@ -1,87 +1,57 @@
 # Soothe Development Guide
 
-> **Binding conduct for all agents and human contributors working in this repository.**
-> Compliance is mandatory; deviations require explicit operator approval and a recorded IG.
+> **Binding conduct for all agents and human contributors.** Compliance is mandatory; deviations require operator approval and a recorded IG.
 
-**What Soothe is** — a goal-driven orchestration framework for 24/7 autonomous agents. It extends `deepagents` with durable planning, reentrant loop state, and remote agent interop across a one-way monorepo dependency DAG.
+**Soothe** — a goal-driven orchestration framework for 24/7 autonomous agents. Extends `deepagents` with durable planning, reentrant loop state, and remote agent interop across a one-way monorepo dependency DAG.
 
-**What this guide governs** — code placement and package boundaries (§7b), persistence backend selection (§10), verification and release gates (§5, §14), documentation and docstring standards (§12, §17), and commit/release attribution hygiene (§11, §13).
-
-**How to use it** — read §1–§17 before any non-trivial change. Substantial work requires an IG in `docs/impl/`; minor changes follow commit/PR context. Run `./scripts/verify_finally.sh` before every commit. When in doubt, stop and ask.
+**Read §1–§17 before any non-trivial change.** Substantial work requires an IG in `docs/impl/`; minor changes follow commit/PR context. Run `./scripts/verify_finally.sh` before every commit. When in doubt, stop and ask.
 
 ---
 
 ## ⚠️ CRITICAL RULES
 
 ### 1. Implementation Guides (IGs)
-- **Substantial work**: Create IG in `docs/impl/` (`IG-XXX-brief-title.md`) to track scope
-- **Minor changes**: No verbose IG — use commit/PR context, or minimal stub only
+- **Substantial work**: Create IG in `docs/impl/` (`IG-XXX-brief-title.md`)
+- **Minor changes**: No IG — commit/PR context suffices
 
 ### 2. Config Sync
-The packaged templates under `packages/soothe-daemon/src/soothe_daemon/setup/templates/` are the **source of truth**; `config/templates/` holds symlinks to them.
-When editing a packaged template, MUST also update `config/develop/nano.yml` (or `soothe.yml`) with matching structure.
+Packaged templates under `packages/soothe-daemon/src/soothe_daemon/setup/templates/` are the **source of truth**; `config/templates/` holds symlinks. When editing a packaged template, also update `config/develop/nano.yml` (or `soothe.yml`) with matching structure.
 
 ### 3. Ecosystem First
 Check `langchain-core`, `langchain-community`, `deepagents` before implementing anything:
-- Tools: `BaseTool`, `@tool`
-- Subagents: `SubAgent`, `CompiledSubAgent`
-- MCP: `langchain-mcp-adapters`
-- Memory: `deepagents.MemoryMiddleware`
+- Tools: `BaseTool`, `@tool` · Subagents: `SubAgent`, `CompiledSubAgent` · MCP: `langchain-mcp-adapters` · Memory: `deepagents.MemoryMiddleware`
 
 ### 4. Test Location
-Tests go in package directories: `packages/<pkg>/tests/unit/` or `tests/integration/` — NOT root `tests/`.
+Tests go in `packages/<pkg>/tests/unit/` or `tests/integration/` — NOT root `tests/`.
 
 ### 5. Verification Required
-Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests pass.
+`./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests pass.
 
 ### 6. After Code Impl: Cleanse → Verify → Fix (MUST)
-Before marking work done (commit, PR, or handoff), apply this sequence every time:
-
-1. **Ask user before cleansing** — for each implementation finished, ask whether to cleanse legacy code, backward compat shims, and dead code related to the change.
-2. **Cleanse** — if approved, remove superseded helpers, unused exports, duplicate paths, compat shims, and stale tests/docs. Deletion/consolidation only; **no behavior rewrites**.
+Before marking work done, every time:
+1. **Ask user** whether to cleanse legacy code, compat shims, and dead code related to the change.
+2. **Cleanse** (if approved) — remove superseded helpers, unused exports, duplicate paths, compat shims, stale tests/docs. Deletion/consolidation only; **no behavior rewrites**.
 3. **Verify** — `./scripts/verify_finally.sh`
 4. **Fix to green** — lint, format, tests, vulture. Re-cleanse if fixes leave new dead code, then re-verify until green.
 
 ### 7. Terminology
-- NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
-- NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors, config descriptions). They are internal only — allowed in comments and internal docs, never in docstrings (§17).
+- NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine).
+- NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors, config descriptions). Internal only — allowed in comments and internal docs, never in docstrings (§17).
 - Only `docs/specs/` (RFCs) and `docs/impl/` (IGs) are active references. `docs/archive/` is historical only.
 
 ### 7b. Package Boundaries (MUST)
 
-Soothe is a **one-way dependency DAG**. Place code in the correct **monorepo-owned** package. **Never reverse an arrow.**
-Enforcement: `scripts/check_module_import_boundaries.sh` (wired into `./scripts/verify_finally.sh`).
+Soothe is a **one-way dependency DAG**. Place code in the correct **monorepo-owned** package. **Never reverse an arrow.** Enforcement: `scripts/check_module_import_boundaries.sh` (wired into `./scripts/verify_finally.sh`).
 
-**Owned**: `soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`.
-**Submodules** (`client/*`): consumed as code — do **not** format/lint/test/release them here.
-**PyPI-only**: `soothe-nano`, `soothe-deepagents` (maintain/release in their own repos).
+**Owned**: `soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`. **Submodules** (`client/*`): consumed as code — do **not** format/lint/test/release them here. **PyPI-only**: `soothe-nano`, `soothe-deepagents` (maintain/release in their own repos).
 
 > `soothe-sdk` keeps its own `VERSION` file (1.x line) because `soothe-nano` (PyPI) depends on `soothe-sdk>=1.0.7`. All other owned packages use the root `VERSION` file (0.x line).
-
-#### Dependency DAG (allowed direction only)
-
-```text
-soothe-sdk            ← shared contracts (monorepo; leaf)               ← OWNED
-soothe-deepagents     ← deepagents fork (PyPI; leaf)
-        ↓
-soothe-nano           ← Coding CoreAgent (PyPI)
-        ↓
-soothe                ← host: StrangeLoop, CE, runner                   ← OWNED
-        ↓
-soothe-autopilot      ← goal orchestration: Autopilot, rails, verify    ← OWNED
-        ↓
-soothe-daemon         ← soothed process (channels, cron)                ← OWNED
-        ↑
-soothe-client-python  ← WebSocket transport (submodule)
-        ↑
-soothe-cli            ← Typer + Textual TUI                             ← OWNED
-```
 
 #### Placement (where new code goes)
 
 | Concern | Package |
 |---------|---------|
-| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` (`packages/soothe-sdk`) |
+| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` |
 | Coding CoreAgent, skills/MCP/backends in-proc | `soothe-nano` (PyPI) |
 | StrangeLoop, Context Engine, identity, host runner | `soothe` |
 | Autopilot (scheduling, dispatch, monitor, rails, verify, notify) | `soothe-autopilot` |
@@ -89,7 +59,7 @@ soothe-cli            ← Typer + Textual TUI                             ← OW
 | Human CLI / TUI | `soothe-cli` |
 | Language WS clients | `client/*` (submodules) |
 
-#### Import allow / deny (MUST)
+#### Import allow / deny (MUST) — this table IS the DAG
 
 | Package | May import | Must NOT import |
 |---------|------------|-----------------|
@@ -111,17 +81,15 @@ Fix the implementation, not test expectations. "Passing tests" ≠ "Working corr
 
 ### 9. No Keyword Heuristics (RFC-630)
 Prefer **structured light-LLM fields** or **declarative config rules** over keyword/regex content-judgment heuristics.
-
-- **Content judgment** (intent, identity, routing, failure classification): use Pass 1/2 structured output or a dedicated fast-model call — not keyword lists or regex on user text.
+- **Content judgment** (intent, identity, routing, failure classification): Pass 1/2 structured output or a dedicated fast-model call — not keyword lists or regex on user text.
 - **Structural controls** (`continue`/`resume`, checkpoint gates, status vocabulary): deterministic rules are fine.
 - **Thresholds and banned patterns**: put in config (`agent.loop.rules`, etc.), not magic numbers or inline regex.
-- **If a keyword/regex heuristic seems required**: stop and ask the user. Propose the LLM or config-rules alternative first.
+- If a keyword/regex heuristic seems required: stop and ask. Propose the LLM or config-rules alternative first.
 
 See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLoop migration pattern.
 
 ### 10. Unified Persistence Backend (MUST)
 `persistence.default_backend` is **one mode for the whole process**: `postgresql` or `sqlite`. **Never mix** the two in the same daemon/runtime.
-
 - **Postgres mode** → all daemon-owned durable stores MUST use PostgreSQL (RFC-612 databases under `postgres_base_dsn` / `postgres_databases`). No SQLite "for convenience" for cron, identity, display cards, checkpoints, Context Engine, durability, or autopilot.
 - **SQLite mode** → use local `$SOOTHE_HOME` / `$SOOTHE_DATA_DIR` SQLite files. Do not open a parallel Postgres path for any subset of features.
 - Overrides (`agent.protocols.durability.backend` / `.checkpointer`) MUST stay `"default"` unless the operator intentionally switches the **entire** process.
@@ -130,20 +98,11 @@ See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLo
 - Leftover SQLite files under `$SOOTHE_DATA_DIR` in Postgres mode are legacy only; do not write new runtime state to them.
 
 ### 11. No AI Co-Authors (MUST)
-AI agents MUST NOT add AI tools or assistants as co-authors, reviewers, or attributions in commits, PRs, or any git metadata. This includes Cursor, Claude, Grok, GitHub Copilot, ChatGPT, Gemini, Cody, Continue, Cline, and similar.
-
-- No `Co-authored-by:` trailers (e.g. `Co-authored-by: Cursor <noreply@cursor.com>`).
-- No `Generated-with:`, `Assisted-by:`, `Reviewed-by:` (for AI), or equivalent trailers.
-- No AI-tool names in `AUTHORS`, `CONTRIBUTORS`, `.mailmap`, release notes, or changelog author lines.
-- No `--trailer` / `git commit --trailer` attributing any AI tool.
-- `git log` reflects **human contributors only**. AI assistance may be disclosed in PR description prose, but **never** in commit metadata.
-
-If a hook or template inserts an AI co-author trailer, remove it before committing.
+AI agents MUST NOT add AI tools or assistants as co-authors, reviewers, or attributions in commits, PRs, or any git metadata (Cursor, Claude, Grok, GitHub Copilot, ChatGPT, Gemini, Cody, Continue, Cline, etc.). No `Co-authored-by:`, `Generated-with:`, `Assisted-by:`, `Reviewed-by:` (for AI) trailers. No AI-tool names in `AUTHORS`, `CONTRIBUTORS`, `.mailmap`, release notes, or changelog author lines. No `--trailer` / `git commit --trailer` attributing any AI tool. `git log` reflects **human contributors only**. AI assistance may be disclosed in PR description prose, but **never** in commit metadata. If a hook or template inserts an AI co-author trailer, remove it before committing.
 
 ### 12. Drift Governance (MUST)
 Spec↔code drift is tracked through **canonical documentation mechanisms only** — not ad-hoc dashboards, cron jobs, or parallel tracking systems.
-
-- **No drift-refresh cron infrastructure** — do not re-introduce `DriftRefreshConfig`, `DriftTriggerHook`, `builtin:drift-refresh-*` cron jobs, or drift-dashboard data dictionaries. They duplicated the RFC/IG review process without adding value.
+- **No drift-refresh cron infrastructure** — do not re-introduce `DriftRefreshConfig`, `DriftTriggerHook`, `builtin:drift-refresh-*` cron jobs, or drift-dashboard data dictionaries. They duplicated the RFC/IG review process.
 - **Gap-tracking scripts** (`scripts/auto_gap_report.py`, `scripts/create_drift_backlog_issues.sh`) MUST write output into `docs/impl/` with an `IG-` prefix and be triaged through the standard IG lifecycle — never a separate dashboard or backlog.
 - **Drift findings are IGs, not dashboards** — file `IG-XXX-gap-*.md` in `docs/impl/`. Do not create standalone drift-tracking documents outside the numbered IG process.
 - **Config fields** — do not add `cron.drift_refresh` or equivalent drift-dashboard blocks to any packaged template or `config/templates/` symlink. Drift governance is a documentation process, not a runtime config concern.
@@ -152,67 +111,54 @@ Spec↔code drift is tracked through **canonical documentation mechanisms only**
 
 ### 13. Changelog (MUST)
 Keep changelogs **brief and sharp**. Each entry is a single scannable line telling *what changed and why* — nothing more.
-
-- **One line per change** — no multi-paragraph prose, no preamble, no "This PR..." narration.
-- **Lead with user-facing effect**, not implementation detail.
-- **Active voice, imperative mood** — "Add retry backoff to channel sends", not "Retries were added".
-- **Concrete and specific** — name the component, config key, or command. Avoid "various improvements", "misc fixes".
-- **Group by release section** (`Added` / `Changed` / `Fixed` / `Removed`); most impactful first.
-- **No internal jargon** — omit IG-XXX/RFC-XXX, ticket IDs, commit hashes from the body (per §7). Link from release notes if needed.
-- **No AI attribution** (per §11).
-- **If a change isn't user-visible, it probably doesn't belong in the changelog.** Internal refactors, test additions, and tooling that don't alter behavior are omitted unless they affect operators.
+- One line per change — no multi-paragraph prose, no preamble, no "This PR..." narration.
+- Lead with user-facing effect, not implementation detail.
+- Active voice, imperative mood — "Add retry backoff to channel sends", not "Retries were added".
+- Concrete and specific — name the component, config key, or command. Avoid "various improvements", "misc fixes".
+- Group by release section (`Added` / `Changed` / `Fixed` / `Removed`); most impactful first.
+- No internal jargon — omit IG-XXX/RFC-XXX, ticket IDs, commit hashes from the body (§7). Link from release notes if needed.
+- No AI attribution (§11).
+- If a change isn't user-visible, it probably doesn't belong in the changelog. Internal refactors, test additions, and tooling that don't alter behavior are omitted unless they affect operators.
 
 Good: `Add \`persistence.default_backend\` validation that rejects mixed sqlite/postgres in one process.`
-
 Bad: `This PR updates the persistence layer to add a check for the default backend config so that users don't accidentally mix backends. See IG-612 for details. (#1234, authored by...)`
 
 ### 14. Release (MUST)
-A **release** = cutting a new version across the monorepo-owned packages and publishing it to PyPI + the container registry **via the GitHub release workflows** — not by manual `twine upload`, `docker push`, or local builds. The trigger is a **GitHub Release object** on a version tag, not a bare git tag.
+A **release** = cutting a new version across the monorepo-owned packages and publishing to PyPI + the container registry **via the GitHub release workflows** — not by manual `twine upload`, `docker push`, or local builds. The trigger is a **GitHub Release object** on a version tag, not a bare git tag.
 
 #### Pre-release gates (before tagging)
-
 1. **Verify upstream libs** — check whether `soothe-sdk`, `soothe-client-python` (submodule), `soothe-deepagents`, and `soothe-nano` require updating. Bump submodule pins / PyPI floors when consuming new upstream versions; release those packages from their own repositories first, then pin a compatible version range here.
 2. **Default to patch** — release a **patch** bump (e.g. `1.0.y → 1.0.y+1`). Do **not** cut minor/major unless explicitly approved; those require a documented breaking change and sign-off.
 3. **Verify before release** — `./scripts/verify_finally.sh` MUST pass (zero lint errors, all tests green) on the commit being tagged. Pre-release CI MUST also pass before the publish job runs. Do not tag or release off a red build.
-4. **PyPI-only deps must be live before releasing owned packages** — before tagging any owned package release (`soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`, `soothe-sdk`), verify that the PyPI-only dependencies (`soothe-nano`, `soothe-deepagents`) have their latest versions already published on PyPI **and** that the monorepo's pinned floors (`packages/*/pyproject.toml`) match or are below the latest PyPI version. Query `https://pypi.org/pypi/<pkg>/json` for each. If a pinned floor exceeds what is live on PyPI, the release will be uninstallable — release the upstream package from its own repo first, then proceed.
+4. **PyPI-only deps must be live before releasing owned packages** — before tagging any owned package release, verify that `soothe-nano` and `soothe-deepagents` have their latest versions already published on PyPI **and** that the monorepo's pinned floors (`packages/*/pyproject.toml`) match or are below the latest PyPI version. Query `https://pypi.org/pypi/<pkg>/json` for each. If a pinned floor exceeds what is live on PyPI, the release will be uninstallable — release the upstream package from its own repo first, then proceed.
 
 #### Version bump + changelog
-
 5. **Bump the root `VERSION` file** — `soothe`, `soothe-autopilot`, `soothe-daemon`, and `soothe-cli` all read from the root `VERSION` (via `tool.hatch.version` → `../../VERSION`). `soothe-sdk` keeps its own `packages/soothe-sdk/VERSION` on an independent 1.x line and is **not** touched by monorepo releases unless the SDK itself is being released.
 6. **Promote the `[Unreleased]` block** in `CHANGELOG.md` into a dated `## [vX.Y.Z] - YYYY-MM-DD` entry with a `[Compare with previous version]` link, and reset `[Unreleased]` to empty. Follow the Keep a Changelog format (§13).
 7. **Commit the bump** — e.g. `chore(release): bump to X.Y.Z` touching only `VERSION` + `CHANGELOG.md`.
 
 #### Tag + GitHub Release (the trigger)
-
 8. **Tag the release commit** — `git tag -a vX.Y.Z <sha> -m "vX.Y.Z"`. If the tag name was previously used by an SDK-only release, force-move it onto the new monorepo commit (`git tag -f -a vX.Y.Z <sha>`); SDK releases are preserved by their `soothe-sdk-v*` tags.
 9. **Push the tag** — `git push origin vX.Y.Z --force` (force only if re-tagging).
 10. **Create the GitHub Release object** — `gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file <release-notes.md> --latest`. **This is the trigger.** A bare git tag does NOT fire the workflows — only the `release: published` event does.
-    - If a stale Release object exists on the tag (e.g. an old SDK release), delete it first with `gh release delete vX.Y.Z --cleanup-tag=false --yes`, then create the fresh one. The `release: published` event only fires on a *newly published* release, not on a tag force-move.
+11. **Do not tag from a non-main branch** unless explicitly approved.
 
 #### What the workflows do (do not replicate manually)
-
-11. **`release.yml` ("Release Soothe Packages")** fires on `release: published`. It builds each owned package, runs tests, and publishes to PyPI via trusted publishing. Each job is **idempotent** — it checks `pip index versions <pkg>` and skips publishing if the version already exists on PyPI. Do not pre-publish manually; if you do, the workflow will simply skip the upload.
-12. **`release-docker.yml` ("Release Docker Image")** fires on `workflow_run` of "Release Soothe Packages" completing successfully. It waits for `soothe==X.Y.Z` and `soothe-daemon==X.Y.Z` on PyPI, resolves them together, then builds and pushes the multi-arch `soothed` image to the container registry. It does not run if the PyPI workflow failed.
-13. **Do not publish to PyPI or the registry by hand.** The only exception is recovering from a transient PyPI 500/timeout on a package the workflow skipped or failed to upload — in that case, `uv build` + `uv publish dist/* --system-certs` for the affected package only, then re-trigger or let the next release confirm.
+12. **`release.yml`** ("Release Soothe Packages") fires on `release: published`. Builds each owned package, runs tests, publishes to PyPI via trusted publishing. Each job is **idempotent** — checks `pip index versions <pkg>` and skips publishing if the version already exists. Do not pre-publish manually; if you do, the workflow will skip the upload.
+13. **`release-docker.yml`** ("Release Docker Image") fires on `workflow_run` of "Release Soothe Packages" completing successfully. Waits for `soothe==X.Y.Z` and `soothe-daemon==X.Y.Z` on PyPI, resolves them together, then builds and pushes the multi-arch `soothed` image to the container registry. Does not run if the PyPI workflow failed.
+14. **Do not publish to PyPI or the registry by hand.** The only exception is recovering from a transient PyPI 500/timeout on a package the workflow skipped or failed to upload — in that case, `uv build` + `uv publish dist/* --system-certs` for the affected package only, then re-trigger or let the next release confirm.
 
 #### Verify the release landed
-
-14. **Confirm on PyPI** — `curl -sL https://pypi.org/pypi/<pkg>/json` shows `X.Y.Z` as latest for `soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`. PyPI's JSON API can lag ~60s behind upload confirmations.
-15. **Confirm the workflows ran green** — `gh run list --repo mirasoth/soothe --limit 5`; both "Release Soothe Packages" and "Release Docker Image" must show `success`.
-16. **Confirm the GitHub Release** — `gh release view vX.Y.Z` shows `published` and `isLatest: true`.
+15. **Confirm on PyPI** — `curl -sL https://pypi.org/pypi/<pkg>/json` shows `X.Y.Z` as latest for `soothe`, `soothe-autopilot`, `soothe-daemon`, `soothe-cli`. PyPI's JSON API can lag ~60s behind upload confirmations.
+16. **Confirm the workflows ran green** — `gh run list --repo mirasoth/soothe --limit 5`; both "Release Soothe Packages" and "Release Docker Image" must show `success`.
+17. **Confirm the GitHub Release** — `gh release view vX.Y.Z` shows `published` and `isLatest: true`.
 
 ### 15. Reentrant Loop State (MUST)
-
 Loop state is **independent of runtime workers** — pauseable and resumable across arbitrary time intervals. Workers are stateless conduits; state lives in storage, not in process. (IG-760)
-
 1. **State is in storage, not in process.** Three persistent layers hold loop state: LangGraph checkpointer (graph channel values), Context Engine (goal DAG + ledger), and disk artifacts (`.soothe/plans/*.md`). A worker crash loses nothing that isn't already on disk. Never add a new in-memory-only state layer for data that must survive worker exit.
-
 2. **The `pending_clarification` channel is the re-entry contract.** When a loop parks for user input (plan review, ask_user), everything needed to resume — plan draft, plan path, refinement comments, clarification origin — MUST be serialized into the `pending_clarification` graph channel. A fresh worker reads this channel via `aget_state` and reconstructs the context. Do not store resumption-critical data only on `LoopPhaseScratch` (in-memory) without projecting it into a graph channel.
-
 3. **CE goal status is the source of truth for parking.** A goal in `awaiting_clarification` is intentionally parked — not crashed, not stale. The stale-loop reconciler, auto-resume, and clarification-resume paths all check this status before acting. Never demote a loop with a pending clarification to `idle` (that kills the clarification flow). Never mark a parked goal as `interrupted` on cancel — cancel the in-flight operation, not the parking state.
-
 4. **Scratch is ephemeral; channels are durable.** `LoopPhaseScratch` is deliberately not serialized by LangGraph (it carries rich non-primitive models). Fields that must survive a worker exit are projected into graph channels before parking (`build_plan_mode_review_pending`). `hydrate_scratch_from_pending` is the inverse projection on resume. New scratch fields that need persistence MUST follow this project→persist→hydrate pattern.
-
 5. **Cancel ≠ terminal.** A cancel during a long-running LLM call (synthesis, refinement, execute) cancels the in-flight operation, not the goal's clarification status. The goal's `awaiting_clarification` status is preserved so the user's next input resumes from the same parked state, not from a new goal. `resolve_clarification_resume_ce_goal` matches both `"active"` and `"awaiting_clarification"` goals.
 
 ### 16. API Exposure (Minimum-Exposure) (MUST)
@@ -221,17 +167,17 @@ Loop state is **independent of runtime workers** — pauseable and resumable acr
 - Never list private `_`-prefixed names in `__all__`.
 
 ### 17. Docstrings (MUST)
-- Keep docstrings brief and sharp; no verbose prose.
-- Module docstring: a small number of lines stating what the module provides. Do not repeat what function signatures or function docstrings already say.
+- Brief and sharp; no verbose prose.
+- Module docstring: a few lines stating what the module provides. Do not repeat what function signatures or function docstrings already say.
 - Never reference external design docs, reports, or category taxonomies (e.g. "report 5.3", "category I", IG-XXX/RFC-XXX) in docstrings; docstrings must stand alone.
-- Class docstrings describe semantics, coordinate/unit conventions once, args, and a minimal usage example. Do not restate parameter defaults that are obvious from the signature.
+- Class docstrings: describe semantics, coordinate/unit conventions once, args, and a minimal usage example. Do not restate parameter defaults that are obvious from the signature.
 - Docstrings must match the implementation; if behavior changes, update the docstring.
 
 ---
 
 ## 📁 Structure
 
-Import/placement rules: **§7b Package Boundaries (MUST)**. Do not reverse the DAG.
+Import/placement rules: **§7b**. Do not reverse the DAG.
 
 ```
 packages/
@@ -299,7 +245,6 @@ register_event(MyCustomEvent, summary_template="Custom: {data}")
 ## 🛠️ What NOT to Implement
 
 **deepagents** provides: file ops, shell, task tracking, SubAgent, Skills, Memory, Summarization middleware.
-
 **langchain** provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, Gmail, document loaders, `init_chat_model()`.
 
 **Check these first.**
