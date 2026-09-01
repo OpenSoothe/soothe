@@ -995,15 +995,9 @@ class _MessagesMixin:
     def cycle_composer_mode(self) -> None:
         """Advance composer mode and refresh the status-bar badge.
 
-        The mode is held on the app (`self._composer_mode`). Auto/Manual map
-        to the `clarification_mode` wire field; Plan sets
-        `interaction_mode=plan` on subsequent turns. The badge updates
-        immediately; no toast is emitted because the badge is the feedback.
-
-        When a goal is running and the new mode is Auto or Manual, the mode is
-        also hot-swapped on the daemon's live `LoopRuntimeContext` via the
-        `loop_set_clarification_mode` RPC so the next clarification uses the
-        new policy without waiting for the next turn.
+        Cycle: Auto → Manual → Bypass → Plan → Ask → Auto. When a goal is
+        running and the new mode is Auto or Manual, hot-swaps the daemon's
+        live clarification policy via `loop_set_clarification_mode`.
         """
         from soothe_cli.tui.composer_mode import next_composer_mode
 

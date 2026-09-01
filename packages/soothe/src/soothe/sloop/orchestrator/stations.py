@@ -92,7 +92,7 @@ class LoopGraphState(TypedDict, total=False):
     # round-trip via graph checkpoint.
     resume_ticket: ResumeTicket | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
-    interaction_mode: str | None  # "agent" | "ask" | "plan" — set by enter_loop
+    interaction_mode: str | None  # "agent" | "ask" | "plan" | "bypass" — set by enter_loop
     # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``
     # on approve so routers finalize the plan-mode goal (instead of grounding
     # onto its already-completed root). The finalize node reads the follow-on

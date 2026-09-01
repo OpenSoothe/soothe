@@ -8,6 +8,7 @@ from textual.app import App, ComposeResult
 from soothe_cli.tui.composer_mode import (
     COMPOSER_MODE_ASK,
     COMPOSER_MODE_AUTO,
+    COMPOSER_MODE_BYPASS,
     COMPOSER_MODE_MANUAL,
     COMPOSER_MODE_PLAN,
 )
@@ -38,7 +39,8 @@ async def test_badge_defaults_to_auto_text_and_class() -> None:
         assert badge.mode == COMPOSER_MODE_AUTO
         assert badge.has_class("auto")
         assert not badge.has_class("manual")
-        assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
+        assert not badge.has_class("bypass")
+        assert _read_static_content(badge) == "⏵⏵ agent · auto (shift+Tab to cycle)"
 
 
 @pytest.mark.asyncio
@@ -51,7 +53,8 @@ async def test_badge_flips_to_auto_when_mode_assigned() -> None:
         assert badge.has_class("auto")
         assert not badge.has_class("manual")
         assert not badge.has_class("plan")
-        assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
+        assert not badge.has_class("bypass")
+        assert _read_static_content(badge) == "⏵⏵ agent · auto (shift+Tab to cycle)"
 
 
 @pytest.mark.asyncio
@@ -64,7 +67,8 @@ async def test_badge_flips_to_manual_when_mode_assigned() -> None:
         assert badge.has_class("manual")
         assert not badge.has_class("auto")
         assert not badge.has_class("plan")
-        assert _read_static_content(badge) == "⏵⏵ manual clarification (shift+Tab to cycle)"
+        assert not badge.has_class("bypass")
+        assert _read_static_content(badge) == "⏵⏵ agent · manual (shift+Tab to cycle)"
 
 
 @pytest.mark.asyncio
@@ -77,7 +81,8 @@ async def test_badge_flips_to_plan_when_mode_assigned() -> None:
         assert badge.has_class("plan")
         assert not badge.has_class("auto")
         assert not badge.has_class("manual")
-        assert _read_static_content(badge) == "⏵⏵ plan mode (shift+Tab to cycle)"
+        assert not badge.has_class("bypass")
+        assert _read_static_content(badge) == "⏵⏵ plan (shift+Tab to cycle)"
 
 
 @pytest.mark.asyncio
@@ -91,7 +96,22 @@ async def test_badge_flips_to_ask_when_mode_assigned() -> None:
         assert not badge.has_class("auto")
         assert not badge.has_class("manual")
         assert not badge.has_class("plan")
-        assert _read_static_content(badge) == "⏵⏵ ask mode (shift+Tab to cycle)"
+        assert _read_static_content(badge) == "⏵⏵ ask (shift+Tab to cycle)"
+
+
+@pytest.mark.asyncio
+async def test_badge_flips_to_bypass_when_mode_assigned() -> None:
+    """Setting ``mode`` to bypass applies the warning Bypass pill."""
+    async with _BadgeOnlyApp().run_test() as pilot:
+        badge = pilot.app.query_one("#badge", ClarificationModeBadge)
+        badge.mode = COMPOSER_MODE_BYPASS
+        await pilot.pause()
+        assert badge.has_class("bypass")
+        assert not badge.has_class("auto")
+        assert not badge.has_class("manual")
+        assert not badge.has_class("plan")
+        assert not badge.has_class("ask")
+        assert _read_static_content(badge) == "⏵⏵ agent · bypass (shift+Tab to cycle)"
 
 
 @pytest.mark.asyncio
@@ -102,34 +122,34 @@ async def test_badge_rejects_unknown_mode_falls_back_to_auto() -> None:
         badge.mode = "nonsense"
         await pilot.pause()
         assert badge.has_class("auto")
-        assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
+        assert _read_static_content(badge) == "⏵⏵ agent · auto (shift+Tab to cycle)"
 
 
 def test_badge_has_initial_content_before_mount() -> None:
     """The constructor seeds the Static content so the badge paints immediately."""
     badge = ClarificationModeBadge(id="pre-mount")
-    assert _read_static_content(badge) == "⏵⏵ auto clarification (shift+Tab to cycle)"
+    assert _read_static_content(badge) == "⏵⏵ agent · auto (shift+Tab to cycle)"
     assert badge.has_class("auto")
 
 
 def test_badge_constructor_accepts_initial_manual_mode() -> None:
     """``ClarificationModeBadge(mode="manual")`` starts on the manual variant."""
     badge = ClarificationModeBadge(id="pre-mount-manual", mode="manual")
-    assert _read_static_content(badge) == "⏵⏵ manual clarification (shift+Tab to cycle)"
+    assert _read_static_content(badge) == "⏵⏵ agent · manual (shift+Tab to cycle)"
     assert badge.has_class("manual")
 
 
 def test_badge_constructor_accepts_initial_plan_mode() -> None:
     """``ClarificationModeBadge(mode="plan")`` starts on the plan variant."""
     badge = ClarificationModeBadge(id="pre-mount-plan", mode="plan")
-    assert _read_static_content(badge) == "⏵⏵ plan mode (shift+Tab to cycle)"
+    assert _read_static_content(badge) == "⏵⏵ plan (shift+Tab to cycle)"
     assert badge.has_class("plan")
 
 
 def test_badge_constructor_accepts_initial_ask_mode() -> None:
     """``ClarificationModeBadge(mode="ask")`` starts on the ask variant."""
     badge = ClarificationModeBadge(id="pre-mount-ask", mode="ask")
-    assert _read_static_content(badge) == "⏵⏵ ask mode (shift+Tab to cycle)"
+    assert _read_static_content(badge) == "⏵⏵ ask (shift+Tab to cycle)"
     assert badge.has_class("ask")
 
 

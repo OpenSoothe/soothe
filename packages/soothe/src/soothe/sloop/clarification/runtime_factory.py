@@ -49,6 +49,7 @@ def build_clarification_policy_for_runner(
     human_attached: bool = False,
     thread_id: str | None = None,
     loop_id: str | None = None,
+    interaction_mode: str | None = None,
 ) -> ClarificationPolicy:
     """Build the policy a runner injects into `LoopRuntimeContext`.
 
@@ -68,6 +69,9 @@ def build_clarification_policy_for_runner(
         thread_id: Loop thread id used as the Langfuse `session_id` for the
             veritas LLM call so the span correlates with the parent loop trace.
         loop_id: Loop id forwarded to Langfuse for trace correlation.
+        interaction_mode: Per-request CoreAgent interaction mode. When
+            `"bypass"`, the tool-approval pipeline skips all deny rules
+            and safety checks.
 
     Returns:
         A `ClarificationPolicy` ready to attach to a goal run. The veritas
@@ -81,11 +85,13 @@ def build_clarification_policy_for_runner(
     clar_cfg = config.agent.clarification
     ta_cfg = clar_cfg.tool_approval
 
+    is_bypass = interaction_mode == "bypass"
     tool_approval_pipeline: ToolApprovalPipeline | None = None
     if ta_cfg.enabled:
         tool_approval_pipeline = ToolApprovalPipeline(
             config=ta_cfg,
             security_config=config.security,
+            bypass_security=is_bypass,
         )
 
     if resolved_mode == "manual":

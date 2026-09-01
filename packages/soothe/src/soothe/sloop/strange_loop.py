@@ -212,7 +212,8 @@ class StrangeLoop:
         resume_interrupted: bool = False,  # daemon crash recovery admission
         goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
         preamble: list[Any] | None = None,  # RFC-222 §Goal-Report-Pair Projection
-        interaction_mode: str | None = None,  # per-goal "agent"|"ask"|"plan" graph selection
+        interaction_mode: str
+        | None = None,  # per-goal "agent"|"ask"|"plan"|"bypass" graph selection
         approved_plan_path: str | None = None,  # Bug #3: plan-mode approve exec goal
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events.

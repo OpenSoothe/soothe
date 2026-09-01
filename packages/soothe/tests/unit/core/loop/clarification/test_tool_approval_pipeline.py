@@ -388,3 +388,53 @@ class TestFailSafe:
     def test_empty_action_requests_defers(self) -> None:
         result = _pipeline().evaluate([])
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Bypass mode (bypass_security=True — all rules skipped)
+# ---------------------------------------------------------------------------
+
+
+class TestBypassMode:
+    """bypass_security=True: deny rules and safety checks are skipped."""
+
+    def test_bypass_approves_dangerous_command(self) -> None:
+        """rm -rf / is approved in bypass mode."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /")],
+            bypass_security=True,
+        )
+        assert result is not None
+        assert result.decision == "approve"
+        assert result.stage == "default_approve"
+
+    def test_bypass_approves_dangerous_path(self) -> None:
+        """Editing .git/config is approved in bypass mode."""
+        result = _pipeline().evaluate(
+            [_ar("edit_file", file_path="/workspace/.git/config")],
+            workspace_root="/workspace",
+            bypass_security=True,
+        )
+        assert result is not None
+        assert result.decision == "approve"
+
+    def test_bypass_approves_deny_rule_command(self) -> None:
+        """apt install (deny rule) is approved in bypass mode."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="apt install foo")],
+            bypass_security=True,
+        )
+        assert result is not None
+        assert result.decision == "approve"
+
+    def test_bypass_via_constructor_flag(self) -> None:
+        """Pipeline constructed with bypass_security=True skips all checks."""
+        pipeline = ToolApprovalPipeline(_DEFAULT_CONFIG, bypass_security=True)
+        result = pipeline.evaluate([_ar("run_command", command="rm -rf /")])
+        assert result is not None
+        assert result.decision == "approve"
+
+    def test_bypass_empty_still_defers(self) -> None:
+        """Empty action requests still defer even in bypass mode."""
+        result = _pipeline().evaluate([], bypass_security=True)
+        assert result is None

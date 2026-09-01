@@ -44,16 +44,24 @@ def test_cycle_auto_to_manual() -> None:
     assert app._status_bar.last_mode == "manual"
 
 
-def test_cycle_manual_to_plan() -> None:
-    """Second press advances Manual to Plan."""
+def test_cycle_manual_to_bypass() -> None:
+    """Second press advances Manual to Bypass (agent sub-modes grouped)."""
     app = _AppHarness(initial="manual")
+    app.cycle_composer_mode()
+    assert app._composer_mode == "bypass"
+    assert app._status_bar.last_mode == "bypass"
+
+
+def test_cycle_bypass_to_plan() -> None:
+    """Third press advances Bypass to Plan (exits agent sub-modes)."""
+    app = _AppHarness(initial="bypass")
     app.cycle_composer_mode()
     assert app._composer_mode == "plan"
     assert app._status_bar.last_mode == "plan"
 
 
 def test_cycle_plan_to_ask() -> None:
-    """Third press returns Plan to Ask."""
+    """Fourth press advances Plan to Ask."""
     app = _AppHarness(initial="plan")
     app.cycle_composer_mode()
     assert app._composer_mode == "ask"
@@ -61,7 +69,7 @@ def test_cycle_plan_to_ask() -> None:
 
 
 def test_cycle_ask_back_to_auto() -> None:
-    """Fourth press returns Ask to Auto."""
+    """Fifth press returns Ask to Auto."""
     app = _AppHarness(initial="ask")
     app.cycle_composer_mode()
     assert app._composer_mode == "auto"
@@ -69,8 +77,9 @@ def test_cycle_ask_back_to_auto() -> None:
 
 
 def test_cycle_full_round_trip() -> None:
-    """Four presses from Auto land back on Auto."""
+    """Five presses from Auto land back on Auto."""
     app = _AppHarness(initial="auto")
+    app.cycle_composer_mode()
     app.cycle_composer_mode()
     app.cycle_composer_mode()
     app.cycle_composer_mode()

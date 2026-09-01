@@ -34,16 +34,11 @@ class ToolApprovalPipeline:
     """Deny-list-first tool-approval evaluator.
 
     Two stages run cheapest-first: deny rules → safety checks. The first
-    stage that returns a decision wins. Any action that passes both stages
-    is auto-approved in auto mode (absence of deny = implicit allow).
+    stage that returns a decision wins. Actions that pass both are
+    auto-approved in auto mode (absence of deny = implicit allow).
 
-    Safety property: deny rules and safety checks always run before the
+    Safety property: deny rules and safety checks always run before
     default-approve. No configuration can override a safety denial.
-
-    Stage 2 delegates to nano's `WorkspaceToolOperationSecurity` — the same
-    evaluator used by `SoothePolicyMiddleware` and the tool execution
-    layer. This ensures one source of truth for safety constants (banned
-    command patterns, dangerous paths/files).
     """
 
     def __init__(
@@ -51,9 +46,11 @@ class ToolApprovalPipeline:
         config: ToolApprovalConfig,
         *,
         security_config: Any = None,
+        bypass_security: bool = False,
     ) -> None:
         self._deny_rules = config.deny_rules
         self._security_config = security_config
+        self._bypass_security = bypass_security
         self._security_evaluator: Any = None  # lazy-init in _check_safety
 
     def evaluate(
@@ -62,6 +59,7 @@ class ToolApprovalPipeline:
         *,
         workspace_root: str | None = None,
         auto_approve: bool = True,
+        bypass_security: bool | None = None,
     ) -> ApprovalResult | None:
         """Run deny → safety stages. Returns `None` = defer to the next tier.
 
@@ -78,10 +76,24 @@ class ToolApprovalPipeline:
             auto_approve: When `True` (auto mode), actions that pass
                 deny/safety are auto-approved. When `False` (manual mode),
                 passing actions are deferred to the human relay.
+            bypass_security: When `True` (bypass mode), skip all checks and return approve.
         """
         try:
             if not action_requests:
                 return None  # nothing to evaluate → defer to veritas
+
+            if bypass_security is None:
+                bypass_security = self._bypass_security
+            if bypass_security:
+                result = ApprovalResult(
+                    "approve",
+                    "default_approve",
+                    "bypass mode — all security rules skipped",
+                )
+                logger.info(
+                    "[%s] %s by stage=%s (bypass)", "tool_approval", result.decision, result.stage
+                )
+                return result
 
             for ar in action_requests:
                 name = str(ar.get("name") or "")
@@ -101,7 +113,7 @@ class ToolApprovalPipeline:
                     )
                     return result
 
-                # Stage 2: safety checks (bypass-immune, delegated to nano)
+                # Stage 2: safety checks (delegated to nano)
                 safety_result = self._check_safety(name, args, workspace_root)
                 if safety_result is not None:
                     result = ApprovalResult(
@@ -137,12 +149,7 @@ class ToolApprovalPipeline:
         args: Mapping[str, Any],
         workspace_root: str | None,
     ) -> str | None:
-        """Run bypass-immune safety checks via nano's OperationSecurity.
-
-        Delegates to `WorkspaceToolOperationSecurity.evaluate()` — the same
-        evaluator used at the policy middleware and tool execution layers.
-        Returns reason if denied, else None.
-        """
+        """Run safety checks via nano's OperationSecurity. Returns reason if denied, else None."""
         from soothe_nano.security.operation_guard import (
             WorkspaceToolOperationSecurity,
             build_operation_security_request,

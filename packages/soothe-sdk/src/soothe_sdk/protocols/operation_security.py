@@ -33,6 +33,7 @@ class OperationSecurityContext(BaseModel):
     thread_id: str | None = None
     workspace: str | None = None
     security_config: Any = None
+    bypass_security: bool = False
 
 
 class OperationSecurityDecision(BaseModel):

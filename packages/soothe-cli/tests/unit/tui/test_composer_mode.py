@@ -8,6 +8,7 @@ from soothe_cli.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.composer_mode import (
     COMPOSER_MODE_ASK,
     COMPOSER_MODE_AUTO,
+    COMPOSER_MODE_BYPASS,
     COMPOSER_MODE_MANUAL,
     COMPOSER_MODE_PLAN,
     ComposerWireFields,
@@ -24,6 +25,7 @@ from soothe_cli.tui.composer_mode import (
         ("manual", COMPOSER_MODE_MANUAL),
         ("plan", COMPOSER_MODE_PLAN),
         ("ask", COMPOSER_MODE_ASK),
+        ("bypass", COMPOSER_MODE_BYPASS),
         (None, COMPOSER_MODE_AUTO),
         ("garbage", COMPOSER_MODE_AUTO),
         ("", COMPOSER_MODE_AUTO),
@@ -37,7 +39,8 @@ def test_normalize_composer_mode(raw: str | None, expected: str) -> None:
     ("current", "expected"),
     [
         ("auto", "manual"),
-        ("manual", "plan"),
+        ("manual", "bypass"),
+        ("bypass", "plan"),
         ("plan", "ask"),
         ("ask", "auto"),
         ("garbage", "auto"),
@@ -54,6 +57,7 @@ def test_next_composer_mode(current: str, expected: str) -> None:
         ("manual", "manual", None, None),
         ("plan", "auto", None, "plan"),
         ("ask", "auto", None, "ask"),
+        ("bypass", "auto", None, "bypass"),
         ("garbage", "auto", None, None),
     ],
 )

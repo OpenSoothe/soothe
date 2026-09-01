@@ -1,4 +1,8 @@
-"""Sticky TUI composer modes: Auto / Manual / Plan / Ask."""
+"""TUI composer modes — working-mode hierarchy.
+
+Agent sub-modes (auto, manual, bypass) grouped first, then plan and ask.
+Shift+Tab cycle: Auto → Manual → Bypass → Plan → Ask → Auto.
+"""
 
 from __future__ import annotations
 
@@ -8,14 +12,24 @@ COMPOSER_MODE_AUTO = "auto"
 COMPOSER_MODE_MANUAL = "manual"
 COMPOSER_MODE_PLAN = "plan"
 COMPOSER_MODE_ASK = "ask"
+COMPOSER_MODE_BYPASS = "bypass"
 
+# Agent sub-modes grouped first, then standalone working modes.
 COMPOSER_MODE_ORDER: tuple[str, ...] = (
     COMPOSER_MODE_AUTO,
     COMPOSER_MODE_MANUAL,
+    COMPOSER_MODE_BYPASS,
     COMPOSER_MODE_PLAN,
     COMPOSER_MODE_ASK,
 )
 VALID_COMPOSER_MODES: frozenset[str] = frozenset(COMPOSER_MODE_ORDER)
+
+# Agent working mode sub-modes (full mutating tool surface).
+AGENT_SUB_MODES: frozenset[str] = frozenset(
+    {COMPOSER_MODE_AUTO, COMPOSER_MODE_MANUAL, COMPOSER_MODE_BYPASS}
+)
+# Standalone working modes (not agent sub-modes).
+STANDALONE_WORKING_MODES: frozenset[str] = frozenset({COMPOSER_MODE_PLAN, COMPOSER_MODE_ASK})
 
 
 @dataclass(frozen=True)
@@ -35,11 +49,7 @@ def normalize_composer_mode(mode: str | None) -> str:
 
 
 def next_composer_mode(current: str) -> str:
-    """Advance Auto → Manual → Plan → Ask → Auto.
-
-    Unknown values normalize to `auto` (the default, same as a first
-    Shift+Tab from a garbage seed), without advancing past Auto in that step.
-    """
+    """Advance to the next mode in the cycle. Unknown values reset to `auto`."""
     if current not in VALID_COMPOSER_MODES:
         return COMPOSER_MODE_AUTO
     idx = COMPOSER_MODE_ORDER.index(current)
@@ -47,23 +57,19 @@ def next_composer_mode(current: str) -> str:
 
 
 def resolve_composer_wire_fields(mode: str) -> ComposerWireFields:
-    """Map composer mode to wire `clarification_mode`, sticky subagent, and
-    `interaction_mode`.
+    """Map composer mode to wire fields.
 
-    Args:
-    mode: Composer mode (`auto`, `manual`, `plan`, or `ask`).
-
-    Returns:
-    A :class:`ComposerWireFields`. Plan mode sends `clarification_mode=auto`
-    plus `interaction_mode=plan` (read-only plan graph); ask mode sends
-    `clarification_mode=auto` plus `interaction_mode=ask`. Slash routing
-    in the message still wins over the sticky hint at send time.
+    auto → clarification=auto, interaction=None; manual → clarification=manual;
+    bypass → clarification=auto, interaction=bypass; plan → interaction=plan;
+    ask → interaction=ask. Slash routing in the message wins over the sticky hint.
     """
     normalized = normalize_composer_mode(mode)
     if normalized == COMPOSER_MODE_PLAN:
         return ComposerWireFields(COMPOSER_MODE_AUTO, None, "plan")
     if normalized == COMPOSER_MODE_ASK:
         return ComposerWireFields(COMPOSER_MODE_AUTO, None, COMPOSER_MODE_ASK)
+    if normalized == COMPOSER_MODE_BYPASS:
+        return ComposerWireFields(COMPOSER_MODE_AUTO, None, COMPOSER_MODE_BYPASS)
     if normalized == COMPOSER_MODE_MANUAL:
         return ComposerWireFields(COMPOSER_MODE_MANUAL, None, None)
     return ComposerWireFields(COMPOSER_MODE_AUTO, None, None)

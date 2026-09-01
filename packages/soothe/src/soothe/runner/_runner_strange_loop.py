@@ -496,8 +496,8 @@ class StrangeLoopMixin:
                 `"manual"`). `None` falls back to
                 `config.agent.clarification.default_mode`.
             interaction_mode: per-request CoreAgent interaction mode
-                (`"agent"` / `"ask"`). `"ask"` selects the read-only
-                graph; `None` selects the default graph.
+                (`"agent"` / `"ask"` / `"plan"` / `"bypass"`). Each selects
+                its own graph; `None` uses the default graph.
             resume_interrupted: When True, recover an interrupted running goal
                 without chitchat routing or continue-keyword cancel.
 
@@ -546,6 +546,8 @@ class StrangeLoopMixin:
             core_agent = self._plan_core_agent
         elif interaction_mode == "ask":
             core_agent = self._ask_core_agent
+        elif interaction_mode == "bypass":
+            core_agent = self._bypass_core_agent
         else:
             core_agent = self._agent
         loop_agent = StrangeLoop(
@@ -571,6 +573,7 @@ class StrangeLoopMixin:
                 human_attached=True,
                 thread_id=tid,
                 loop_id=strange_loop_id,
+                interaction_mode=interaction_mode,
             )
         except Exception:
             logger.exception(

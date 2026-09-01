@@ -75,14 +75,10 @@ class ModelLabel(Widget):
 
 
 class ClarificationModeBadge(Static):
-    """Visual block showing the active composer mode (Auto / Manual / Plan / Ask).
+    """Active composer-mode badge. Shows `⏵⏵ <label> (shift+Tab to cycle)`.
 
-    Rendered Claude Code-style as `⏵⏵ <label> (shift+Tab to cycle)`. Each mode
-    uses a distinct foreground color with no background, so the badge blends into
-    the status bar rather than appearing as a colored chip. `Manual` (the
-    default) renders as dim muted text so it stays low-emphasis; `Auto` is green,
-    `Plan` teal accent, and `Ask` blue primary. All colors use theme-aware CSS
-    variables so they adapt to dark and light themes.
+    Each mode uses a distinct foreground color: Manual dim, Auto green,
+    Bypass warning bold, Plan teal, Ask blue.
     """
 
     DEFAULT_CSS = """
@@ -106,13 +102,19 @@ class ClarificationModeBadge(Static):
     ClarificationModeBadge.ask {
         color: $primary;
     }
+
+    ClarificationModeBadge.bypass {
+        color: $warning;
+        text-style: bold;
+    }
     """
 
     _MODE_LABELS: dict[str, str] = {
-        "auto": "auto clarification",
-        "manual": "manual clarification",
-        "plan": "plan mode",
-        "ask": "ask mode",
+        "auto": "agent · auto",
+        "manual": "agent · manual",
+        "bypass": "agent · bypass",
+        "plan": "plan",
+        "ask": "ask",
     }
     _CYCLE_HINT = "(shift+Tab to cycle)"
 
@@ -142,7 +144,7 @@ class ClarificationModeBadge(Static):
 
     def _refresh(self, mode: str) -> None:
         normalized = normalize_composer_mode(mode)
-        self.remove_class("auto", "manual", "plan", "ask")
+        self.remove_class("auto", "manual", "plan", "ask", "bypass")
         self.add_class(normalized)
         self.update(self._render_label(normalized))
 

@@ -87,7 +87,7 @@ class AgentBuilder(nano_builder.AgentBuilder):
         # interrupt, reducing the clarification queue load by ~90%.
         # The deny-rule pipeline and nano safety evaluator still run as
         # belt-and-suspenders regardless.
-        if kwargs.get("interaction_mode") not in ("plan", "ask"):
+        if kwargs.get("interaction_mode") not in ("plan", "ask", "bypass"):
             from langchain.agents.middleware import InterruptOnConfig
 
             from soothe.sloop.clarification.interrupt_rules import (
