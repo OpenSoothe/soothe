@@ -1,26 +1,23 @@
-# Research Workspace Materialization and Incremental Persistence
+# Workspace Sync: Materialization and Incremental Persistence — Final Design
 
-**Status:** Proposed (design draft — pending user review)
-**Version:** 1.6 (dual-backend durability: WorkspaceStateStore follows persistence.default_backend)
-**Date:** 2026-08-25
-**Scope:** Filesystem-native agent runtime, S3-compatible object store (MinIO) as durable backing, local filesystem workspace
+**Status:** Final (consolidated design — supersedes all prior workspace-sync drafts)
+**Version:** 2.0
+**Date:** 2026-09-01
+**Scope:** Filesystem-native agent runtime with multi-backend durable object storage (S3, GCS, Azure, local), local filesystem workspace, incremental materialization, dirty tracking, checkpointing, and incremental persistence.
 
-> This is a **workspace subsystem** design, not an agent-identity design. It serves any **filesystem-native** agent (e.g. a research/analysis agent that reads uploaded PDFs and writes reports). The agent identity that consumes this workspace is left to a separate RFC.
-
----
-
-## Primary goals
-
-- Minimize network bandwidth between the object store and the agent host
-- Preserve filesystem-native agent behavior (the agent sees ordinary paths, no object-store awareness)
-- Support incremental / diff-based agent writing with crash recovery
-- Keep the object store (MinIO) as durable storage, not the agent's hot working filesystem
+> **Supersedes:**
+> - `2026-08-25-research-workspace-materialization-design.md` (v1.6 — original materialization design)
+> - `2026-09-01-workspace-sync-layer-comparison.md` (layer placement analysis — conclusion adopted)
+> - `2026-09-01-workspace-sync-via-s3-uri-design.md` (`s3://` URI entry point — generalized to any URI scheme)
+> - `2026-09-01-fsspec-vs-s3-review.md` (fsspec vs boto3 review — decision: adopt fsspec)
+>
+> This document is the single authoritative design for the workspace sync subsystem. All prior drafts are removed.
 
 ---
 
 ## 1. Problem
 
-A filesystem-native research agent expects user resources and generated artifacts to exist as ordinary filesystem paths. The surrounding platform stores uploaded resources and persistent artifacts in an S3-compatible object store (MinIO).
+A filesystem-native research agent expects user resources and generated artifacts to exist as ordinary filesystem paths. The surrounding platform stores uploaded resources and persistent artifacts in an object store (S3-compatible, GCS, Azure Blob, or local filesystem for dev/testing).
 
 A naive implementation performs:
 
@@ -31,13 +28,13 @@ agent → upload entire output tree → object store
 
 This wastes bandwidth because:
 
-1. Resources are frequently reused across research runs
-2. Agent outputs are incrementally modified rather than rewritten from scratch
-3. Research runs may contain many intermediate files that do not need persistence
-4. Large resources may change only partially
-5. Multiple runs may share identical resources
-6. Uploading every filesystem event to object storage introduces excessive network traffic
-7. The object store should be durable storage, not the agent's hot working filesystem
+1. Resources are frequently reused across research runs.
+2. Agent outputs are incrementally modified rather than rewritten from scratch.
+3. Research runs may contain many intermediate files that do not need persistence.
+4. Large resources may change only partially.
+5. Multiple runs may share identical resources.
+6. Uploading every filesystem event to object storage introduces excessive network traffic.
+7. The object store should be durable storage, not the agent's hot working filesystem.
 
 The system therefore needs a filesystem workspace with **incremental materialization, local caching, dirty tracking, content addressing, checkpointing, and incremental persistence**.
 
@@ -47,7 +44,7 @@ The system therefore needs a filesystem workspace with **incremental materializa
 
 ### 2.1 Object store is the durable source of truth
 
-The object store (S3/MinIO) stores: user resources, resource manifests, durable checkpoints, published artifacts, content-addressed blobs. The agent never needs to know that the object store exists. The storage backend is abstracted behind the `WorkspaceSyncBackend` protocol (§6b).
+The object store (S3/MinIO/GCS/Azure/local) stores: user resources, resource manifests, durable checkpoints, published artifacts, content-addressed blobs. The agent never needs to know that the object store exists. The storage backend is abstracted behind the `WorkspaceSyncBackend` protocol (§6b).
 
 ### 2.2 Filesystem is the execution authority
 
@@ -71,37 +68,42 @@ not `write → network → storage backend`.
 
 The system uses SHA-256 content hashes: `content → SHA-256 → immutable blob`. A path such as `input/paper.pdf` is only a logical reference.
 
+### 2.6 Transport is fsspec — protocol is not
+
+The `WorkspaceSyncBackend` protocol carries workspace-layer semantics (content-addressed blobs, manifest optimistic concurrency, checkpoint lifecycle, artifact publication). fsspec is the **transport layer** behind one concrete `FsspecSyncBackend` adapter — it is not a replacement for the protocol. This gives N backends (S3, GCS, Azure, local, memory, SFTP, WebDAV) for the cost of one adapter.
+
 ---
 
 ## 3. High-level architecture
 
 ```text
-                         ┌────────────────────┐
-                         │  S3 / MinIO / GCS  │
-                         │  (durable store)   │
-                         │                    │
-                         │ resources/         │
-                         │ manifests/         │
-                         │ blobs/             │
-                         │ checkpoints/       │
-                         │ artifacts/         │
-                         └─────────┬──────────┘
-                                   │
-                            Resource Manifest
-                                   │
-                                   ▼
-              ┌────────────────────────────────────────┐
-              │     WorkspaceSyncBackend (protocol)    │  ← soothe-sdk
-              │     get_blob / put_blob / head_blob   │
-              │     get_manifest / put_manifest       │
-              │     list/get/put_checkpoint           │
-              │     publish_artifact                  │
-              └────────────────────┬─────────────────┘
-                                   │  (injected)
-                                   ▼
-                    ┌──────────────────────────┐
-                    │    Workspace Manager     │  ← soothe (host)
-                    └────────────┬─────────────┘
+                         ┌────────────────────────────┐
+                         │  S3 / MinIO / GCS / Azure  │
+                         │  / Local / Memory           │
+                         │  (durable store)            │
+                         │                             │
+                         │ resources/                  │
+                         │ manifests/                  │
+                         │ blobs/                      │
+                         │ checkpoints/                │
+                         │ artifacts/                  │
+                         └─────────────┬───────────────┘
+                                       │
+                              Resource Manifest
+                                       │
+                                       ▼
+              ┌──────────────────────────────────────────────┐
+              │     WorkspaceSyncBackend (protocol)           │  ← soothe-sdk
+              │     get_blob / put_blob / head_blob           │
+              │     get_manifest / put_manifest               │
+              │     list/get/put_checkpoint                    │
+              │     publish_artifact                          │
+              └──────────────────────┬───────────────────────┘
+                                     │  (injected)
+                                     ▼
+                    ┌──────────────────────────────┐
+                    │    Workspace Manager          │  ← soothe (host)
+                    └──────────────┬───────────────┘
                                  │
                  ┌───────────────┴────────────────┐
                  │                                │
@@ -240,7 +242,7 @@ The canonical model is defined as a Pydantic `BaseModel` in `soothe-sdk` (see §
 
 > **Design decision:** The Workspace Manager depends on a **protocol boundary** so the storage backend is pluggable. The CAS, dirty tracking, checkpointing, and workspace lifecycle stay as concrete host code; only the object-store operations are abstracted. This matches Soothe's existing pattern (`VectorStoreProtocol` + `VectorRecord` both live in `soothe-sdk`, with concrete implementations in the host).
 
-### Protocol boundary (Option C)
+### Protocol boundary
 
 The protocol abstracts **only the object-store operations** the Workspace Manager needs. The Workspace Manager (concrete, in `soothe`) depends on the protocol + data models. The algorithm (CAS + dirty tracking + debouncing + checkpointing) is backend-agnostic by construction — it only talks to the protocol.
 
@@ -262,9 +264,13 @@ The protocol abstracts **only the object-store operations** the Workspace Manage
 │    ├─ dirty tracker                                      │
 │    ├─ debounced checkpointer                            │
 │    └─ backend: WorkspaceSyncBackend (injected)          │
-│         ├─ S3WorkspaceSyncBackend  (boto3/aioboto3)     │
-│         ├─ LocalFsSyncBackend       (dev/testing)        │
-│         └─ GcsWorkspaceSyncBackend  (future)            │
+│         ├─ FsspecSyncBackend  (fsspec — unified)        │
+│         │    ├─ S3FileSystem       (s3fs)      [s3]     │
+│         │    ├─ LocalFileSystem    (core)      [dev]    │
+│         │    ├─ GCSFileSystem      (gcsfs)     [gcs]    │
+│         │    ├─ AzureBlobFS        (adlfs)    [azure]   │
+│         │    └─ MemoryFileSystem   (core)     [tests]   │
+│         └─ path-layout mapper (sha256→path, etc.)       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -308,21 +314,145 @@ class WorkspaceSyncBackend(Protocol):
 
 ### Why not a full workspace protocol?
 
-A full `Workspace` protocol (`materialize`, `checkpoint`, `publish`, `recover`, `close`) was considered (Option B) and **rejected**. The workspace lifecycle logic (CAS, dirty tracking, debouncing) is the hard part and should not be reimplemented per backend. Making the manager a protocol would produce N implementations of the same algorithm. The protocol boundary is at the storage backend, not the manager.
+A full `Workspace` protocol (`materialize`, `checkpoint`, `publish`, `recover`, `close`) was considered and **rejected**. The workspace lifecycle logic (CAS, dirty tracking, debouncing) is the hard part and should not be reimplemented per backend. Making the manager a protocol would produce N implementations of the same algorithm. The protocol boundary is at the storage backend, not the manager.
 
-### Backend implementations
+### Backend implementation: `FsspecSyncBackend`
 
-| Backend | Package | Use case |
-|---------|---------|----------|
-| `S3WorkspaceSyncBackend` | `soothe` (host) | Production — any S3-compatible store (MinIO, RDS-S3, AWS S3) |
-| `LocalFsSyncBackend` | `soothe` (host) | Dev/testing — no network, uses local directory as the "remote" store |
-| `GcsWorkspaceSyncBackend` | future | Google Cloud Storage |
+> **Decision (from fsspec review):** Replace the originally-planned `S3WorkspaceSyncBackend` (boto3/aioboto3), `LocalFsSyncBackend` (stdlib), and deferred `GcsWorkspaceSyncBackend` with a single `FsspecSyncBackend` adapter that works with any fsspec-supported filesystem.
 
-The S3 adapter MUST be written against the S3 API surface (not MinIO-specific extensions) so it works against any S3-compatible store. MinIO is the reference implementation.
+| Backend | Package | fsspec extra | Use case |
+|---------|---------|-------------|----------|
+| `FsspecSyncBackend` | `soothe` (host) | `fsspec` (core) | Unified adapter — works with any fsspec filesystem |
+| → S3/MinIO | via `s3fs` | `[s3]` | Production — S3-compatible stores |
+| → GCS | via `gcsfs` | `[gcs]` | Google Cloud Storage (works out of the box) |
+| → Azure Blob | via `adlfs` | `[azure]` | Azure Blob Storage |
+| → Local FS | via `LocalFileSystem` | (core) | Dev/testing |
+| → Memory | via `MemoryFileSystem` | (core) | Unit tests |
+
+**Rationale:** One `FsspecSyncBackend` adapter (~200 lines) replaces all three planned backends. New backends require zero code — just an optional pip extra. The `fsspec` core is lightweight (~2 MB, zero transitive deps); backend-specific packages (`s3fs`, `gcsfs`, `adlfs`) are optional extras installed only when needed.
+
+The `FsspecSyncBackend` translates each `WorkspaceSyncBackend` call into fsspec operations:
+
+| Protocol method | fsspec operation |
+|---|---|
+| `get_blob(sha256)` | `fs.cat(blob_path(sha256))` → `None` if `FileNotFoundError` |
+| `put_blob(sha256, data)` | `fs.pipe(blob_path(sha256), data)` (write-once; check `exists` first) |
+| `head_blob(sha256)` | `fs.exists(blob_path(sha256))` |
+| `get_manifest(run_id)` | `fs.cat(manifest_path(run_id))` → parse JSON |
+| `put_manifest(run_id, manifest, if_match=...)` | `fs.pipe(manifest_path, ...)` + read-then-write guard (§6c) |
+| `list_checkpoints(run_id)` | `fs.ls(checkpoint_dir(run_id))` |
+| `get_checkpoint(id)` | `fs.cat(checkpoint_path(id))` |
+| `put_checkpoint(id, data)` | `fs.pipe(checkpoint_path(id), data)` |
+| `publish_artifact(path, data)` | `fs.pipe(artifact_path, data)` → construct `Artifact` |
+| `stream_blob(sha256)` | `fs.open(blob_path, 'rb')` with chunked read |
 
 ### Credential isolation
 
-The `WorkspaceSyncBackend` implementation holds the storage credentials. The Workspace Manager receives an already-constructed backend instance — it never sees credentials. The agent never sees either. This enforces Invariant 4 (§45: "the agent never directly accesses the storage backend").
+The `WorkspaceSyncBackend` implementation holds the storage credentials (passed as fsspec `storage_options`). The Workspace Manager receives an already-constructed backend instance — it never sees credentials. The agent never sees either. This enforces Invariant 4 (§45: "the agent never directly accesses the storage backend").
+
+---
+
+## 6c. FsspecSyncBackend design
+
+### Async I/O gap
+
+fsspec is sync-first; `AsyncFileSystem` exists but coverage is incomplete across backends (e.g., `adlfs` has limited async support). All fsspec calls are wrapped in `asyncio.to_thread()`:
+
+```python
+async def get_blob(self, sha256: str) -> bytes | None:
+    try:
+        return await asyncio.to_thread(self._fs.cat, self._blob_path(sha256))
+    except FileNotFoundError:
+        return None
+```
+
+This is the same pattern that would have been needed for `boto3`. The performance characteristics are identical — both approaches offload sync I/O to a thread pool.
+
+For backends where `AsyncFileSystem` is well-supported (notably `s3fs`), the async variant can be used directly as a future optimization.
+
+### Optimistic concurrency (if_match)
+
+`put_manifest(..., if_match=version)` requires conditional write semantics. S3 supports this natively via `If-Match` ETag preconditions. fsspec's generic interface has no conditional write.
+
+**Mitigation:** Implement a read-then-write guard inside `FsspecSyncBackend`:
+
+```python
+async def put_manifest(self, run_id, manifest, *, if_match=None):
+    existing = await self.get_manifest(run_id)
+    if if_match is not None and existing and existing.version != if_match:
+        raise ConcurrentModificationError(...)
+    data = manifest.model_dump_json().encode()
+    await asyncio.to_thread(self._fs.pipe, self._manifest_path(run_id), data)
+    return manifest
+```
+
+**Caveat:** This is a race condition — between the read and the write, another worker could update the manifest. For S3 backends, a fast-path using S3 conditional writes via `s3fs` internals is available. For other backends without conditional writes (local FS, SFTP), the race window is acceptable because:
+
+- Workspaces are owned by exactly one run (Invariant 3, §45).
+- Concurrent manifest writes only happen during crash recovery, which is designed to anchor on the latest snapshot (§14a recovery algorithm).
+
+### Content-addressed write-once semantics
+
+Blobs are immutable (Invariant 1, §45). `put_blob` must be idempotent — writing the same hash twice is a no-op. fsspec's `pipe()` overwrites by default, so `exists()` is checked first:
+
+```python
+async def put_blob(self, sha256: str, data: bytes) -> None:
+    path = self._blob_path(sha256)
+    if await asyncio.to_thread(self._fs.exists, path):
+        return  # idempotent — blob already stored
+    await asyncio.to_thread(self._fs.pipe, path, data)
+```
+
+### Path-layout mapper
+
+The protocol is content-addressed (`sha256`), but fsspec is path-based. The backend maps hashes to paths using the object-store layout (§22):
+
+```python
+def _blob_path(self, sha256: str) -> str:
+    return f"{self._root}/blobs/sha256/{sha256[:2]}/{sha256}"
+
+def _manifest_path(self, run_id: str) -> str:
+    return f"{self._root}/runs/{run_id}/manifest.json"
+
+def _checkpoint_path(self, checkpoint_id: str) -> str:
+    return f"{self._root}/runs/{checkpoint_id.rsplit('-', 1)[0]}/checkpoints/{checkpoint_id}.json"
+
+def _artifact_path(self, artifact_path: str) -> str:
+    return f"{self._root}/artifacts/{artifact_path}"
+```
+
+### Streaming support
+
+fsspec supports chunked reads via `cat_file(..., start=, end=)` and `open(path, 'rb')` with iteration:
+
+```python
+async def stream_blob(self, sha256: str) -> AsyncIterator[bytes]:
+    path = self._blob_path(sha256)
+    f = await asyncio.to_thread(self._fs.open, path, "rb")
+    try:
+        while chunk := await asyncio.to_thread(f.read, 8192):
+            yield chunk
+    finally:
+        await asyncio.to_thread(f.close)
+```
+
+### URI factory
+
+The `construct_sync_backend(uri, config)` factory becomes trivially generic with fsspec:
+
+```python
+def construct_sync_backend(uri: str, config) -> WorkspaceSyncBackend:
+    fs, root = fsspec.url_to_fs(uri, **_resolve_storage_options(uri, config))
+    return FsspecSyncBackend(fs=fs, root=root)
+
+# s3://bucket/prefix  → s3.S3FileSystem
+# gs://bucket/prefix  → gcs.GCSFileSystem
+# az://container/pfx  → adl.AzureBlobFileSystem
+# file:///path/to/dir → LocalFileSystem
+# memory://test       → MemoryFileSystem
+```
+
+This eliminates per-scheme `if/elif` dispatch and makes the system work with any fsspec-supported backend with zero code changes.
 
 ---
 
@@ -432,7 +562,7 @@ This should be a **later** optimization because filesystem interception adds com
 
 The agent performs frequent incremental writes. The runtime tracks dirty files instead of rescanning the entire workspace.
 
-### 12.1 Strategy: hybrid platform-adaptive watcher (Option D, chosen)
+### 12.1 Strategy: hybrid platform-adaptive watcher
 
 The dirty tracker uses a **thin hybrid abstraction** that selects a native OS watcher when available and falls back to stat-scan polling otherwise. No third-party watcher library (e.g. `watchdog`) is introduced — the wrapper is ~200 lines of stdlib code.
 
@@ -441,12 +571,6 @@ The dirty tracker uses a **thin hybrid abstraction** that selects a native OS wa
 | **Linux** | `inotify` (via `ctypes` or `os.scandir` diff) | stat-scan polling |
 | **macOS** | `FSEvents` (via `ctypes` / CoreServices) | stat-scan polling |
 | **Windows** | `ReadDirectoryChangesW` (via `pywin32` if installed) | stat-scan polling |
-
-Rationale for rejecting alternatives:
-
-- **inotify-only (Option A):** Linux-only; does not work on macOS dev hosts.
-- **stat-scan polling only (Option B):** Adds latency equal to the poll interval, which fights the debounced persistence design (§13) — the debounce window can never be smaller than the poll interval.
-- **`watchdog` library (Option C):** Heavy transitive dependency; fragile cross-platform abstraction; unnecessary bloat for a thin wrapper.
 
 ### 12.2 Event model
 
@@ -475,7 +599,7 @@ deleted_files = {
 
 **Deduplication:** multiple events on the same file within the debounce window collapse to one `FileEvent` (latest state wins).
 
-**Delete tracking:** deletions are recorded separately from modifications so the checkpoint knows to remove entries from the remote manifest. This is the easy-to-forget case.
+**Delete tracking:** deletions are recorded separately from modifications so the checkpoint knows to remove entries from the remote manifest.
 
 ### 12.4 Exclusions
 
@@ -576,13 +700,11 @@ class CheckpointPayload(BaseModel):
 | c014 (compaction) | `SNAPSHOT` | all dirty files since c001 | full `Manifest` (latest) | `None` |
 | c015 | `DELTA` | only files changed since c014 | `None` | `"c014"` |
 
-### Why snapshot + delta (not full-snapshot-only or delta-only)
+### Why snapshot + delta
 
 - **Full-snapshot-only** (Option A): trivially correct and idempotent, but re-uploads the entire manifest + dirty set every checkpoint. For a 500-entry manifest checkpointed every 60s over a 4-hour run, that's ~240 redundant uploads.
 - **Delta-only** (Option B): minimal bandwidth, but recovery requires strict ordering, tombstone tracking for deletes, and gap-filling when a delta is lost. A single corrupted checkpoint invalidates the entire chain.
 - **Snapshot + delta** (Option C, chosen): the first checkpoint and periodic compactions are self-contained `SNAPSHOT`s; intermediate checkpoints are compact `DELTA`s referencing their parent. Recovery anchors on the nearest preceding snapshot and replays deltas forward. A lost delta degrades gracefully — fall back to the last snapshot and restart from there.
-
-This mirrors the §18 text-diff pattern (snapshot + patches with periodic compaction) at the metadata level, keeping one mental model across both subsystems.
 
 ### Compaction trigger
 
@@ -726,8 +848,6 @@ state_store = create_workspace_state_store(config, run_id)
 #                                   run_id=run_id)
 ```
 
-The factory branches on `config.persistence.default_backend`, the same pattern as `create_cron_job_store` and the StrangeLoop checkpoint backend selection. Both implementations expose the same async API (a `WorkspaceStateStore` protocol — see below).
-
 ### `WorkspaceStateStore` protocol
 
 ```python
@@ -835,7 +955,7 @@ The `run_id` column allows multiple concurrent workspace runs to share the same 
 
 ## 22. Object-store layout
 
-> **New external dependency note:** Soothe currently has **no** MinIO/S3 dependency in the codebase. This design introduces an S3-compatible object store as a new external backing service. The adapter MUST be written against the S3 API surface (not MinIO-specific extensions) so it works against MinIO, RDS-S3, or any S3-compatible store. MinIO is the reference implementation. The physical layout below is the `S3WorkspaceSyncBackend` implementation's concern — other backends may use a different layout.
+> **Backend note:** The physical layout below is the `FsspecSyncBackend` implementation's concern. It works identically across S3, GCS, Azure, and local FS because fsspec abstracts the path operations.
 
 Recommended object layout:
 
@@ -1181,6 +1301,8 @@ The agent should never receive `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`, AWS cred
 
 Each manifest has a `version`. When committing: `read version N → write version N+1` using conditional object update semantics where available (S3 `If-Match` / ETag precondition). This prevents stale workers from overwriting newer state.
 
+> **fsspec note:** For S3 backends, the `FsspecSyncBackend` can use `s3fs` internals to access native S3 conditional writes as a fast-path. For other backends without conditional writes, the read-then-write guard (§6c) is used. The race window is acceptable because workspaces are owned by exactly one run (Invariant 3).
+
 ---
 
 ## 38. Why not continuous object-store ↔ FS sync?
@@ -1288,7 +1410,7 @@ ArtifactSpec(
 
 ```text
 Workspace Manager
-S3 adapter (S3 API surface)
+FsspecSyncBackend (fsspec core + s3fs for S3)
 manifest
 local CAS
 SHA-256
@@ -1338,6 +1460,12 @@ remote CAS
 workspace:
   root: $SOOTHE_HOME/data/workspaces   # follows RFC-621 daemon-generated convention
   state_backend: default               # "default" follows persistence.default_backend; or "sqlite"/"postgresql" to override
+
+sync:
+  backend: fsspec                      # unified adapter — works with any fsspec filesystem
+  fsspec:
+    # backend-specific storage_options are resolved from the URI scheme
+    # e.g., s3:// → {endpoint_url, key, secret, ...} from env or config
 
 cache:
   root: /agent-cache
@@ -1414,13 +1542,14 @@ publication:
                                 │
                                 │ upload
                                 ▼
-                         ┌─────────────┐
-                         │  S3 / MinIO  │
-                         │             │
-                         │ resources   │
-                         │ CAS blobs   │
-                         │ manifests   │
-                         └──────┬──────┘
+                         ┌─────────────────┐
+                         │ S3/GCS/Azure/   │
+                         │ Local/Memory    │
+                         │                 │
+                         │ resources       │
+                         │ CAS blobs       │
+                         │ manifests       │
+                         └────────┬────────┘
                                 │
                          manifest lookup
                                 │
@@ -1503,7 +1632,7 @@ The fundamental abstraction is:
                 └─────────────────────┘
 ```
 
-**In short:** The object store (S3/MinIO) is the durable content-addressed store. The local filesystem is the agent's transaction workspace. The `WorkspaceSyncBackend` protocol (in `soothe-sdk`) abstracts the storage backend; the Workspace Manager (concrete, in `soothe`) bridges the two using manifests, CAS, dirty tracking, asynchronous checkpoints, and incremental persistence — all backend-agnostic.
+**In short:** The object store (S3/GCS/Azure/local) is the durable content-addressed store. The local filesystem is the agent's transaction workspace. The `WorkspaceSyncBackend` protocol (in `soothe-sdk`) abstracts the storage backend; the Workspace Manager (concrete, in `soothe`) bridges the two using manifests, CAS, dirty tracking, asynchronous checkpoints, and incremental persistence — all backend-agnostic. The `FsspecSyncBackend` (in `soothe`) provides unified multi-backend transport via fsspec.
 
 This architecture keeps filesystem-native agents completely filesystem-native while minimizing both **network bandwidth and filesystem copying**, and it leaves room for chunk-level deduplication and lazy materialization when large-scale workloads require them.
 
@@ -1540,22 +1669,205 @@ The Workspace Manager is host-runner territory — it bridges object storage and
 | Piece | Package |
 |-------|---------|
 | `WorkspaceSyncBackend` protocol + `Resource`/`ManifestEntry`/`Manifest`/`ArtifactSpec`/`Artifact`/`CheckpointType`/`CheckpointPayload` data models | `soothe-sdk` (shared contracts) |
-| `WorkspaceManager`, `Workspace`, CAS cache, dirty tracker, S3/MinIO adapter | `soothe` (host runner) |
+| `WorkspaceManager`, `Workspace`, CAS cache, dirty tracker, `FsspecSyncBackend` (fsspec-based, supports S3/GCS/Azure/local/memory) | `soothe` (host runner) |
 | `WorkspaceStateStore` protocol + `SqliteWorkspaceStateStore` / `PostgresWorkspaceStateStore` + `create_workspace_state_store()` factory | `soothe` (host runner) |
-| `LocalFsSyncBackend` (dev/testing backend) | `soothe` (host runner) |
+| `construct_sync_backend(uri, config)` factory (uses `fsspec.url_to_fs`) | `soothe` (host runner) |
 | Workspace lifecycle RPCs / admin IO | `soothe-daemon` |
 | CLI/TUI commands that trigger workspace operations | `soothe-cli` (via WebSocket, not direct import) |
 
-The S3 adapter MUST import only `soothe-sdk` contracts and a standard S3 client library — it must not import `soothe-autopilot`, `soothe-daemon`, or `soothe-cli`.
+The `FsspecSyncBackend` MUST import only `soothe-sdk` contracts and `fsspec` — it must not import `soothe-autopilot`, `soothe-daemon`, or `soothe-cli`.
+
+### DAG compliance
+
+```text
+soothe-sdk
+  │  WorkspaceSyncBackend protocol
+  │  Resource, Manifest, Artifact models
+  ↓
+soothe-nano
+  │  (no workspace sync code — just path resolution)
+  ↓
+soothe
+  │  WorkspaceManager (concrete)
+  │  FsspecSyncBackend (concrete, imports fsspec + optional s3fs/gcsfs/adlfs)
+  │  CAS cache, dirty tracker, debouncer
+  │  WorkspaceStateStore (SQLite/Postgres)
+  ↓
+soothe-daemon
+     _handle_loop_new: detect remote URI, bootstrap WorkspaceManager
+     workspace lifecycle RPCs
+```
+
+No DAG arrows are reversed. `soothe` imports `soothe-sdk` (for the protocol) and `soothe-nano` (for path resolution facade). `soothe-daemon` imports `soothe` (for the Workspace Manager). No package imports a downstream package.
 
 ---
 
-## 49. Open questions (for RFC formalization)
+## 49. Resolved design questions
 
-These are flagged for resolution during RFC formalization, not blockers for draft approval:
+These questions were open in prior drafts and are now resolved:
 
-1. **Agent identity.** Which filesystem-native agent consumes this workspace? A new RFC (or a revision to an existing built-in agent RFC) should name it. Candidate: a `research_workspace` agent or an extension of an existing analysis agent.
-2. **Object-store provisioning.** Is the S3-compatible store (MinIO) a daemon-managed sidecar (docker-compose service) or an externally-provided S3 endpoint? Affects config shape and credential management.
-3. **Workspace run ↔ thread/loop linkage.** Should a workspace run be 1:1 with a StrangeLoop thread, or can a single thread own multiple sequential workspace runs? Affects `recover()` semantics and RFC-803 cross-referencing.
-4. **`.workspace/` visibility enforcement.** Confirm that RFC-102's `SecurityConfig` path blacklist can hide a subdirectory (not just file types); if not, a small RFC-102 extension is needed.
-5. **macOS watcher in production.** `FSEvents` is fine for dev hosts, but production runs in Linux containers — confirm the watcher abstraction's stat-scan fallback is acceptable for the MVP or whether `inotify`-only is acceptable with macOS as dev-only. (Decision: hybrid watcher with FSEvents on macOS dev hosts and inotify on Linux containers is the MVP; stat-scan fallback for degraded environments. See §12.)
+### Q1 — Agent identity
+
+Which filesystem-native agent consumes this workspace? A new RFC (or a revision to an existing built-in agent RFC) should name it. Candidate: a `research_workspace` agent or an extension of an existing analysis agent. **Status: remains open for a separate RFC — not a blocker for this design.**
+
+### Q2 — Object-store provisioning
+
+Is the S3-compatible store (MinIO) a daemon-managed sidecar (docker-compose service) or an externally-provided S3 endpoint? Affects config shape and credential management. **Status: remains open for deployment architecture — not a blocker for this design.**
+
+### Q3 — Workspace run ↔ thread/loop linkage
+
+Should a workspace run be 1:1 with a StrangeLoop thread, or can a single thread own multiple sequential workspace runs? Affects `recover()` semantics and RFC-803 cross-referencing. **Status: remains open for RFC-803 reconciliation — not a blocker for this design.**
+
+### Q4 — `.workspace/` visibility enforcement
+
+Confirm that RFC-102's `SecurityConfig` path blacklist can hide a subdirectory (not just file types); if not, a small RFC-102 extension is needed. **Status: remains open for RFC-102 confirmation.**
+
+### Q5 — macOS watcher in production
+
+`FSEvents` is fine for dev hosts, but production runs in Linux containers — confirm the watcher abstraction's stat-scan fallback is acceptable for the MVP or whether `inotify`-only is acceptable with macOS as dev-only. **Resolved: hybrid watcher with FSEvents on macOS dev hosts and inotify on Linux containers is the MVP; stat-scan fallback for degraded environments. See §12.**
+
+### Q6 — boto3 vs aioboto3 (formerly open question #2 in prior drafts)
+
+**Resolved: Neither boto3 nor aioboto3 is a direct dependency.** `fsspec` is the transport abstraction; `s3fs` (which wraps `aiobotocore`) is an optional extra for S3 deployments. The async-I/O gap is bridged via `asyncio.to_thread()`. See §6c.
+
+### Q7 — `gs://` and other URI schemes (formerly open in the `s3://` URI draft)
+
+**Resolved: All fsspec-supported schemes work out of the box.** The `construct_sync_backend(uri, config)` factory uses `fsspec.url_to_fs(uri)` — no per-scheme dispatch code needed. `s3://`, `gs://`, `az://`, `file://`, and `memory://` all work with zero additional code. See §6c.
+
+### Q8 — Manifest synthesis from prefix listing (no `manifest.json`)
+
+**Resolved: Option B (synthesize) for MVP, with Option A (explicit manifest) as fast-path.** If `manifest.json` exists at the prefix root, use it. Otherwise, the `FsspecSyncBackend` lists the prefix via `fs.ls()`, computes SHA-256 for each object (via streaming hash), and builds a `Manifest` on the fly. The synthesized manifest is cached in the workspace state DB (§21) so subsequent materializations of the same prefix are cheap.
+
+### Q9 — Write-back semantics
+
+**Resolved: Write artifacts to a configurable `workspace_sync.publish_prefix`** (default: `<source>/artifacts/`), never overwrite the source prefix.
+
+### Q10 — Re-sync on resume
+
+**Resolved: No.** On resume, use the local workspace state DB + last checkpoint. Only re-materialize from the object store if the local workspace is missing (crash recovery, §26).
+
+---
+
+## 50. Dependency changes
+
+### `packages/soothe/pyproject.toml`
+
+```toml
+[project]
+dependencies = [
+    # ... existing deps ...
+    "fsspec>=2026.0",          # NEW — core, lightweight (~2 MB)
+]
+
+[project.optional-dependencies]
+s3 = ["s3fs>=2026.0"]          # S3/MinIO support
+gcs = ["gcsfs>=2026.0"]        # Google Cloud Storage
+azure = ["adlfs>=2026.0"]      # Azure Blob Storage
+all-backends = ["s3fs>=2026.0", "gcsfs>=2026.0", "adlfs>=2026.0"]
+```
+
+### No changes to `soothe-sdk` or `soothe-nano`
+
+The protocol stays in the SDK. fsspec is a host-only dependency. Nano is unaffected.
+
+---
+
+## 51. Module layout
+
+New modules under `packages/soothe/src/soothe/workspace/`:
+
+```text
+soothe/workspace/
+├── sync/                          ← NEW
+│   ├── __init__.py
+│   ├── manager.py                 ← WorkspaceManager (lifecycle orchestrator)
+│   ├── workspace.py               ← Workspace (per-run handle: open, materialize, checkpoint, publish, close)
+│   ├── cas.py                     ← Local CAS cache (SHA-256 → blob, reflink/hardlink/copy)
+│   ├── dirty_tracker.py           ← Hybrid FS watcher (inotify/FSEvents/stat-scan)
+│   ├── debouncer.py               ← Debounced checkpoint trigger
+│   ├── manifest_synth.py         ← Synthesize manifest from prefix listing (no manifest.json)
+│   └── backends/
+│       ├── __init__.py
+│       └── fsspec.py              ← FsspecSyncBackend (fsspec — unified adapter)
+├── state/                         ← NEW
+│   ├── __init__.py
+│   ├── protocol.py                ← WorkspaceStateStore protocol
+│   ├── sqlite.py                  ← SqliteWorkspaceStateStore
+│   ├── postgres.py               ← PostgresWorkspaceStateStore
+│   └── factory.py                 ← create_workspace_state_store()
+├── resolution.py                  ← MODIFY: detect remote URI scheme (s3://, gs://, etc.)
+├── loop_workspace.py              ← EXISTING
+├── core_resolution.py             ← EXISTING
+├── scoped.py                      ← EXISTING
+└── __init__.py                    ← MODIFY: re-export new public API
+```
+
+### URI entry point integration
+
+In `soothe/workspace/resolution.py`, add a URI classifier:
+
+```python
+def is_remote_workspace_uri(value: str) -> bool:
+    """True if value is a remote URI (s3://, gs://, az://, etc.) not a local path."""
+    return "://" in value and not value.startswith("file://")
+```
+
+`validate_client_workspace` must reject remote URIs (it's for local paths only).
+
+In the daemon router (`_handle_loop_new`), add URI-scheme detection before the existing `validate_client_workspace` path:
+
+```python
+raw_workspace = msg.get("client_workspace") or msg.get("workspace")
+sync_source = msg.get("workspace_sync_source")  # NEW field
+
+if _is_remote_uri(raw_workspace):
+    sync_source = raw_workspace
+    raw_workspace = None  # don't treat as local path
+
+if sync_source:
+    # Materialize temp workspace from remote source
+    backend = construct_sync_backend(sync_source, config)
+    local_root = await _workspace_manager.open_from_uri(
+        run_id=loop_id,
+        backend=backend,
+        source_uri=sync_source,
+    )
+    effective_workspace = local_root
+    meta_updates["workspace_sync_source"] = sync_source
+else:
+    # Existing local-path resolution (RFC-621)
+    ...
+```
+
+### Loop metadata
+
+New metadata fields persisted on `loop_new`:
+
+| Field | Purpose |
+|-------|---------|
+| `workspace_sync_source` | The original URI (`s3://bucket/proj/`, `gs://bucket/proj/`, etc.) |
+| `workspace_sync_backend` | Serialized backend config (endpoint, bucket, prefix, storage_options) |
+| `current_workspace` | The local temp workspace path (as today) |
+
+On crash recovery, the daemon reads `workspace_sync_source`, reconstructs the backend via `construct_sync_backend()`, calls `workspace.recover(checkpoint_id)`, and resumes.
+
+---
+
+## 52. Key invariant: the agent never sees the URI
+
+The agent **never sees `s3://`, `gs://`, or any remote URI**. The agent sees an ordinary local filesystem path (`$SOOTHE_HOME/data/workspaces/<run-id>/`). The remote URI is a **sync source**, recorded in loop metadata, and the Workspace Manager handles all remote I/O. This preserves Invariant 4 (§45): "the agent never directly accesses the storage backend."
+
+---
+
+## 53. What this design does NOT change
+
+- **Agent behavior:** The agent sees a local path. No object-store awareness. No new tools needed.
+- **Materialization algorithm (§9):** Unchanged — manifest → CAS → hardlink/reflink.
+- **Dirty tracking (§12):** Unchanged — FS events → dirty set → debounce → checkpoint.
+- **Checkpoint/publish (§14, §15, §32):** Unchanged — local state DB → background uploader → object store.
+- **CAS dedup (§24):** Unchanged — content-addressed blobs shared across runs.
+- **Security (§35):** Unchanged — credentials stay in the backend, agent never sees them.
+- **`WorkspaceSyncBackend` protocol:** Unchanged — stays in `soothe-sdk`.
+- **`WorkspaceManager`:** Unchanged — stays concrete in `soothe`, talks to the protocol.
+- **All 9 core invariants (§45):** Unchanged.
+- **Package DAG:** `fsspec` is a dependency of `soothe` (host), not `soothe-sdk` or `soothe-nano`.
