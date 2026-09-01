@@ -280,7 +280,7 @@ router_profiles:
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-active_router_profile: glm-mm
+active_router_profile: glm
 embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
