@@ -4121,7 +4121,15 @@ async def execute_task_textual(
                                         goal_loop_start_monotonic=goal_loop_start_monotonic,
                                         turn_start_monotonic=start_time,
                                     )
-                                    if adapter._goal_tree_message is not None:
+                                    follow_on = (
+                                        data.get("follow_on_exec")
+                                        if isinstance(data, dict)
+                                        else None
+                                    )
+                                    # Skip the terminal footer when a follow-on exec
+                                    # goal is pending: the daemon immediately enqueues
+                                    # it, so showing "Done" here is misleading.
+                                    if adapter._goal_tree_message is not None and not follow_on:
                                         goal_elapsed_start = _goal_loop_elapsed_start(
                                             goal_loop_start_monotonic=goal_loop_start_monotonic,
                                             turn_start_monotonic=start_time,
@@ -4164,11 +4172,6 @@ async def execute_task_textual(
                                     # row stays active through the plan→exec transition;
                                     # the exec goal's ``STRANGE_LOOP_STARTED`` will
                                     # re-anchor and replace it.
-                                    follow_on = (
-                                        data.get("follow_on_exec")
-                                        if isinstance(data, dict)
-                                        else None
-                                    )
                                     if adapter._set_spinner and not clarification_pending:
                                         if follow_on:
                                             adapter._plan_approve_follow_on_pending = True

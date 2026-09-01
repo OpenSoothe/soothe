@@ -343,9 +343,20 @@ class CognitionGoalTreeMessage(Vertical):
         return f"↑{format_token_count(total_in)} ↓{format_token_count(total_out)}"
 
     def mark_loop_started(self, started_at: float | None = None) -> None:
-        """Anchor plan-level elapsed time (matches thinking-row turn start)."""
-        if self._loop_started_at is None:
+        """Anchor plan-level elapsed time (matches thinking-row turn start).
+
+        On reuse after a terminal footer (plan-approve → exec follow-on),
+        clear the stale footer + step rows so the panel returns to live state.
+        """
+        if self._loop_started_at is None or self._footer_visible:
             self._loop_started_at = started_at if started_at is not None else time()
+            if self._footer_visible:
+                self._footer_visible = False
+                self._footer_plain = ""
+                self._footer_tone = "muted"
+                self._step_order.clear()
+                self._steps.clear()
+                self._sync_goal_tree_widgets()
 
     def _indent_prefix(self) -> str:
         """Body gutter aligned to the right of the goal header prefix dot.
