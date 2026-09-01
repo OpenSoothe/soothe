@@ -92,7 +92,6 @@ agent:
       tool_output_max_chars: 10000
     llm_rate_limit:
       enabled: true
-      # Sized for ~2 Autopilot jobs (max_parallel_goals=3) + ~3 CLI StrangeLoops.
       rpm_limit: 180
       concurrent_limit: 4
       global_concurrent_limit: 18
@@ -157,7 +156,6 @@ tools:
   data:
     enabled: true
   wizsearch:
-    # Tarzi-backed; default_engines is ordered failover (first success wins).
     enabled: true
     default_engines:
       - tavily
@@ -170,12 +168,11 @@ tools:
     proxy: null
   http_requests:
     enabled: true
-    allow_dangerous_requests: false  # SEC: opt-in; prevents SSRF/arbitrary POST
+    allow_dangerous_requests: false
     headers: {}
     verify_ssl: true
   deepxiv:
     enabled: false
-    # Plain string, ${DEEPXIV_API_KEY}, or null (env lookup: DEEPXIV_API_KEY / DEEPXIV_TOKEN).
     token: "${DEEPXIV_API_KEY}"
     timeout: 60
     max_retries: 3
@@ -242,7 +239,7 @@ update:
 
 persistence:
   default_backend: sqlite
-  # Plain DSN string or ${ENV_VAR}. Unused while default_backend is sqlite.
+  # Unused while default_backend is sqlite.
   postgres_base_dsn: "${SOOTHE_POSTGRES_BASE_DSN}"
   postgres_databases:
     checkpoints: soothe_checkpoints
@@ -289,7 +286,6 @@ observability:
   profile_model_calls: false
   langfuse:
     enabled: false
-    # Plain string or ${ENV_VAR}; omit/null also reads LANGFUSE_* from the environment.
     public_key: "${LANGFUSE_PUBLIC_KEY}"
     secret_key: "${LANGFUSE_SECRET_KEY}"
     host: "${LANGFUSE_HOST}"
@@ -332,7 +328,6 @@ security:
 
 filesystem_middleware:
   backup_enabled: true
-  # null → workspace .soothe/backups (product default; overrides deepagents .backups)
   backup_dir: null
   workspace_root: null
   max_file_size_mb: 10
@@ -352,7 +347,6 @@ optimization:
 vector_stores:
   - name: sqlite_vec_default
     provider_type: sqlite_vec
-    # dsn / url / api_key: plain string or ${ENV_VAR} (pgvector / Weaviate).
     dsn: null
     index_type: hnsw
     url: null

@@ -11,6 +11,241 @@ providers:
       - MiniMax-M3
       - text-embedding-v4
 
+  # Multi-instance DashScope providers for random selection + failover.
+  - name: ds1
+    provider_type: openai
+    api_base_url: "${DS1_BASE_URL}"
+    api_key: "${DS1_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds2
+    provider_type: openai
+    api_base_url: "${DS2_BASE_URL}"
+    api_key: "${DS2_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds3
+    provider_type: openai
+    api_base_url: "${DS3_BASE_URL}"
+    api_key: "${DS3_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds4
+    provider_type: openai
+    api_base_url: "${DS4_BASE_URL}"
+    api_key: "${DS4_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds5
+    provider_type: openai
+    api_base_url: "${DS5_BASE_URL}"
+    api_key: "${DS5_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds6
+    provider_type: openai
+    api_base_url: "${DS6_BASE_URL}"
+    api_key: "${DS6_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds7
+    provider_type: openai
+    api_base_url: "${DS7_BASE_URL}"
+    api_key: "${DS7_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds8
+    provider_type: openai
+    api_base_url: "${DS8_BASE_URL}"
+    api_key: "${DS8_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds9
+    provider_type: openai
+    api_base_url: "${DS9_BASE_URL}"
+    api_key: "${DS9_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds10
+    provider_type: openai
+    api_base_url: "${DS10_BASE_URL}"
+    api_key: "${DS10_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds11
+    provider_type: openai
+    api_base_url: "${DS11_BASE_URL}"
+    api_key: "${DS11_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds12
+    provider_type: openai
+    api_base_url: "${DS12_BASE_URL}"
+    api_key: "${DS12_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds13
+    provider_type: openai
+    api_base_url: "${DS13_BASE_URL}"
+    api_key: "${DS13_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds14
+    provider_type: openai
+    api_base_url: "${DS14_BASE_URL}"
+    api_key: "${DS14_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds15
+    provider_type: openai
+    api_base_url: "${DS15_BASE_URL}"
+    api_key: "${DS15_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds16
+    provider_type: openai
+    api_base_url: "${DS16_BASE_URL}"
+    api_key: "${DS16_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds17
+    provider_type: openai
+    api_base_url: "${DS17_BASE_URL}"
+    api_key: "${DS17_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds18
+    provider_type: openai
+    api_base_url: "${DS18_BASE_URL}"
+    api_key: "${DS18_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds19
+    provider_type: openai
+    api_base_url: "${DS19_BASE_URL}"
+    api_key: "${DS19_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds20
+    provider_type: openai
+    api_base_url: "${DS20_BASE_URL}"
+    api_key: "${DS20_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds21
+    provider_type: openai
+    api_base_url: "${DS21_BASE_URL}"
+    api_key: "${DS21_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds22
+    provider_type: openai
+    api_base_url: "${DS22_BASE_URL}"
+    api_key: "${DS22_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds23
+    provider_type: openai
+    api_base_url: "${DS23_BASE_URL}"
+    api_key: "${DS23_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds24
+    provider_type: openai
+    api_base_url: "${DS24_BASE_URL}"
+    api_key: "${DS24_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds25
+    provider_type: openai
+    api_base_url: "${DS25_BASE_URL}"
+    api_key: "${DS25_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
+  - name: ds26
+    provider_type: openai
+    api_base_url: "${DS26_BASE_URL}"
+    api_key: "${DS26_API_KEY}"
+    models:
+      - glm-5.2
+      - qwen3.7-plus
+      - qwen3.6-flash
+
   - name: omlx
     provider_type: openai
     api_base_url: "http://localhost:9642/v1"
@@ -29,6 +264,14 @@ router_profiles:
       fast: "dashscope:qwen3.6-flash"
       think: "dashscope:glm-5.2"
       image: "dashscope:qwen3.7-plus"
+      ocr: "omlx:DeepSeek-OCR-4bit"
+
+  - name: glm-mm
+    router:
+      default: "ds1:glm-5.2;ds2:glm-5.2;ds3:glm-5.2;ds4:glm-5.2;ds5:glm-5.2;ds6:glm-5.2;ds7:glm-5.2;ds8:glm-5.2;ds9:glm-5.2;ds10:glm-5.2;ds11:glm-5.2;ds12:glm-5.2;ds13:glm-5.2;ds14:glm-5.2;ds15:glm-5.2;ds16:glm-5.2;ds17:glm-5.2;ds18:glm-5.2;ds19:glm-5.2;ds20:glm-5.2;ds21:glm-5.2;ds22:glm-5.2;ds23:glm-5.2;ds24:glm-5.2;ds25:glm-5.2;ds26:glm-5.2"
+      fast: "ds1:qwen3.6-flash;ds2:qwen3.6-flash;ds3:qwen3.6-flash;ds4:qwen3.6-flash;ds5:qwen3.6-flash;ds6:qwen3.6-flash;ds7:qwen3.6-flash;ds8:qwen3.6-flash;ds9:qwen3.6-flash;ds10:qwen3.6-flash;ds11:qwen3.6-flash;ds12:qwen3.6-flash;ds13:qwen3.6-flash;ds14:qwen3.6-flash;ds15:qwen3.6-flash;ds16:qwen3.6-flash;ds17:qwen3.6-flash;ds18:qwen3.6-flash;ds19:qwen3.6-flash;ds20:qwen3.6-flash;ds21:qwen3.6-flash;ds22:qwen3.6-flash;ds23:qwen3.6-flash;ds24:qwen3.6-flash;ds25:qwen3.6-flash;ds26:qwen3.6-flash"
+      think: "ds1:glm-5.2;ds2:glm-5.2;ds3:glm-5.2;ds4:glm-5.2;ds5:glm-5.2;ds6:glm-5.2;ds7:glm-5.2;ds8:glm-5.2;ds9:glm-5.2;ds10:glm-5.2;ds11:glm-5.2;ds12:glm-5.2;ds13:glm-5.2;ds14:glm-5.2;ds15:glm-5.2;ds16:glm-5.2;ds17:glm-5.2;ds18:glm-5.2;ds19:glm-5.2;ds20:glm-5.2;ds21:glm-5.2;ds22:glm-5.2;ds23:glm-5.2;ds24:glm-5.2;ds25:glm-5.2;ds26:glm-5.2"
+      image: "ds1:qwen3.7-plus;ds2:qwen3.7-plus;ds3:qwen3.7-plus;ds4:qwen3.7-plus;ds5:qwen3.7-plus;ds6:qwen3.7-plus;ds7:qwen3.7-plus;ds8:qwen3.7-plus;ds9:qwen3.7-plus;ds10:qwen3.7-plus;ds11:qwen3.7-plus;ds12:qwen3.7-plus;ds13:qwen3.7-plus;ds14:qwen3.7-plus;ds15:qwen3.7-plus;ds16:qwen3.7-plus;ds17:qwen3.7-plus;ds18:qwen3.7-plus;ds19:qwen3.7-plus;ds20:qwen3.7-plus;ds21:qwen3.7-plus;ds22:qwen3.7-plus;ds23:qwen3.7-plus;ds24:qwen3.7-plus;ds25:qwen3.7-plus;ds26:qwen3.7-plus"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
   - name: qwen
