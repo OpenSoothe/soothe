@@ -421,8 +421,10 @@ class _UIMixin:
                 await self._loading_widget.remove()
                 self._loading_widget = None
             self._connect_spinner_start_mono = None
+            self._show_tip_row()
             return
 
+        self._hide_tip_row()
         thinking_status = self.query_one("#thinking-status", Container)
 
         connect_start_mono: float | None = None
@@ -480,6 +482,16 @@ class _UIMixin:
         """Resume the thinking-row spinner after a clarification pause."""
         if self._loading_widget is not None:
             self._loading_widget.resume()
+
+    def _show_tip_row(self) -> None:
+        """Show the rotating tip in the thinking row when the loop is idle."""
+        if self._tip_row is not None:
+            self._tip_row.display = True
+
+    def _hide_tip_row(self) -> None:
+        """Hide the tip row so the thinking spinner gets the full row."""
+        if self._tip_row is not None:
+            self._tip_row.display = False
 
     def action_toggle_plan_quick_view(self) -> None:
         """Expand or collapse the in-flow plan panel above the thinking row."""

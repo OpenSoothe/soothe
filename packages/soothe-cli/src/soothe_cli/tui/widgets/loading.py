@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from time import monotonic
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from textual.content import Content
 from textual.widgets import Static
@@ -305,3 +305,73 @@ class LoadingWidget(Static):
     def stop(self) -> None:
         """Stop the animation (widget will be removed by caller)."""
         self._stop_timer()
+
+
+class TipRow(Static):
+    """Rotating tip / transient notice shown in the thinking row when idle.
+
+    Sits in the same ``#thinking-status`` container as :class:`LoadingWidget`.
+    When the loop is inactive (no spinner) the tip is visible; when the loop
+    is active the spinner replaces it and this row is hidden by the caller.
+    """
+
+    DEFAULT_CSS = """
+    TipRow {
+        height: 1;
+        padding: 0 1;
+        margin-top: 1;
+    }
+
+    TipRow.notification {
+        color: $warning;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the tip row with no content."""
+        super().__init__(*args, **kwargs)
+        self._is_notification = False
+        self._tip_text: str = ""
+
+    def _render_tip(self, text: str) -> Content:
+        colors = theme.get_theme_colors(self)
+        prefix = Content.styled("💡 ", colors.muted)
+        body = Content.styled(text, colors.muted)
+        return Content.assemble(prefix, body)
+
+    def _render_notice(self, text: str) -> Content:
+        colors = theme.get_theme_colors(self)
+        prefix = Content.styled("⚠ ", colors.warning)
+        body = Content.styled(text, colors.warning)
+        return Content.assemble(prefix, body)
+
+    def _refresh_content(self) -> None:
+        """Re-render the stored tip/notice text, styled only when mounted."""
+        if not self.is_mounted:
+            return
+        text = self._tip_text
+        if not text:
+            self.update("")
+        elif self._is_notification:
+            self.update(self._render_notice(text))
+        else:
+            self.update(self._render_tip(text))
+
+    def on_mount(self) -> None:
+        """Render the initial tip content once the widget is in the DOM."""
+        self._refresh_content()
+
+    def set_tip(self, text: str) -> None:
+        """Show a default rotating tip (muted, non-bold)."""
+        self._is_notification = False
+        self.remove_class("notification")
+        self._tip_text = (text or "").strip()
+        self._refresh_content()
+
+    def set_notification(self, text: str) -> None:
+        """Show a transient notice (warning-colored, bold)."""
+        self._is_notification = True
+        self.add_class("notification")
+        self._tip_text = (text or "").strip()
+        self._refresh_content()

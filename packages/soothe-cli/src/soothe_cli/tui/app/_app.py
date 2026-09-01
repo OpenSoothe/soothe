@@ -40,7 +40,7 @@ from soothe_cli.tui.app._types import (
 from soothe_cli.tui.app._ui import _UIMixin
 from soothe_cli.tui.composer_mode import normalize_composer_mode
 from soothe_cli.tui.widgets.chat_input import ChatInput
-from soothe_cli.tui.widgets.loading import LoadingWidget
+from soothe_cli.tui.widgets.loading import LoadingWidget, TipRow
 from soothe_cli.tui.widgets.message_store import MessageStore
 from soothe_cli.tui.widgets.messages import (
     AssistantMessage,
@@ -226,10 +226,11 @@ class SootheApp(
         self._mcp_tool_count = sum(len(s.tools) for s in (mcp_server_info or []))
 
         self._status_bar: StatusBar | None = None
+        self._tip_row: TipRow | None = None
         self._default_session_tip: str = ""
         self._status_notification_timer: Timer | None = None
         self._status_notification_active = False
-        # Rotating tip source + interval timer for the status footer.
+        # Rotating tip source + interval timer for the thinking row.
         self._tip_rotator: TipRotator = TipRotator()
         self._tip_rotation_timer: Timer | None = None
 
@@ -381,11 +382,11 @@ class SootheApp(
         """Persist and render the fallback tip shown when no notification is active."""
         cleaned = (tip or "").strip()
         self._default_session_tip = cleaned
-        if self._status_bar is not None and not self._status_notification_active:
-            self._status_bar.set_session_tip(cleaned)
+        if self._tip_row is not None and not self._status_notification_active:
+            self._tip_row.set_tip(cleaned)
 
     def start_tip_rotation(self, interval: float = 12.0) -> None:
-        """Cycle through rotating tips in the status footer at a fixed interval.
+        """Cycle through rotating tips in the thinking row at a fixed interval.
 
         Args:
         interval: Seconds between tip rotations.
@@ -401,7 +402,7 @@ class SootheApp(
             self._tip_rotation_timer = None
 
     def _rotate_session_tip(self) -> None:
-        """Advance to the next tip and push it to the status footer.
+        """Advance to the next tip and push it to the thinking row.
 
         Transient notifications take precedence: rotation is skipped while a
         notification is active so it can run its timeout uninterrupted.
@@ -411,7 +412,7 @@ class SootheApp(
         self.set_default_session_tip(self._tip_rotator.next_tip())
 
     def _set_status_notification(self, message: str, *, timeout: float | None = None) -> None:
-        """Render a transient notification in the status-tip area."""
+        """Render a transient notification in the thinking-row tip area."""
         text = (message or "").strip()
         if not text:
             return
@@ -420,8 +421,8 @@ class SootheApp(
                 self._status_notification_timer.stop()
             self._status_notification_timer = None
         self._status_notification_active = True
-        if self._status_bar is not None:
-            self._status_bar.set_notification_message(text)
+        if self._tip_row is not None:
+            self._tip_row.set_notification(text)
 
         duration = timeout if timeout and timeout > 0 else 3.0
         self._status_notification_timer = self.set_timer(duration, self._clear_status_notification)
@@ -430,8 +431,8 @@ class SootheApp(
         """Restore the default tip after transient notification timeout."""
         self._status_notification_timer = None
         self._status_notification_active = False
-        if self._status_bar is not None:
-            self._status_bar.set_session_tip(self._default_session_tip)
+        if self._tip_row is not None:
+            self._tip_row.set_tip(self._default_session_tip)
 
     def notify(  # type: ignore[override]
         self,
@@ -442,7 +443,7 @@ class SootheApp(
         timeout: float | None = None,
         markup: bool = True,  # noqa: ARG002
     ) -> None:
-        """Display notifications in the status-tip area instead of toast bubbles."""
+        """Display notifications in the thinking-row tip area instead of toast bubbles."""
         text = str(message or "").strip()
         if not text:
             return
@@ -495,7 +496,8 @@ class SootheApp(
             default_visible=plan_visible,
         )
         with Container(id="bottom-app-container"):
-            yield Container(id="thinking-status")
+            with Container(id="thinking-status"):
+                yield TipRow(id="tip-row")
             yield ChatInput(
                 cwd=self._cwd,
                 image_tracker=self._image_tracker,

@@ -64,6 +64,7 @@ from soothe_nano.config.models import (  # noqa: F401
     WebSearchConfig,
     WorkspaceMountConfig,
     get_knowledge_cutoff,
+    parse_model_specs,
 )
 from soothe_nano.config.models import (
     AgentConfig as NanoAgentConfig,

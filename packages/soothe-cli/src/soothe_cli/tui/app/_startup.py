@@ -24,6 +24,7 @@ from soothe_cli.tui.app._types import (
     TextualSessionState,
 )
 from soothe_cli.tui.widgets.chat_input import ChatInput
+from soothe_cli.tui.widgets.loading import TipRow
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     ErrorMessage,
@@ -129,6 +130,7 @@ class _StartupMixin:
         self.watch(chat, "scroll_y", self._on_chat_scroll_y_changed)
 
         self._status_bar = self.query_one("#status-bar", StatusBar)
+        self._tip_row = self.query_one("#tip-row", TipRow)
         self._chat_input = self.query_one("#input-area", ChatInput)
         with suppress(NoMatches):
             from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
@@ -142,8 +144,11 @@ class _StartupMixin:
         # hard-coded "auto" fallback before the daemon-default seed runs).
         self._status_bar.set_clarification_mode(self._composer_mode)
 
-        # Seed the status footer with the first rotating tip and start rotation.
+        # Seed the thinking-row tip with the first rotating tip and start rotation.
+        # The tip row is visible while the loop is idle; `_set_spinner` hides it
+        # when the agent starts working and restores it when the loop goes idle.
         self.set_default_session_tip(self._tip_rotator.next_tip())
+        self._show_tip_row()
         self.start_tip_rotation()
 
         # Focus the input immediately so the cursor is visible on first paint

@@ -1,4 +1,4 @@
-"""Rotating session tips for the status bar below the chat input."""
+"""Rotating session tips for the thinking row shown when the loop is idle."""
 
 from __future__ import annotations
 

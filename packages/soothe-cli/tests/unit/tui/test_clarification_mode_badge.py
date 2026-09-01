@@ -12,10 +12,10 @@ from soothe_cli.tui.composer_mode import (
     COMPOSER_MODE_MANUAL,
     COMPOSER_MODE_PLAN,
 )
+from soothe_cli.tui.widgets.loading import TipRow
 from soothe_cli.tui.widgets.status import (
     ClarificationModeBadge,
     ModelLabel,
-    StatusBar,
 )
 
 
@@ -165,17 +165,19 @@ def test_model_label_truncates_from_the_right_when_too_narrow() -> None:
     assert expected == "gpt-4…"
 
 
-def test_status_tip_prefixes_default_tip_text() -> None:
-    """Default session tips keep the `Tip:` prefix in the status area."""
-    bar = StatusBar()
-    bar.set_session_tip("Use /help")
-    assert bar.session_tip == "Tip: Use /help"
-    assert bar.tip_is_notification is False
+def test_tip_row_renders_default_tip() -> None:
+    """The tip row stores a rotating tip with the muted (non-notification) style."""
+    row = TipRow()
+    row.set_tip("Use /help")
+    assert row._tip_text == "Use /help"
+    assert row._is_notification is False
+    assert not row.has_class("notification")
 
 
-def test_status_tip_can_show_transient_notification_message() -> None:
-    """Notification mode renders a message in the same status-tip slot."""
-    bar = StatusBar()
-    bar.set_notification_message("Saved draft")
-    assert bar.session_tip == "Notice: Saved draft"
-    assert bar.tip_is_notification is True
+def test_tip_row_renders_notification() -> None:
+    """Notification mode stores a notice with the warning style."""
+    row = TipRow()
+    row.set_notification("Saved draft")
+    assert row._tip_text == "Saved draft"
+    assert row._is_notification is True
+    assert row.has_class("notification")

@@ -150,7 +150,7 @@ class ClarificationModeBadge(Static):
 
 
 class StatusBar(Horizontal):
-    """Status bar with model, clarification-mode badge, tip, cwd, branch, tokens."""
+    """Status bar with model, clarification-mode badge, cwd, branch, tokens."""
 
     DEFAULT_CSS = """
     StatusBar {
@@ -184,21 +184,6 @@ class StatusBar(Horizontal):
     StatusBar .status-mode.command {
         background: $mode-command;
         color: white;
-    }
-
-    StatusBar .status-tip {
-        width: 1fr;
-        min-width: 0;
-        padding: 0 1 0 0;
-        color: $text-muted;
-        text-style: dim;
-        text-overflow: ellipsis;
-        overflow: hidden;
-    }
-
-    StatusBar .status-tip.notification {
-        color: $warning;
-        text-style: bold;
     }
 
     StatusBar .status-message {
@@ -240,8 +225,6 @@ class StatusBar(Horizontal):
     mode: reactive[str] = reactive("normal", init=False)
     clarification_mode: reactive[str] = reactive(COMPOSER_MODE_AUTO, init=False)
     status_message: reactive[str] = reactive("", init=False)
-    session_tip: reactive[str] = reactive("", init=False)
-    tip_is_notification: reactive[bool] = reactive(False, init=False)
     cwd: reactive[str] = reactive("", init=False)
     branch: reactive[str] = reactive("", init=False)
     tokens: reactive[int] = reactive(0, init=False)
@@ -261,13 +244,12 @@ class StatusBar(Horizontal):
         """Compose the status bar layout.
 
         Yields:
-        Clarification-mode badge, model label, input-mode indicator, tip,
+        Clarification-mode badge, model label, input-mode indicator,
         message/cwd/branch group, and token count.
         """
         yield ClarificationModeBadge(id="clarification-mode-badge")
         yield ModelLabel(id="model-display")
         yield Static("", classes="status-mode normal", id="mode-indicator")
-        yield Static("", classes="status-tip", id="session-tip")
         with Horizontal(classes="status-left-collapsible"):
             yield Static("", classes="status-message", id="status-message")
             yield Static("", classes="status-cwd", id="cwd-display")
@@ -322,23 +304,6 @@ class StatusBar(Horizontal):
         else:
             indicator.update("")
             indicator.add_class("normal")
-
-    def watch_session_tip(self, new_value: str) -> None:
-        """Update the status-tip text below the input."""
-        try:
-            tip_widget = self.query_one("#session-tip", Static)
-        except NoMatches:
-            return
-        text = (new_value or "").strip()
-        tip_widget.update(text)
-
-    def watch_tip_is_notification(self, is_notification: bool) -> None:
-        """Toggle visual style for transient notifications in the tip slot."""
-        try:
-            tip_widget = self.query_one("#session-tip", Static)
-        except NoMatches:
-            return
-        tip_widget.set_class(is_notification, "notification")
 
     def watch_cwd(self, new_value: str) -> None:
         """Update cwd display when it changes."""
@@ -395,18 +360,6 @@ class StatusBar(Horizontal):
         mode: One of "normal", "shell", or "command"
         """
         self.mode = mode
-
-    def set_session_tip(self, tip: str) -> None:
-        """Set the default rotating tip shown in the status-tip area."""
-        self.tip_is_notification = False
-        text = (tip or "").strip()
-        self.session_tip = f"Tip: {text}" if text else ""
-
-    def set_notification_message(self, message: str) -> None:
-        """Set a transient notification message in the status-tip area."""
-        self.tip_is_notification = True
-        text = (message or "").strip()
-        self.session_tip = f"Notice: {text}" if text else ""
 
     def set_status_message(self, message: str) -> None:
         """Set the status message.
