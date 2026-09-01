@@ -198,10 +198,10 @@ def main(
             help=(
                 "Auto-show the in-flow plan panel while a goal is executing "
                 "and hide it when the goal completes. Ctrl+t toggles "
-                "thereafter. Default: enabled."
+                "thereafter. Default: disabled (hidden)."
             ),
         ),
-    ] = True,
+    ] = False,
     show_version: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--version", help="Show version and exit."),
