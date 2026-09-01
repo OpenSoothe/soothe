@@ -881,6 +881,29 @@ class LoopState(BaseModel):
         default=None,
         description="Interrupt-resume identity (thread_id + step_id + step_description).",
     )
+    # Circuit-breaker counters that persist across graph re-entries within a
+    # single goal run. Each key is a step_id; the value is the number of
+    # times that step has been dispatched by the Executor. Prevents infinite
+    # re-dispatch when a model failure (e.g. blocked API key) causes the DAG
+    # to re-dispatch the same step repeatedly with no real progress.
+    step_dispatch_counts: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Per-step dispatch count for circuit-breaker detection. "
+            "Persists across graph re-entries within a goal run."
+        ),
+    )
+    # Consecutive empty-completion counter per step_id. An "empty completion"
+    # is a step that finished with main_tools=0 and output below the
+    # meaningful threshold. After N consecutive empties, the step is
+    # force-failed by the executor's watchdog.
+    step_consecutive_empty: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Per-step consecutive empty-completion count for watchdog "
+            "detection. Persists across graph re-entries within a goal run."
+        ),
+    )
 
     # Cross-turn clarification memory (RFC-622 enhancement). Append-only log of
     # resolved clarifications within this goal run, so veritas can reference

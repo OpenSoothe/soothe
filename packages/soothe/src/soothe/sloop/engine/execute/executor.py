@@ -446,6 +446,47 @@ class Executor:
             return 0
         return max(0, int(self._config.agent.loop.dispatch_retry_max))
 
+    # ------------------------------------------------------------------
+    # Circuit breakers for re-dispatch and consecutive empty completions
+    # ------------------------------------------------------------------
+
+    _REDISPATCH_DEFAULT = 3
+    """Default max dispatches per step before the circuit breaker trips."""
+
+    _EMPTY_COMPLETION_DEFAULT = 3
+    """Default max consecutive empty completions before force-failing a step."""
+
+    _EMPTY_OUTPUT_MIN_CHARS = 50
+    """Minimum output chars to count as 'meaningful' for the empty-completion watchdog."""
+
+    def _max_redispatch(self) -> int:
+        """Max times a step may be dispatched before the circuit breaker trips."""
+        if self._config is None:
+            return self._REDISPATCH_DEFAULT
+        return max(
+            1,
+            int(
+                getattr(
+                    self._config.agent.loop, "max_redispatch_per_step", self._REDISPATCH_DEFAULT
+                )
+            ),
+        )
+
+    def _max_consecutive_empty(self) -> int:
+        """Max consecutive empty completions before force-failing a step."""
+        if self._config is None:
+            return self._EMPTY_COMPLETION_DEFAULT
+        return max(
+            1,
+            int(
+                getattr(
+                    self._config.agent.loop,
+                    "max_consecutive_empty_completions",
+                    self._EMPTY_COMPLETION_DEFAULT,
+                )
+            ),
+        )
+
     async def _read_runtime_state(
         self,
         *,
@@ -1273,6 +1314,48 @@ class Executor:
             logger.warning("No ready steps to execute (all completed or blocked)")
             return
 
+        # Circuit breaker (cross-graph-reentry): fail steps that have been
+        # re-dispatched too many times. The counter persists on LoopState
+        # across graph re-entries (clarification routing, new iterations)
+        # within a single goal run. This catches the ``mode=parallel`` path
+        # where _execute_parallel_waves does not have its own while-True loop.
+        max_redispatch = self._max_redispatch()
+        tripped: list[StepAction] = []
+        for s in ready_steps:
+            count = state.step_dispatch_counts.get(s.id, 0) + 1
+            state.step_dispatch_counts[s.id] = count
+            if count > max_redispatch:
+                logger.error(
+                    "[Execute] step %s re-dispatched %d times without "
+                    "completion; tripping circuit breaker (max=%d)",
+                    s.id,
+                    count - 1,
+                    max_redispatch,
+                )
+                tripped.append(s)
+        for s in tripped:
+            yield StepExecutionRecord(
+                step_id=s.id,
+                success=False,
+                outcome={
+                    "type": "error",
+                    "error": (
+                        f"Step re-dispatched {state.step_dispatch_counts[s.id] - 1} times "
+                        "without progress (circuit breaker)"
+                    ),
+                },
+                error=(
+                    f"Step re-dispatched {state.step_dispatch_counts[s.id] - 1} times "
+                    "without progress (circuit breaker)"
+                ),
+                error_type="fatal",
+                duration_ms=0,
+                thread_id=state.thread_id,
+            )
+        ready_steps = [s for s in ready_steps if s not in tripped]
+        if not ready_steps:
+            return
+
         max_parallel_tools = self._max_parallel_tools_limit()
 
         has_dependency_edges = any(step.dependencies for step in decision.steps)
@@ -1970,9 +2053,51 @@ class Executor:
         local_done = set(state.dependency_completion_ids())
         failed_sticky: set[str] = set()
         queued_emitted: set[str] = set()
+        max_redispatch = self._max_redispatch()
 
         while True:
             ready_all = decision.get_ready_steps(local_done)
+            ready = [s for s in ready_all if s.id not in failed_sticky]
+            if not ready:
+                break
+            # Circuit breaker: fail steps re-dispatched too many times without
+            # completion. This prevents infinite re-dispatch loops when a step
+            # "completes" but doesn't produce real progress (e.g. model failure
+            # with blocked API key → empty output → DAG re-dispatches).
+            tripped: list[StepAction] = []
+            for s in ready:
+                count = state.step_dispatch_counts.get(s.id, 0) + 1
+                state.step_dispatch_counts[s.id] = count
+                if count > max_redispatch:
+                    logger.error(
+                        "[Execute] step %s re-dispatched %d times without "
+                        "completion; tripping circuit breaker (max=%d)",
+                        s.id,
+                        count - 1,
+                        max_redispatch,
+                    )
+                    failed_sticky.add(s.id)
+                    tripped.append(s)
+            for s in tripped:
+                result = StepExecutionRecord(
+                    step_id=s.id,
+                    success=False,
+                    outcome={
+                        "type": "error",
+                        "error": (
+                            f"Step re-dispatched {state.step_dispatch_counts[s.id] - 1} times "
+                            "without progress (circuit breaker)"
+                        ),
+                    },
+                    error=(
+                        f"Step re-dispatched {state.step_dispatch_counts[s.id] - 1} times "
+                        "without progress (circuit breaker)"
+                    ),
+                    error_type="fatal",
+                    duration_ms=0,
+                    thread_id=state.thread_id,
+                )
+                yield result
             ready = [s for s in ready_all if s.id not in failed_sticky]
             if not ready:
                 break
@@ -2431,22 +2556,71 @@ class Executor:
                 )
                 primary_outcome["step_close_report"] = close_report.model_dump()
 
-            # Step success: fail only when every tool call errored; otherwise a step
-            # may recover from individual tool failures and still finish. A captured
-            # ask_user interrupt means the step is awaiting the user, not failed.
+            # Step success: fail when every tool call errored OR the step produced
+            # no meaningful output (model failure / blocked API key → empty stream).
+            # A captured ask_user interrupt means the step is awaiting the user,
+            # not failed — the empty-output guard does not apply in that case
+            # because the step resumes after the user answers.
             all_tools_failed = all_tool_outcomes_failed(stream_outcomes)
-            step_success = not all_tools_failed or captured_clarification
+            # Detect model-failure pattern: no tools called, no messages, no
+            # meaningful text output. This catches the case where
+            # MultiModelChatModel raised RuntimeError("all models in pool
+            # failed") and LangGraph swallowed it as an empty stream.
+            _min_output_chars = self._execute_min_answer_chars() if self._config else 50
+            has_meaningful_output = (
+                main_tool_call_count > 0
+                or bool(messages)
+                or len(output.strip()) >= _min_output_chars
+            )
+            # When there are zero tool outcomes, all_tools_failed is True
+            # (by design — nothing succeeded). But a text-only response with
+            # meaningful content is still a valid step completion (the model
+            # answered directly without tools). Only fail when there's no
+            # meaningful output at all.
+            if not stream_outcomes and has_meaningful_output:
+                all_tools_failed = False
+            step_success = (not all_tools_failed or captured_clarification) and (
+                captured_clarification or has_meaningful_output
+            )
             step_error: str | None = None
             step_error_type: (
                 Literal["execution", "tool", "timeout", "policy", "unknown", "fatal"] | None
             ) = None
-            if all_tools_failed and not captured_clarification:
+            if not step_success and not captured_clarification and not stream_outcomes:
+                # Empty-outcome failure: the model produced no tool calls and
+                # no meaningful output. This is a model failure (e.g. blocked
+                # API key → RuntimeError swallowed by LangGraph → empty stream),
+                # not a tool failure.
+                step_error = "Step produced no output or tool calls (possible model failure)"
+                step_error_type = "execution"
+                logger.warning(
+                    "Step %s failed: no meaningful output (main_tools=%d, "
+                    "output_len=%d, messages=%d) in %dms — model may have failed",
+                    step.id,
+                    main_tool_call_count,
+                    len(output),
+                    len(messages),
+                    duration_ms,
+                )
+            elif all_tools_failed and not captured_clarification:
                 step_error = _first_tool_error_message(stream_outcomes) or "All tool calls failed"
                 step_error_type = "tool"
                 logger.warning(
                     "Step %s failed: all %d tool call(s) returned errors in %dms",
                     step.id,
                     len(stream_outcomes),
+                    duration_ms,
+                )
+            elif not step_success and not captured_clarification:
+                step_error = "Step produced no output or tool calls (possible model failure)"
+                step_error_type = "execution"
+                logger.warning(
+                    "Step %s failed: no meaningful output (main_tools=%d, "
+                    "output_len=%d, messages=%d) in %dms — model may have failed",
+                    step.id,
+                    main_tool_call_count,
+                    len(output),
+                    len(messages),
                     duration_ms,
                 )
             elif all_tools_failed and captured_clarification:
@@ -2517,6 +2691,58 @@ class Executor:
                             step.id,
                             len(final_ai_text),
                         )
+
+            # Consecutive-empty-completion watchdog: track steps that "complete"
+            # with zero tools and minimal output. After N consecutive empties,
+            # force-fail the step. This catches model-failure loops where each
+            # invocation produces a few truncated tokens (e.g. blocked API key
+            # → RuntimeError swallowed by LangGraph → empty stream) but the step
+            # is marked success=True because no tool *failed* (none were called).
+            if (
+                loop_state is not None
+                and not captured_clarification
+                and step_success
+                and main_tool_call_count == 0
+                and len(output.strip()) < self._EMPTY_OUTPUT_MIN_CHARS
+            ):
+                empty_count = loop_state.step_consecutive_empty.get(step.id, 0) + 1
+                loop_state.step_consecutive_empty[step.id] = empty_count
+                max_empty = self._max_consecutive_empty()
+                if empty_count >= max_empty:
+                    logger.error(
+                        "[Execute] step %s completed with no tools and minimal "
+                        "output %d consecutive times; force-failing (max=%d)",
+                        step.id,
+                        empty_count,
+                        max_empty,
+                    )
+                    step_success = False
+                    step_error = (
+                        f"Step produced no meaningful output or tool calls "
+                        f"in {empty_count} consecutive completions (watchdog)"
+                    )
+                    step_error_type = "fatal"
+                    primary_outcome["watchdog"] = {
+                        "type": "consecutive_empty_completion",
+                        "count": empty_count,
+                    }
+                else:
+                    logger.warning(
+                        "[Execute] step %s completed with no tools and minimal "
+                        "output (%d/%d consecutive empties)",
+                        step.id,
+                        empty_count,
+                        max_empty,
+                    )
+            elif (
+                loop_state is not None
+                and step_success
+                and (
+                    main_tool_call_count > 0 or len(output.strip()) >= self._EMPTY_OUTPUT_MIN_CHARS
+                )
+            ):
+                # Reset counter on a meaningful completion.
+                loop_state.step_consecutive_empty.pop(step.id, None)
 
             return _ExecuteStepResult(
                 events=events,

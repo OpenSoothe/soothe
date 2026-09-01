@@ -15,10 +15,17 @@ def executor() -> Executor:
     return Executor(object(), config=SootheConfig())
 
 
-def test_all_tool_outcomes_failed_requires_nonempty_outcomes() -> None:
-    assert all_tool_outcomes_failed([]) is False
+def test_all_tool_outcomes_failed_empty_means_all_failed() -> None:
+    """Empty outcomes means no tool succeeded — treat as failure.
+
+    This prevents model-failure (e.g. blocked API key → RuntimeError
+    swallowed by LangGraph → empty stream) from being marked as a
+    successful step with zero tool calls.
+    """
+    assert all_tool_outcomes_failed([]) is True
     assert all_tool_outcomes_failed([{"has_error": True}]) is True
     assert all_tool_outcomes_failed([{"has_error": True}, {"has_error": False}]) is False
+    assert all_tool_outcomes_failed([{"has_error": False}]) is False
 
 
 def test_wave_metrics_ignore_recoverable_tool_errors_on_successful_steps(

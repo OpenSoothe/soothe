@@ -26,10 +26,20 @@ async def _empty_agent_stream() -> AsyncIterator[Any]:
         yield None
 
 
+async def _content_agent_stream() -> AsyncIterator[Any]:
+    """Stream that produces a valid AIMessage — simulates a successful model call."""
+    yield (
+        (),
+        "messages",
+        (AIMessage(content="Step completed successfully with results."), {}),
+    )
+
+
 def _make_mock_agent() -> MagicMock:
     mock_agent = MagicMock()
     # execution_astream is sync and returns an async iterator — not awaitable.
-    mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_agent_stream())
+    # Produces a valid AIMessage so the step has meaningful output (success=True).
+    mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _content_agent_stream())
     mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())
     mock_agent.aget_state = AsyncMock(return_value=MagicMock())
     return mock_agent

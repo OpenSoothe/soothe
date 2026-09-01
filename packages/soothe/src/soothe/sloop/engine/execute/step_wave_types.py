@@ -156,9 +156,17 @@ class _ParallelStepDone:
 
 
 def all_tool_outcomes_failed(outcomes: list[dict[str, Any]]) -> bool:
-    """Return True when every recorded tool outcome in a step reported an error."""
+    """Return True when no tool outcome succeeded.
+
+    An empty outcome list means the step produced zero tool calls — the model
+    either failed before emitting any tool call or produced only text. In both
+    cases nothing succeeded, so this returns ``True``. This prevents a
+    model-failure (e.g. blocked API key → ``RuntimeError("all models in pool
+    failed")``) from being swallowed as a successful empty step that the DAG
+    re-dispatches indefinitely.
+    """
     if not outcomes:
-        return False
+        return True
     return all(bool(o.get("has_error")) for o in outcomes)
 
 

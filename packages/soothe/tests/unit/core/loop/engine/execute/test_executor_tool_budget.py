@@ -203,3 +203,149 @@ async def test_stream_collect_no_progress_watchdog_raises_timeout() -> None:
             step_id="s_watchdog",
         ):
             pass
+
+
+@pytest.mark.asyncio
+async def test_empty_stream_step_marks_failure_not_success() -> None:
+    """A step that produces no chunks (model failure) must not be success=True.
+
+    When MultiModelChatModel raises RuntimeError('all models in pool failed')
+    and LangGraph swallows it, the stream ends with no chunks. The step must
+    be marked failed, not 'completed successfully' — otherwise the DAG
+    re-dispatches it indefinitely.
+    """
+
+    async def empty_stream():
+        return
+        yield  # make this a generator
+
+    agent = _make_mock_agent([])
+    ce = _make_ce()
+    ex = Executor(agent, max_parallel_steps=1, config=None, context_engine=ce)
+    state = LoopState(goal="g", thread_id="t", max_iterations=3)
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+    step = _make_step()
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+    out = [item async for item in ex.execute(decision, state)]
+    results = [x for x in out if isinstance(x, StepExecutionRecord)]
+    assert len(results) == 1
+    sr = results[0]
+    assert sr.success is False
+    assert sr.error_type == "execution"
+    assert "no output" in (sr.error or "").lower() or "model failure" in (sr.error or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_redispatch_circuit_breaker_trips_after_max() -> None:
+    """The re-dispatch counter must trip after max_redispatch dispatches.
+
+    The counter persists on LoopState across graph re-entries. After
+    max_redispatch dispatches, the step is force-failed with error_type=fatal.
+    """
+    config = MagicMock()
+    config.agent.loop.max_redispatch_per_step = 2
+    config.agent.loop.context_window_limit = 100000
+    config.agent.loop.execute_min_answer_chars = 50
+
+    agent = _make_mock_agent([])
+    ce = _make_ce()
+    ex = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    state = LoopState(goal="g", thread_id="t", max_iterations=3)
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+    step = _make_step()
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+    # First dispatch: step fails (empty output), counter = 1
+    out1 = [item async for item in ex.execute(decision, state)]
+    results1 = [x for x in out1 if isinstance(x, StepExecutionRecord)]
+    assert len(results1) == 1
+    assert results1[0].success is False
+
+    # Simulate graph re-entry: new Executor, same state
+    ex2 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    out2 = [item async for item in ex2.execute(decision, state)]
+    results2 = [x for x in out2 if isinstance(x, StepExecutionRecord)]
+    # Counter = 2 → still under limit (max=2), step is dispatched and fails again
+    assert len(results2) == 1
+    assert results2[0].success is False
+
+    # Third dispatch: counter = 3 > max=2 → circuit breaker trips
+    ex3 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    out3 = [item async for item in ex3.execute(decision, state)]
+    results3 = [x for x in out3 if isinstance(x, StepExecutionRecord)]
+    assert len(results3) == 1
+    assert results3[0].success is False
+    assert results3[0].error_type == "fatal"
+    assert "circuit breaker" in (results3[0].error or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_consecutive_empty_completion_watchdog_force_fails() -> None:
+    """After N consecutive empty completions, the watchdog force-fails the step.
+
+    This catches model-failure loops where the model produces a few truncated
+    tokens (not enough for meaningful output) but no tool calls, and the step
+    is marked success=True because no tool *failed*.
+    """
+    from langchain_core.messages import AIMessageChunk
+
+    config = MagicMock()
+    config.agent.loop.max_consecutive_empty_completions = 2
+    config.agent.loop.execute_min_answer_chars = 50
+    config.agent.loop.context_window_limit = 100000
+    config.agent.loop.max_redispatch_per_step = 99  # don't trip re-dispatch breaker
+
+    # Stream that produces a short chunk (20-49 chars) with 0 tool calls.
+    # This passes the has_meaningful_output guard (output >= min_answer_chars=20)
+    # but the consecutive-empty watchdog catches the repeated no-progress pattern
+    # (output < _EMPTY_OUTPUT_MIN_CHARS=50, main_tools=0).
+    tiny_chunk = (
+        (),
+        "messages",
+        (AIMessageChunk(content="Let me verify the current state."), {}),
+    )
+
+    agent = _make_mock_agent([tiny_chunk])
+    ce = _make_ce()
+    state = LoopState(goal="g", thread_id="t", max_iterations=3)
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+    step = _make_step()
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+
+    # First dispatch: empty completion count = 1 (under threshold)
+    ex1 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    out1 = [item async for item in ex1.execute(decision, state)]
+    r1 = [x for x in out1 if isinstance(x, StepExecutionRecord)]
+    assert len(r1) == 1
+    # First time might be failure (empty output guard) or success (if output >= threshold)
+    # but the consecutive-empty counter should be tracking
+
+    # Second dispatch: empty completion count = 2 → force-fail
+    ex2 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    out2 = [item async for item in ex2.execute(decision, state)]
+    r2 = [x for x in out2 if isinstance(x, StepExecutionRecord)]
+    assert len(r2) == 1
+    # After 2 consecutive empties, the watchdog force-fails
+    assert r2[0].success is False
+    assert r2[0].error_type == "fatal"
+    assert "consecutive" in (r2[0].error or "").lower()
