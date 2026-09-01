@@ -55,7 +55,7 @@ tools:
       - duckduckgo
       - bing
   http_requests:
-    allow_dangerous_requests: false  # SEC: opt-in; prevents SSRF/arbitrary POST
+    allow_dangerous_requests: false
   deepxiv:
     token: "${DEEPXIV_API_KEY}"
 
