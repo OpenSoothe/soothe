@@ -86,7 +86,7 @@ services:
       # ~/.soothe so prod state survives `make reset-the-world` and vice-versa.
       - ${HOME}/.soothe-prod:/var/lib/soothe
       # Agent config: repo-tracked, read-only on top of the workdir.
-      - ./nano.yml:/var/lib/soothe/config/nano.yml:ro
+      - ../config/production/nano.yml:/var/lib/soothe/config/nano.yml:ro
       # Client workspaces: expose host project dirs to the container (path
       # translation via SOOTHE_WORKSPACE_HOST_ROOT in nano.yml). Separate
       # from daemon state.

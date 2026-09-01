@@ -53,7 +53,7 @@ All services bound to localhost only. PostgreSQL uses default credentials (postg
 
 ## Config
 
-`nano.yml` uses OpenAI-Custom/Coding-Plan providers with `${ENV_VAR}` substitution.
+`nano.yml` (in `config/production/`) uses OpenAI-Custom/Coding-Plan providers with `${ENV_VAR}` substitution.
 
 ## Security
 

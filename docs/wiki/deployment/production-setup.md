@@ -421,7 +421,7 @@ services:
 
 ### Configuration Mapping
 
-`deploy/nano.yml` resolves `host_root` from the same env var Compose injects (default `$HOME`):
+`config/production/nano.yml` resolves `host_root` from the same env var Compose injects (default `$HOME`):
 
 ```yaml
 workspace_mount:

@@ -1,6 +1,6 @@
 # Soothe Production Environment Variables
 # DashScope wired into the OpenAI-compatible env vars consumed by
-# deploy/docker-compose.yml and deploy/nano.yml.
+# deploy/docker-compose.yml and config/production/nano.yml.
 # Values come from the host shell environment (export before running).
 
 OPENAI_BASE_URL=${DASHSCOPE_BASE_URL}
