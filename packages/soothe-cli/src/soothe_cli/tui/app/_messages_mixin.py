@@ -983,7 +983,7 @@ class _MessagesMixin:
         """Shift+Tab: navigate loop selector when active, otherwise cycle mode.
 
         - In the LoopSelectorScreen, defer to its filter navigation.
-        - On the main screen, cycle composer mode Auto → Manual → Plan → Ask.
+        - On the main screen, cycle composer mode Auto → Bypass → Manual → Plan → Ask.
         """
         from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
@@ -995,7 +995,7 @@ class _MessagesMixin:
     def cycle_composer_mode(self) -> None:
         """Advance composer mode and refresh the status-bar badge.
 
-        Cycle: Auto → Manual → Bypass → Plan → Ask → Auto. When a goal is
+        Cycle: Auto → Bypass → Manual → Plan → Ask → Auto. When a goal is
         running and the new mode is Auto or Manual, hot-swaps the daemon's
         live clarification policy via `loop_set_clarification_mode`.
         """

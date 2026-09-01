@@ -233,6 +233,20 @@ class CognitionStepMessage(Vertical):
             return "[Ask] "
         return ""
 
+    @property
+    def _suppress_execute_prose(self) -> bool:
+        """True when the step's execute prose should not render in the detail panel.
+
+        In plan mode, the agent's final message IS the plan document. The plan
+        review card (StructuredAskUserWidget with origin ``plan_mode_review``)
+        already renders the full plan body (formatted, collapsible). Showing the
+        raw plan markdown again on the step card is redundant — especially after a
+        refinement, where the old step card would display the *original* plan
+        alongside the *refined* plan review card. Suppress the prose so only the
+        review card shows the plan content.
+        """
+        return self._interaction_mode == "plan"
+
     def set_description(self, description: str) -> None:
         """Update the step title (full plan/execute brief, no abbreviation)."""
         text = (description or "").strip() or "(step)"
@@ -487,7 +501,7 @@ class CognitionStepMessage(Vertical):
                 suffix=tool_part,
             )
             prose = (self._last_completed_execute_prose or "").strip()
-            if prose:
+            if prose and not self._suppress_execute_prose:
                 self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
                 self._detail_widget.display = True
             elif self._has_clarification_details:
@@ -1445,8 +1459,12 @@ class CognitionStepMessage(Vertical):
                 suffix=f"{tool_part}{token_suffix}",
             )
             self._sync_step_card_surface()
-            if prose:
+            if prose and not self._suppress_execute_prose:
                 self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
+            elif self._detail_widget is not None:
+                # Clear stale running-display content (e.g. plan markdown in
+                # plan mode) so the detail panel is empty when collapsed.
+                self._detail_widget.update("")
             self._auto_collapse_on_terminal()
             return
 

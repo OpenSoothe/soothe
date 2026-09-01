@@ -36,25 +36,25 @@ class _ExecutionHarness(_ExecutionMixin):
         self._daemon_config = daemon_config or object()
 
 
-def test_cycle_auto_to_manual() -> None:
-    """First press takes the user from Auto to Manual."""
+def test_cycle_auto_to_bypass() -> None:
+    """First press takes the user from Auto to Bypass."""
     app = _AppHarness(initial="auto")
-    app.cycle_composer_mode()
-    assert app._composer_mode == "manual"
-    assert app._status_bar.last_mode == "manual"
-
-
-def test_cycle_manual_to_bypass() -> None:
-    """Second press advances Manual to Bypass (agent sub-modes grouped)."""
-    app = _AppHarness(initial="manual")
     app.cycle_composer_mode()
     assert app._composer_mode == "bypass"
     assert app._status_bar.last_mode == "bypass"
 
 
-def test_cycle_bypass_to_plan() -> None:
-    """Third press advances Bypass to Plan (exits agent sub-modes)."""
+def test_cycle_bypass_to_manual() -> None:
+    """Second press advances Bypass to Manual (agent sub-modes grouped)."""
     app = _AppHarness(initial="bypass")
+    app.cycle_composer_mode()
+    assert app._composer_mode == "manual"
+    assert app._status_bar.last_mode == "manual"
+
+
+def test_cycle_manual_to_plan() -> None:
+    """Third press advances Manual to Plan (exits agent sub-modes)."""
+    app = _AppHarness(initial="manual")
     app.cycle_composer_mode()
     assert app._composer_mode == "plan"
     assert app._status_bar.last_mode == "plan"
@@ -93,7 +93,7 @@ def test_cycle_tolerates_missing_status_bar() -> None:
     app = _AppHarness(initial="auto")
     app._status_bar = None
     app.cycle_composer_mode()
-    assert app._composer_mode == "manual"
+    assert app._composer_mode == "bypass"
 
 
 def test_cycle_treats_unknown_initial_value_as_auto() -> None:
@@ -102,7 +102,7 @@ def test_cycle_treats_unknown_initial_value_as_auto() -> None:
     app.cycle_composer_mode()
     assert app._composer_mode == "auto"
     app.cycle_composer_mode()
-    assert app._composer_mode == "manual"
+    assert app._composer_mode == "bypass"
 
 
 def test_shift_tab_action_cycles_mode() -> None:
@@ -113,7 +113,7 @@ def test_shift_tab_action_cycles_mode() -> None:
     # stubbing screen as a non-selector object.
     app.screen = object()  # type: ignore[attr-defined]
     app.action_shift_tab()
-    assert app._composer_mode == "manual"
+    assert app._composer_mode == "bypass"
 
 
 def test_plan_approval_uses_daemon_default_manual() -> None:

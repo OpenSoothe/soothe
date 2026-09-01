@@ -1,7 +1,7 @@
 """TUI composer modes — working-mode hierarchy.
 
-Agent sub-modes (auto, manual, bypass) grouped first, then plan and ask.
-Shift+Tab cycle: Auto → Manual → Bypass → Plan → Ask → Auto.
+Agent sub-modes (auto, bypass, manual) grouped first, then plan and ask.
+Shift+Tab cycle: Auto → Bypass → Manual → Plan → Ask → Auto.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ COMPOSER_MODE_BYPASS = "bypass"
 # Agent sub-modes grouped first, then standalone working modes.
 COMPOSER_MODE_ORDER: tuple[str, ...] = (
     COMPOSER_MODE_AUTO,
-    COMPOSER_MODE_MANUAL,
     COMPOSER_MODE_BYPASS,
+    COMPOSER_MODE_MANUAL,
     COMPOSER_MODE_PLAN,
     COMPOSER_MODE_ASK,
 )

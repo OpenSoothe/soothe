@@ -77,8 +77,8 @@ class ModelLabel(Widget):
 class ClarificationModeBadge(Static):
     """Active composer-mode badge. Shows `⏵⏵ <label> (shift+Tab to cycle)`.
 
-    Each mode uses a distinct foreground color: Manual dim, Auto green,
-    Bypass warning bold, Plan teal, Ask blue.
+    Each mode uses a distinct foreground color: Auto green, Bypass amber,
+    Manual purple, Plan accent teal, Ask primary blue.
     """
 
     DEFAULT_CSS = """
@@ -90,9 +90,16 @@ class ClarificationModeBadge(Static):
         color: $success;
     }
 
+    ClarificationModeBadge.auto {
+        color: $success;
+    }
+
+    ClarificationModeBadge.bypass {
+        color: $warning;
+    }
+
     ClarificationModeBadge.manual {
-        color: $text-muted;
-        text-style: dim;
+        color: $secondary;
     }
 
     ClarificationModeBadge.plan {
@@ -102,17 +109,12 @@ class ClarificationModeBadge(Static):
     ClarificationModeBadge.ask {
         color: $primary;
     }
-
-    ClarificationModeBadge.bypass {
-        color: $warning;
-        text-style: bold;
-    }
     """
 
     _MODE_LABELS: dict[str, str] = {
         "auto": "agent · auto",
-        "manual": "agent · manual",
         "bypass": "agent · bypass",
+        "manual": "agent · manual",
         "plan": "plan",
         "ask": "ask",
     }
@@ -463,5 +465,5 @@ class StatusBar(Horizontal):
         badge.mode = normalize_composer_mode(mode)
 
     def set_clarification_mode(self, mode: str) -> None:
-        """Set the active composer mode (`auto`, `manual`, `plan`, or `ask`)."""
+        """Set the active composer mode (`auto`, `bypass`, `manual`, `plan`, or `ask`)."""
         self.clarification_mode = normalize_composer_mode(mode)

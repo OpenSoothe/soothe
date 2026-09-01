@@ -38,9 +38,9 @@ def test_normalize_composer_mode(raw: str | None, expected: str) -> None:
 @pytest.mark.parametrize(
     ("current", "expected"),
     [
-        ("auto", "manual"),
-        ("manual", "bypass"),
-        ("bypass", "plan"),
+        ("auto", "bypass"),
+        ("bypass", "manual"),
+        ("manual", "plan"),
         ("plan", "ask"),
         ("ask", "auto"),
         ("garbage", "auto"),
