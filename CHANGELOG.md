@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- MinIO object storage to the dev docker-compose stack (default profile), providing a local S3-compatible endpoint for the fsspec workspace sync backend (`s3://soothe/...`); the `soothe` bucket is provisioned automatically by a `soothe-minio-init` sidecar. S3 API on host port 19100, console on host port 19101 (avoids port conflict with triarch's MinIO on 19000).
+- `workspace_sync` section in the dev `nano.yml` config, wiring the fsspec workspace sync backend to the dev MinIO S3 endpoint (`s3://soothe/` bucket, endpoint `http://127.0.0.1:${SOOTHE_MINIO_PORT:-19100}`, credentials via `SOOTHE_MINIO_ROOT_USER` / `SOOTHE_MINIO_ROOT_PASSWORD` env vars).
+- `scripts/dev_workspace_sync_backup.py` — dev utility that constructs the S3 backend via `construct_sync_backend`, writes agent output files, creates a SNAPSHOT checkpoint (CAS blobs + manifest + checkpoint payload), publishes artifacts, and verifies the snapshot landed in MinIO S3.
 - PostgreSQL-backed `WorkspaceStateStore` for workspace sync, completing the unified persistence backend (PostgreSQL mode now uses the `soothe_metadata` database for workspace file/blob/checkpoint/artifact state, consistent with cron and display card stores).
 
 ### Changed

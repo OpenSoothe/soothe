@@ -15,7 +15,7 @@
 # Uses .venv managed by uv for development.
 
 .PHONY: help setup sync sync-no-cache sync-verify
-.PHONY: docker-dev-up docker-dev-down docker-dev-ps
+.PHONY: docker-dev-pull docker-dev-up docker-dev-down docker-dev-ps
 .PHONY: docker-prod-pull docker-prod-up docker-prod-down docker-prod-ps
 
 # Production stack only (deploy/docker-compose.yml needs API keys from deploy/.env)
@@ -60,7 +60,8 @@ help:
 	@echo "  make sync-no-cache   - Sync with --no-cache --refresh (clean cache)"
 	@echo ""
 	@echo "Docker (Dev):"
-	@echo "  make docker-dev-up    - Start dev dependencies (pgvector + Langfuse)"
+	@echo "  make docker-dev-pull  - Pull dev images (pgvector + MinIO + Langfuse)"
+	@echo "  make docker-dev-up    - Start dev dependencies (pgvector + MinIO + Langfuse)"
 	@echo "  make docker-dev-down  - Stop dev dependencies"
 	@echo "  make docker-dev-ps    - Show dev containers status"
 	@echo ""
@@ -134,20 +135,27 @@ sync-verify:
 # ============================================================================
 #
 # Profiles in docker-compose.yml:
-#   - default:    Dev dependencies (soothe-pgvector)
+#   - default:    Dev dependencies (soothe-pgvector + soothe-minio)
 #   - langfuse:   Langfuse v3 observability stack
 #
 # Quick reference:
 #   Dev stack (deps + Langfuse): make docker-dev-up
 #   Production stack:           cp deploy/env-example deploy/.env && make docker-prod-up
 
-# --- Dev Dependencies (pgvector + Langfuse by default) ---------------------
+# --- Dev Dependencies (pgvector + MinIO + Langfuse by default) ----------------
+
+docker-dev-pull:
+	@echo "Pulling dev images (pgvector + MinIO + Langfuse)..."
+	docker compose --profile langfuse pull
+	@echo "Pull complete"
 
 docker-dev-up:
-	@echo "Starting dev dependencies (pgvector + Langfuse)..."
+	@echo "Starting dev dependencies (pgvector + MinIO + Langfuse)..."
 	docker compose --profile langfuse up -d
 	@echo ""
 	@echo "Dev database: port 6432"
+	@echo "MinIO S3 API: http://localhost:19100  (bucket: soothe)"
+	@echo "MinIO console: http://localhost:19101"
 	@echo "Langfuse UI: http://localhost:3300"
 	@echo "Sign-in: dev@soothe.local / SootheLangfuseLocalDev1"
 

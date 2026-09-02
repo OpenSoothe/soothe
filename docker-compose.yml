@@ -2,7 +2,7 @@
 # RFC-612: Multi-database PostgreSQL architecture
 #
 # Profiles:
-#   - default:    Dev dependencies (soothe-pgvector)
+#   - default:    Dev dependencies (soothe-pgvector + soothe-minio)
 #   - langfuse:   Langfuse v3 observability stack (optional)
 #
 # Usage:
@@ -15,6 +15,13 @@
 #
 # Production daemon stack: See deploy/docker-compose.yml and deploy/README.md
 #
+# Default-profile services:
+#   soothe-pgvector — PostgreSQL 17 + pgvector (dev DB on port 6432)
+#   soothe-minio    — S3-compatible object store for the fsspec workspace
+#                     sync backend (s3://soothe/...). S3 API on host port 19100,
+#                     console on host port 19101 (avoids triarch's port 19000).
+#                     Buckets provisioned by
+#                     soothe-minio-init (creates `soothe`).
 # Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) requires --profile langfuse.
 # UI (browser): http://localhost:3300
 # Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector
@@ -28,6 +35,10 @@
 #
 # Environment variables:
 #   POSTGRES_PASSWORD=...            # PostgreSQL password (dev default: postgres)
+#   SOOTHE_MINIO_ROOT_USER=...       # MinIO root user (dev default: soothe)
+#   SOOTHE_MINIO_ROOT_PASSWORD=...   # MinIO root password (dev default: soothe@minio)
+#   SOOTHE_MINIO_PORT=...            # MinIO S3 API host port (dev default: 19100)
+#   SOOTHE_MINIO_CONSOLE_PORT=...    # MinIO console host port (dev default: 19101)
 #   LANGFUSE_INIT_*                  # Optional Langfuse headless-init overrides
 
 services:
@@ -75,6 +86,60 @@ services:
       options:
         max-size: "100m"
         max-file: "3"
+
+  # --- MinIO (default profile — workspace sync object storage) ---
+  # Local S3-compatible object store for the fsspec workspace sync backend
+  # (s3://soothe/...). Mirrors the triarch dev MinIO pattern. Always starts
+  # with the default profile; not gated behind --profile langfuse.
+  # S3 API (host): http://localhost:19100  Console: http://localhost:19101
+  soothe-minio:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/minio:RELEASE.2025-05-24T17-08-30Z
+    restart: unless-stopped
+    command: server /data --address :19000 --console-address :19001
+    environment:
+      MINIO_ROOT_USER: ${SOOTHE_MINIO_ROOT_USER:-soothe}
+      MINIO_ROOT_PASSWORD: ${SOOTHE_MINIO_ROOT_PASSWORD:-soothe@minio}
+    networks:
+      - soothe-db
+    ports:
+      - target: 19000
+        published: ${SOOTHE_MINIO_PORT:-19100}
+        host_ip: ${SOOTHE_MINIO_BIND_IP:-0.0.0.0}
+      - target: 19001
+        published: ${SOOTHE_MINIO_CONSOLE_PORT:-19101}
+        host_ip: ${SOOTHE_MINIO_BIND_IP:-0.0.0.0}
+    volumes:
+      - soothe_minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:19000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  soothe-minio-init:
+    image: registry.cn-hangzhou.aliyuncs.com/lacogito/minio-mc:latest
+    restart: "no"
+    depends_on:
+      soothe-minio:
+        condition: service_healthy
+    networks:
+      - soothe-db
+    environment:
+      MINIO_HOST: http://soothe-minio:19000
+      MINIO_ROOT_USER: ${SOOTHE_MINIO_ROOT_USER:-soothe}
+      MINIO_ROOT_PASSWORD: ${SOOTHE_MINIO_ROOT_PASSWORD:-soothe@minio}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        set -e;
+        mc alias set --insecure local http://soothe-minio:19000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD";
+        mc mb --ignore-existing local/soothe
 
   # --- Langfuse v3 — shares soothe-pgvector (langfuse DB via config/develop/init-langfuse-db.sql) ---
   langfuse-clickhouse:
@@ -273,6 +338,8 @@ networks:
 volumes:
   soothe_postgres_data:
     name: soothe_postgres_data
+  soothe_minio_data:
+    name: soothe_minio_data
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
   langfuse_minio_data:

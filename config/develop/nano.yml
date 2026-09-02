@@ -311,6 +311,22 @@ persistence:
     pool_max_idle_seconds: 90
     pool_max_lifetime_seconds: 900
 
+# Workspace sync — durable object-store backend for agent workspace
+# materialization, checkpointing, and artifact publication (RFC-906).
+# Dev MinIO: s3://soothe/ bucket on the soothe-minio container (default
+# profile). S3 API on host port ${SOOTHE_MINIO_PORT:-19100}; console on
+# ${SOOTHE_MINIO_CONSOLE_PORT:-19101}. Credentials via env vars below.
+# The construct_sync_backend factory passes endpoint_url/key/secret to
+# fsspec's s3fs; client_kwargs.endpoint_url is the boto3-style override
+# that s3fs maps to the S3 endpoint.
+workspace_sync:
+  source_uri: "s3://soothe/"
+  storage_options:
+    endpoint_url: "http://127.0.0.1:${SOOTHE_MINIO_PORT:-19100}"
+    key: "${SOOTHE_MINIO_ROOT_USER:-soothe}"
+    secret: "${SOOTHE_MINIO_ROOT_PASSWORD:-soothe@minio}"
+    anon: false
+
 observability:
   log_file_level: DEBUG
   langfuse:
