@@ -73,23 +73,33 @@ class LoopRunnerFactory:
         elif mode == "firecracker":
             import os
             import shutil
+            import sys
+
+            if sys.platform != "linux":
+                raise RuntimeError(
+                    f"Firecracker runner officially supports Linux only "
+                    f"(current platform: {sys.platform}). AF_VSOCK and the "
+                    "firecracker binary require a Linux host with KVM. "
+                    "Use 'thread_pool' or 'process_pool' on non-Linux hosts."
+                )
 
             fc = daemon_config.loop_runner.firecracker
             binary = fc.firecracker_binary_path
             if not (shutil.which(binary) or os.path.isfile(binary)):
                 raise FileNotFoundError(
                     f"Firecracker binary not found: {binary}. "
-                    "Install firecracker and set firecracker.firecracker_binary_path."
+                    "Install firecracker and set "
+                    "loop_runner.firecracker.firecracker_binary_path."
                 )
             if fc.kernel_image_path and not os.path.isfile(fc.kernel_image_path):
                 raise FileNotFoundError(
                     f"Kernel image not found: {fc.kernel_image_path}. "
-                    "Set firecracker.kernel_image_path."
+                    "Set loop_runner.firecracker.kernel_image_path."
                 )
             if fc.rootfs_image_path and not os.path.isfile(fc.rootfs_image_path):
                 raise FileNotFoundError(
                     f"Rootfs image not found: {fc.rootfs_image_path}. "
-                    "Set firecracker.rootfs_image_path."
+                    "Set loop_runner.firecracker.rootfs_image_path."
                 )
             logger.info(
                 "LoopRunnerFactory: firecracker mode (min=%d, max=%d microVMs, cpu=%d, mem=%dMiB)",

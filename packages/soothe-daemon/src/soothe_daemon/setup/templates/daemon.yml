@@ -91,7 +91,7 @@ memory_profiling:
 #   thread_pool:     Lightweight async, fast startup (DEFAULT)
 #   process_pool:    Process-based isolation (subprocess spawn, ~8s overhead)
 #   ray:             Ray cluster for horizontal scaling
-#   firecracker:     Firecracker microVM isolation (strongest isolation, Linux-only)
+#   firecracker:     Firecracker microVM isolation (strongest isolation, Linux ONLY)
 loop_runner:
   runner_mode: thread_pool
 
@@ -132,10 +132,8 @@ loop_runner:
     actor_lifetime: detached
     log_to_driver: true
 
-  # Firecracker — microVM isolation (RFC-221). Linux-only at runtime.
-  # Requires: firecracker binary, kernel image (vmlinux), rootfs image (ext4).
-  # The module is import-safe on non-Linux; fails fast when instantiated on macOS/Windows.
-  # Identity service is incompatible (subprocess/VM spawn cannot propagate IdentityService).
+  # Firecracker — microVM isolation (RFC-221).
+  # OFFICIALLY SUPPORTED ON LINUX ONLY.
   firecracker:
     firecracker_binary_path: firecracker  # PATH lookup or absolute path
     kernel_image_path: ""                   # e.g. /var/lib/soothe/vmlinux

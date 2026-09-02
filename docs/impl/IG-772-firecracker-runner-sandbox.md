@@ -157,8 +157,11 @@ All tests are mock-based — no real microVMs or vsock required.
 - `firecracker.enabled` defaults to `False`; default config still selects
   `thread_pool`. No behavioral change to existing runners.
 - No DAG boundary change: all new code in `soothe-daemon`.
-- The `firecracker_runner` module is import-safe on non-Linux (only fails when
-  instantiated), mirroring the Ray soft-dependency pattern.
+- The `firecracker_runner` module is import-safe on non-Linux (no
+  import-time crash), but `LoopRunnerFactory` raises `RuntimeError` if
+  `runner_mode='firecracker'` is selected on a non-Linux host.
+  **Firecracker is officially supported on Linux only** — `AF_VSOCK`,
+  the `firecracker` binary, and KVM require a Linux host.
 
 ## Out of Scope
 

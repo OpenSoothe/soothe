@@ -281,9 +281,12 @@ class FirecrackerConfig(BaseModel):
     `SootheRunner` code as the process pool, but bridges stream chunks
     host↔guest over virtio-vsock instead of `multiprocessing.Queue`.
 
-    Linux-only at runtime: vsock (`AF_VSOCK`) and the `firecracker` binary
-    require a Linux host. The module is import-safe on non-Linux and only
-    fails when instantiated — mirroring the Ray soft-dependency rule.
+    **Linux-only — officially supported on Linux only.** Firecracker
+    requires `AF_VSOCK`, the `firecracker` binary, and a Linux host with
+    KVM. The module is import-safe on non-Linux (no import-time crash),
+    but `LoopRunnerFactory` raises `RuntimeError` if `runner_mode` is set
+    to `firecracker` on a non-Linux host. Use `thread_pool` or
+    `process_pool` on macOS/Windows.
 
     Args:
     kernel_image_path: Path to the pre-built kernel image (vmlinux).
@@ -413,7 +416,8 @@ class LoopRunnerConfig(BaseModel):
             "Select the loop runner substrate: 'thread_pool' (default, "
             "lightweight async), 'process_pool' (subprocess isolation), "
             "'ray' (distributed Ray actors), or 'firecracker' (microVM "
-            "isolation, Linux-only)."
+            "isolation — officially supported on Linux only; raises "
+            "RuntimeError on non-Linux hosts)."
         ),
     )
     thread_pool: ThreadPoolConfig = Field(

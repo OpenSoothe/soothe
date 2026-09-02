@@ -66,6 +66,7 @@ class TestLoopRunnerFactoryFirecrackerMode:
             {"soothe_daemon.runner.firecracker_runner": fake_fc_runner_mod},
         ):
             with (
+                patch("sys.platform", "linux"),
                 patch("os.path.isfile", return_value=True),
                 patch("shutil.which", return_value="/usr/local/bin/firecracker"),
             ):
@@ -75,11 +76,23 @@ class TestLoopRunnerFactoryFirecrackerMode:
         mock_fc_runner_cls.assert_called_once_with("loop-fc", agent_cfg, daemon_cfg)
         assert runner is fake_runner_instance
 
+    def test_raises_runtimeerror_on_non_linux_host(self) -> None:
+        """Construction must fail with RuntimeError on non-Linux hosts."""
+        daemon_cfg, agent_cfg = _fc_config()
+
+        with patch("sys.platform", "darwin"):
+            with pytest.raises(RuntimeError, match="Linux only"):
+                LoopRunnerFactory(daemon_cfg, agent_cfg)
+
     def test_raises_filenotfounderror_when_binary_missing(self) -> None:
         """Construction must fail fast when the firecracker binary is missing."""
         daemon_cfg, agent_cfg = _fc_config()
 
-        with patch("shutil.which", return_value=None), patch("os.path.isfile", return_value=False):
+        with (
+            patch("sys.platform", "linux"),
+            patch("shutil.which", return_value=None),
+            patch("os.path.isfile", return_value=False),
+        ):
             with pytest.raises(FileNotFoundError, match="Firecracker binary not found"):
                 LoopRunnerFactory(daemon_cfg, agent_cfg)
 
@@ -91,6 +104,7 @@ class TestLoopRunnerFactoryFirecrackerMode:
             return "firecracker" in path  # binary path exists, kernel/rootfs don't
 
         with (
+            patch("sys.platform", "linux"),
             patch("shutil.which", return_value="/usr/local/bin/firecracker"),
             patch("os.path.isfile", side_effect=_isfile),
         ):
@@ -105,6 +119,7 @@ class TestLoopRunnerFactoryFirecrackerMode:
             return "firecracker" in path or "vmlinux" in path
 
         with (
+            patch("sys.platform", "linux"),
             patch("shutil.which", return_value="/usr/local/bin/firecracker"),
             patch("os.path.isfile", side_effect=_isfile),
         ):
@@ -125,9 +140,10 @@ class TestFirecrackerConfigValidation:
     """Tests for loop_runner.runner_mode field with firecracker mode."""
 
     def test_firecracker_valid_when_selected(self) -> None:
-        """Firecracker is valid when runner_mode='firecracker'."""
+        """Firecracker is valid when runner_mode='firecracker' on Linux."""
         daemon_cfg, agent_cfg = _fc_config()
         with (
+            patch("sys.platform", "linux"),
             patch("os.path.isfile", return_value=True),
             patch("shutil.which", return_value="/usr/local/bin/firecracker"),
         ):

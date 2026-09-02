@@ -6,11 +6,13 @@ same `_pool_worker_body` / `SootheRunner` code as the process pool, but
 bridges stream chunks host↔guest over **virtio-vsock** instead of
 `multiprocessing.Queue`.
 
-Linux-only at runtime: vsock (`AF_VSOCK`) and the `firecracker` binary
-require a Linux host. This module is import-safe on non-Linux and only
-fails when instantiated — mirroring the Ray soft-dependency rule. The
-factory imports this module lazily inside the `firecracker` branch only,
-so thread/process/ray paths never pay the import cost or require vsock.
+**Linux-only — officially supported on Linux only.** Firecracker requires
+`AF_VSOCK`, the `firecracker` binary, and a Linux host with KVM. This module
+is import-safe on non-Linux (guards `AF_VSOCK` availability so import never
+crashes), but `LoopRunnerFactory` raises `RuntimeError` if `runner_mode` is
+set to `firecracker` on a non-Linux host. The factory imports this module
+lazily inside the `firecracker` branch only, so thread/process/ray paths
+never pay the import cost or require vsock.
 """
 
 from __future__ import annotations
