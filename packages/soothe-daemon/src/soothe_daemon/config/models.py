@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 from soothe.identity.runtime import (
     AKSKConfig as AKSKConfig,
@@ -97,7 +99,6 @@ class ProcessPoolConfig(BaseModel):
     For high-concurrency scenarios, consider PGBouncer as external connection proxy.
 
     Args:
-    enabled: Enable persistent process pool mode.
     min_pool_size: Minimum workers to keep pooled (startup baseline).
     max_pool_size: Maximum workers to scale up under load.
     idle_timeout_seconds: Idle worker timeout before graceful exit.
@@ -111,10 +112,6 @@ class ProcessPoolConfig(BaseModel):
     for this many seconds (window discarded, like EventBus size stats).
     """
 
-    enabled: bool = Field(
-        default=False,
-        description="Enable persistent worker pool (subprocess isolation, ~8s spawn overhead)",
-    )
     min_pool_size: int = Field(
         default=2,
         ge=1,
@@ -193,19 +190,36 @@ class ProcessPoolConfig(BaseModel):
 class RayConfig(BaseModel):
     """Ray distributed loop execution configuration (Ray actors)."""
 
-    enabled: bool = Field(
-        default=False,
-        description="Enable Ray distributed mode (Ray actors).",
+    address: str | None = Field(
+        default=None,
+        description="Ray cluster address (null = auto-detect).",
+    )
+    num_cpus: float = Field(
+        default=0.0,
+        description="CPUs to reserve per Ray actor (0 = auto).",
+    )
+    object_store_memory: int = Field(
+        default=0,
+        description="Object store memory in bytes (0 = auto).",
+    )
+    max_concurrent_actors: int = Field(
+        default=10,
+        ge=1,
+        description="Maximum concurrent Ray actors.",
+    )
+    actor_lifetime: str = Field(
+        default="detached",
+        description="Ray actor lifetime: 'detached' or 'transient'.",
+    )
+    log_to_driver: bool = Field(
+        default=True,
+        description="Stream Ray logs to the driver process.",
     )
 
 
 class ThreadPoolConfig(BaseModel):
     """Thread pool configuration for loop execution with shared asyncio event loops."""
 
-    enabled: bool = Field(
-        default=True,
-        description="Enable thread pool mode (lighter weight, ~ms vs ~8s subprocess spawn)",
-    )
     min_pool_size: int = Field(
         default=16,
         ge=1,
@@ -272,7 +286,6 @@ class FirecrackerConfig(BaseModel):
     fails when instantiated — mirroring the Ray soft-dependency rule.
 
     Args:
-    enabled: Enable Firecracker microVM runner mode.
     kernel_image_path: Path to the pre-built kernel image (vmlinux).
     rootfs_image_path: Path to the pre-built rootfs image (ext4).
     firecracker_binary_path: Path to the `firecracker` binary.
@@ -291,10 +304,6 @@ class FirecrackerConfig(BaseModel):
     extra_kernel_args: Extra kernel command-line arguments appended at boot.
     """
 
-    enabled: bool = Field(
-        default=False,
-        description="Enable Firecracker microVM runner (strong per-loop isolation)",
-    )
     kernel_image_path: str = Field(
         default="",
         description="Path to the pre-built kernel image (vmlinux)",
@@ -381,6 +390,48 @@ class FirecrackerConfig(BaseModel):
     def get_effective_pool_size(self) -> int:
         """Get effective max pool size, ensuring max >= min."""
         return max(self.min_pool_size, self.max_pool_size)
+
+
+class LoopRunnerConfig(BaseModel):
+    """Unified loop runner configuration (RFC-221).
+
+    Groups the runner-mode selector and all four runner sub-configs into a
+    single nested block.  Selection is via ``runner_mode`` — a single string
+    field, not per-runner ``enabled`` booleans.
+
+    Args:
+        runner_mode: Active runner substrate.
+        thread_pool: Tuning for ``runner_mode='thread_pool'``.
+        process_pool: Tuning for ``runner_mode='process_pool'``.
+        ray: Tuning for ``runner_mode='ray'``.
+        firecracker: Tuning for ``runner_mode='firecracker'``.
+    """
+
+    runner_mode: Literal["thread_pool", "process_pool", "ray", "firecracker"] = Field(
+        default="thread_pool",
+        description=(
+            "Select the loop runner substrate: 'thread_pool' (default, "
+            "lightweight async), 'process_pool' (subprocess isolation), "
+            "'ray' (distributed Ray actors), or 'firecracker' (microVM "
+            "isolation, Linux-only)."
+        ),
+    )
+    thread_pool: ThreadPoolConfig = Field(
+        default_factory=ThreadPoolConfig,
+        description="Thread pool configuration (shared-memory async execution).",
+    )
+    process_pool: ProcessPoolConfig = Field(
+        default_factory=ProcessPoolConfig,
+        description="Persistent process pool configuration (local multiprocessing spawn).",
+    )
+    ray: RayConfig = Field(
+        default_factory=RayConfig,
+        description="Ray distributed loop execution configuration (Ray actors).",
+    )
+    firecracker: FirecrackerConfig = Field(
+        default_factory=FirecrackerConfig,
+        description="Firecracker microVM runner configuration (strong per-loop isolation).",
+    )
 
 
 class StaleWorkerReapConfig(BaseModel):
@@ -492,6 +543,7 @@ __all__ = [
     "FirecrackerConfig",
     "IdentityConfig",
     "LoopGcConfig",
+    "LoopRunnerConfig",
     "LoopStatusReconciliationConfig",
     "MemoryProfilingConfig",
     "ProcessPoolConfig",

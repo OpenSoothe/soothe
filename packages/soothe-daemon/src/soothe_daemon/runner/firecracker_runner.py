@@ -1,7 +1,7 @@
 """Firecracker microVM-based loop runner — one warm microVM per worker slot.
 
 A fourth `LoopRunnerProtocol` substrate (RFC-221) selected by
-`LoopRunnerFactory` when `firecracker.enabled=True`. Each microVM runs the
+`LoopRunnerFactory` when `loop_runner.runner_mode='firecracker'`. Each microVM runs the
 same `_pool_worker_body` / `SootheRunner` code as the process pool, but
 bridges stream chunks host↔guest over **virtio-vsock** instead of
 `multiprocessing.Queue`.
@@ -310,7 +310,7 @@ class FirecrackerWorkerPool:
         daemon_config: SootheDaemonConfig,
     ) -> None:
         self._config = config
-        fc = daemon_config.firecracker
+        fc = daemon_config.loop_runner.firecracker
         self._fc_config = fc
         self._min_pool_size = fc.min_pool_size
         self._max_pool_size = max(fc.min_pool_size, fc.max_pool_size)
@@ -874,7 +874,7 @@ class FirecrackerLoopRunner:
 
     Implements `LoopRunnerProtocol` for integration with `QueryEngine`.
     One instance per `loop_id`, created by `LoopRunnerFactory` when
-    `firecracker.enabled=True`. Mirrors `ProcessLoopRunner`'s structure —
+    `loop_runner.runner_mode='firecracker'`. Mirrors `ProcessLoopRunner`'s structure —
     only the transport (vsock vs mp.Queue) and VM lifecycle differ.
     """
 

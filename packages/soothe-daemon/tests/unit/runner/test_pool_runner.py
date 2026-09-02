@@ -817,7 +817,6 @@ class TestProcessPoolConfig:
     def test_defaults(self) -> None:
         """Default configuration values (thread_pool is default runner mode)."""
         cfg = ProcessPoolConfig()
-        assert cfg.enabled is False  # Disabled by default; thread_pool is default
         assert cfg.min_pool_size == 2
         assert cfg.max_pool_size == 4
         assert cfg.idle_timeout_seconds == 300

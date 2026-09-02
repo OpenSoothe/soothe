@@ -30,7 +30,7 @@ async def preopen_shared_postgres_pools(
     if not uses_postgresql_persistence(config):
         return
 
-    if not daemon_config.thread_pool.enabled:
+    if daemon_config.loop_runner.runner_mode != "thread_pool":
         return
 
     from soothe.persistence.loop_writer import LoopPersistenceWriter

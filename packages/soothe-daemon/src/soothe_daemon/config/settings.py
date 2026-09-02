@@ -11,15 +11,12 @@ from soothe.config import SOOTHE_HOME
 
 from soothe_daemon.config.models import (
     ChannelsConfig,
-    FirecrackerConfig,
     IdentityConfig,
     LoopGcConfig,
+    LoopRunnerConfig,
     LoopStatusReconciliationConfig,
     MemoryProfilingConfig,
-    ProcessPoolConfig,
-    RayConfig,
     StaleWorkerReapConfig,
-    ThreadPoolConfig,
     TransportConfig,
 )
 
@@ -183,23 +180,14 @@ class SootheDaemonConfig(BaseSettings):
         description="Memory profiling and leak detection configuration (tracemalloc)",
     )
 
-    # --- Loop runner mode (RFC-221) -----------------------------------------
+    # --- Loop runner (RFC-221) ---------------------------------------------
 
-    ray: RayConfig = Field(
-        default_factory=RayConfig,
-        description="Ray distributed loop execution configuration (Ray actors).",
-    )
-    process_pool: ProcessPoolConfig = Field(
-        default_factory=ProcessPoolConfig,
-        description="Persistent process pool configuration (local multiprocessing spawn)",
-    )
-    thread_pool: ThreadPoolConfig = Field(
-        default_factory=ThreadPoolConfig,
-        description="Thread pool configuration (shared-memory async execution)",
-    )
-    firecracker: FirecrackerConfig = Field(
-        default_factory=FirecrackerConfig,
-        description="Firecracker microVM runner configuration (strong per-loop isolation)",
+    loop_runner: LoopRunnerConfig = Field(
+        default_factory=LoopRunnerConfig,
+        description=(
+            "Unified loop runner configuration. Select the runner substrate via "
+            "`loop_runner.runner_mode` and tune per-mode settings in nested blocks."
+        ),
     )
 
     # --- Linkage to agent core ---------------------------------------------
@@ -253,39 +241,6 @@ class SootheDaemonConfig(BaseSettings):
                 soothe_path=str(soothe_sibling),
             )
         return SootheConfig.from_yaml_file(str(path))
-
-    def validate_runner_mode(self) -> str:
-        """Validate exactly one runner mode is enabled.
-
-        Returns the enabled mode name: "process_pool", "thread_pool",
-        "ray", or "firecracker".
-
-        Raises:
-        ValueError: If no mode is enabled, or multiple modes are enabled.
-        """
-        enabled_modes = []
-        if self.process_pool.enabled:
-            enabled_modes.append("process_pool")
-        if self.thread_pool.enabled:
-            enabled_modes.append("thread_pool")
-        if self.ray.enabled:
-            enabled_modes.append("ray")
-        if self.firecracker.enabled:
-            enabled_modes.append("firecracker")
-
-        if len(enabled_modes) == 0:
-            raise ValueError(
-                "No runner mode enabled. Set exactly one: "
-                "process_pool.enabled=true, thread_pool.enabled=true, "
-                "ray.enabled=true, or firecracker.enabled=true"
-            )
-        if len(enabled_modes) > 1:
-            raise ValueError(
-                f"Multiple runner modes enabled ({', '.join(enabled_modes)}). "
-                "Enable exactly one: process_pool, thread_pool, ray, or firecracker"
-            )
-
-        return enabled_modes[0]
 
 
 __all__ = ["SootheDaemonConfig", "default_daemon_config_path", "default_soothe_config_path"]

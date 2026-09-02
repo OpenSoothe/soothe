@@ -65,7 +65,7 @@ loop_status_reconciliation:
   stale_running_seconds: 180  # ~6 heartbeat windows
   batch_size: 100
 
-# Stale worker reap (also requires process_pool.enabled)
+# Stale worker reap (also requires loop_runner.runner_mode='process_pool')
 stale_worker_reap:
   enabled: true
   interval_seconds: 1800
@@ -81,3 +81,75 @@ memory_profiling:
   trace_depth: 25
   top_allocations_limit: 20
   log_growth_threshold_mb: 100
+
+# ============================================================================
+# LOOP RUNNER (RFC-221)
+# ============================================================================
+# Select exactly ONE runner substrate via `runner_mode`. Each mode's tuning
+# knobs live in its own nested block below.
+#
+#   thread_pool:     Lightweight async, fast startup (DEFAULT)
+#   process_pool:    Process-based isolation (subprocess spawn, ~8s overhead)
+#   ray:             Ray cluster for horizontal scaling
+#   firecracker:     Firecracker microVM isolation (strongest isolation, Linux-only)
+loop_runner:
+  runner_mode: thread_pool
+
+  # Thread pool — DEFAULT. Daemon-level singleton PG pool shared by all threads.
+  thread_pool:
+    min_pool_size: 4
+    max_pool_size: 32
+    idle_timeout_seconds: 300
+    max_requests_per_thread: 100
+    request_timeout_seconds: 1209600  # 14d; 0 = no timeout
+    thread_startup_timeout_seconds: 60
+    reuse_runner: true
+    warmup_runner: true
+    warmup_core_agent: true
+
+  # Process pool — subprocess isolation. Each worker has its OWN PG pool.
+  process_pool:
+    min_pool_size: 2
+    max_pool_size: 4
+    idle_timeout_seconds: 300
+    max_requests_per_worker: 100
+    request_timeout_seconds: 0  # 0 = no timeout
+    heartbeat_interval_seconds: 30
+    stuck_worker_timeout_seconds: 180
+    reuse_runner: true
+    warmup_runner: true
+    warmup_core_agent: true
+    dispatch_wait_stats_enabled: true
+    dispatch_wait_stats_interval_seconds: 60
+    dispatch_wait_stats_idle_pause_seconds: 120
+
+  # Ray — distributed cluster execution (Ray actors).
+  ray:
+    address: null  # null = auto-detect
+    num_cpus: 0.0  # 0 = auto
+    object_store_memory: 0  # 0 = auto
+    max_concurrent_actors: 10
+    actor_lifetime: detached
+    log_to_driver: true
+
+  # Firecracker — microVM isolation (RFC-221). Linux-only at runtime.
+  # Requires: firecracker binary, kernel image (vmlinux), rootfs image (ext4).
+  # The module is import-safe on non-Linux; fails fast when instantiated on macOS/Windows.
+  # Identity service is incompatible (subprocess/VM spawn cannot propagate IdentityService).
+  firecracker:
+    firecracker_binary_path: firecracker  # PATH lookup or absolute path
+    kernel_image_path: ""                   # e.g. /var/lib/soothe/vmlinux
+    rootfs_image_path: ""                    # e.g. /var/lib/soothe/rootfs.ext4
+    min_pool_size: 1                         # warm microVMs at daemon startup
+    max_pool_size: 4                         # max microVMs under load
+    vsock_port_base: 1024                    # per-VM port = base + worker_index
+    vm_cpu_count: 2                          # vCPUs per microVM
+    vm_mem_mib: 2048                         # memory per microVM (MiB)
+    idle_timeout_seconds: 300                # idle VM shutdown grace
+    max_requests_per_worker: 100             # respawn after N requests
+    request_timeout_seconds: 0               # 0 = no timeout
+    reuse_runner: true                       # reuse one SootheRunner per VM
+    warmup_runner: true                      # cache SootheRunner at VM startup
+    warmup_core_agent: true                  # materialize LazyCoreAgent during warmup
+    workspace_mount_mode: virtiofs           # virtiofs (local) | sync (S3 backend)
+    extra_kernel_args: ""                    # extra kernel cmdline args at boot

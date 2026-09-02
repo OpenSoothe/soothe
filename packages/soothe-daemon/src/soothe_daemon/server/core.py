@@ -829,7 +829,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     )
 
             # RFC-221: pre-warm runner pool (process_pool or thread_pool).
-            if self._daemon_config.process_pool.enabled or self._daemon_config.thread_pool.enabled:
+            if self._daemon_config.loop_runner.runner_mode in ("process_pool", "thread_pool"):
                 try:
                     await self._runner_factory.initialize_pool()
                 except Exception as exc:
@@ -910,7 +910,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     self._periodic_loop_status_reconciliation()
                 )
             reap_cfg = self._daemon_config.stale_worker_reap
-            if self._daemon_config.process_pool.enabled and reap_cfg.enabled:
+            if self._daemon_config.loop_runner.runner_mode == "process_pool" and reap_cfg.enabled:
                 self._stale_worker_reap_task = asyncio.create_task(
                     self._periodic_stale_worker_reap()
                 )

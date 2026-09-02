@@ -270,7 +270,7 @@ class AsyncCancelOrchestrator:
         if pool is None:
             return
 
-        runner_type = self._daemon._daemon_config.validate_runner_mode()
+        runner_type = self._daemon._daemon_config.loop_runner.runner_mode
 
         if runner_type == "process_pool" and hasattr(pool, "force_kill_worker"):
             await pool.force_kill_worker(worker_id, timeout)

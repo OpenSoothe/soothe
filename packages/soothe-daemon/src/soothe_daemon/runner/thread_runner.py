@@ -564,7 +564,7 @@ class ThreadPool:
             if cls._shared_pool is not None:
                 return cls._shared_pool
 
-            pool_config = daemon_config.thread_pool
+            pool_config = daemon_config.loop_runner.thread_pool
             pool = ThreadPool(
                 config=config,
                 min_pool_size=pool_config.min_pool_size,

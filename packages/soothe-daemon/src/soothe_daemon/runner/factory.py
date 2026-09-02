@@ -31,8 +31,8 @@ class LoopRunnerFactory:
         self._identity_runtime = identity_runtime
         self._pool_initialized = False
 
-        # Validate exactly one runner mode is enabled
-        mode = daemon_config.validate_runner_mode()
+        # Select runner mode from the unified loop_runner config block.
+        mode = daemon_config.loop_runner.runner_mode
         self._mode = mode
 
         if (
@@ -47,18 +47,20 @@ class LoopRunnerFactory:
             )
 
         if mode == "process_pool":
+            pool = daemon_config.loop_runner.process_pool
             logger.info(
                 "LoopRunnerFactory: process pool mode (min=%d, max=%d workers, max_requests=%d)",
-                daemon_config.process_pool.min_pool_size,
-                daemon_config.process_pool.max_pool_size,
-                daemon_config.process_pool.max_requests_per_worker,
+                pool.min_pool_size,
+                pool.max_pool_size,
+                pool.max_requests_per_worker,
             )
         elif mode == "thread_pool":
+            pool = daemon_config.loop_runner.thread_pool
             logger.info(
                 "LoopRunnerFactory: thread pool mode (min=%d, max=%d threads, max_requests=%d)",
-                daemon_config.thread_pool.min_pool_size,
-                daemon_config.thread_pool.max_pool_size,
-                daemon_config.thread_pool.max_requests_per_thread,
+                pool.min_pool_size,
+                pool.max_pool_size,
+                pool.max_requests_per_thread,
             )
         elif mode == "ray":
             try:
@@ -72,7 +74,7 @@ class LoopRunnerFactory:
             import os
             import shutil
 
-            fc = daemon_config.firecracker
+            fc = daemon_config.loop_runner.firecracker
             binary = fc.firecracker_binary_path
             if not (shutil.which(binary) or os.path.isfile(binary)):
                 raise FileNotFoundError(

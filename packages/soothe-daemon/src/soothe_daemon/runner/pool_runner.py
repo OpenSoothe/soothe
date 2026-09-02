@@ -818,7 +818,7 @@ class ProcessPool:
             if cls._shared_pool is not None:
                 return cls._shared_pool
 
-            pool_config = daemon_config.process_pool
+            pool_config = daemon_config.loop_runner.process_pool
             pool = ProcessPool(
                 config=config,
                 min_pool_size=pool_config.min_pool_size,
