@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move the rail module from `soothe-autopilot` into the `soothe` package as `soothe.rails`, consolidating rail definitions, prompt fragments, and builtin rail YAMLs into the core package.
 - Renamed `run_id` to `loop_id` across the workspace state subsystem for consistency with the display-card store naming convention.
 
+### Fixed
+- Suppress the duplicate raw plan-markdown `AssistantMessage` card in the TUI when a plan-review `StructuredAskUserWidget` already displays the same plan body.
+
 ## [v1.0.4] - 2026-09-01
 
 ### Added

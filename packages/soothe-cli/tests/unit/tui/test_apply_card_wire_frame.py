@@ -204,3 +204,72 @@ def test_adapter_exposes_apply_card_callback_slot() -> None:
     assert adapter._apply_card_wire_frame is None
     adapter._apply_card_wire_frame = AsyncMock(return_value=True)
     assert callable(adapter._apply_card_wire_frame)
+
+
+@pytest.mark.asyncio
+async def test_apply_card_skips_assistant_when_plan_review_widget_active() -> None:
+    """Plan-review widget suppresses the duplicate ASSISTANT card."""
+    plan_body = (
+        "## Plan\n\n"
+        "1. First step with sufficient detail to pass threshold.\n"
+        "2. Second step with more detail.\n"
+        "3. Third step to ensure length."
+    )
+    # Plan-review widget mock.
+    plan_widget = MagicMock()
+    plan_widget._is_plan_review = True
+    plan_widget._body_markdown = plan_body
+    plan_widget._submitted = False
+    plan_widget._origin_node = "plan_mode_review"
+
+    host = _ApplyCardHost()
+    host._ui_adapter = SimpleNamespace(
+        _current_step_messages={},
+        _goal_completion_mounted_this_turn=False,
+        _clarification_input_by_step={"plan_mode_review": plan_widget},
+    )
+    handled = await host._apply_card_wire_frame(
+        {
+            "type": CARD_CREATED,
+            "card_id": "asst-plan-dup",
+            "kind": "assistant",
+            "data": {
+                "type": "assistant",
+                "content": plan_body,
+                "id": "asst-plan-dup",
+            },
+        }
+    )
+    assert handled is True
+    assert host.mounted == []  # No duplicate AssistantMessage mounted
+
+
+@pytest.mark.asyncio
+async def test_apply_card_mounts_assistant_when_plan_review_widget_body_differs() -> None:
+    """Non-matching plan-review widget body allows the card to mount."""
+    plan_widget = MagicMock()
+    plan_widget._is_plan_review = True
+    plan_widget._body_markdown = "## Plan\n\nDifferent content entirely."
+    plan_widget._submitted = False
+    plan_widget._origin_node = "plan_mode_review"
+
+    host = _ApplyCardHost()
+    host._ui_adapter = SimpleNamespace(
+        _current_step_messages={},
+        _goal_completion_mounted_this_turn=False,
+        _clarification_input_by_step={"plan_mode_review": plan_widget},
+    )
+    handled = await host._apply_card_wire_frame(
+        {
+            "type": CARD_CREATED,
+            "card_id": "asst-plan-uniq",
+            "kind": "assistant",
+            "data": {
+                "type": "assistant",
+                "content": "Some unrelated assistant content that is clearly different.",
+                "id": "asst-plan-uniq",
+            },
+        }
+    )
+    assert handled is True
+    assert len(host.mounted) == 1  # AssistantMessage mounted normally

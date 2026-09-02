@@ -369,7 +369,11 @@ class _MessagesMixin:
         return False
 
     def _assistant_card_already_visible(self, card: Any) -> bool:
-        """True when stream already mounted this assistant body (avoid double report)."""
+        """True when the stream already mounted this assistant body.
+
+        Also suppresses the raw plan ASSISTANT card when a plan-review
+        `StructuredAskUserWidget` with overlapping body is mounted.
+        """
         from soothe_sdk.display.transcript_types import MessageType
 
         adapter = getattr(self, "_ui_adapter", None)
@@ -388,6 +392,54 @@ class _MessagesMixin:
                 return True
             # Only inspect the latest assistant card.
             break
+        # Plan-mode: suppress ASSISTANT card when a plan-review widget already
+        # shows the same plan body.
+        if self._plan_review_widget_shows_text(text):
+            return True
+        return False
+
+    @staticmethod
+    def _text_overlaps_plan_body(text: str, body: str) -> bool:
+        """True when `text` and `body` overlap (exact, prefix, substring, or 200-char prefix).
+
+        Substring checks require the shorter string to be at least 50 chars
+        to avoid false positives.
+        """
+        if not text or not body:
+            return False
+        if text == body or text.startswith(body) or body.startswith(text):
+            return True
+        # Substring containment: handles preface trimming (e.g. "Here is the
+        # plan.\n\n## Plan:..." card vs "## Plan:..." widget body). Require the
+        # shorter string to be at least 50 chars to avoid false positives.
+        shorter = body if len(body) <= len(text) else text
+        longer = text if shorter is body else body
+        if len(shorter) >= 50 and shorter in longer:
+            return True
+        # Handle truncation: compare a significant prefix of the shorter text.
+        prefix_len = min(200, len(text), len(body))
+        if prefix_len >= 50 and text[:prefix_len] == body[:prefix_len]:
+            return True
+        return False
+
+    def _plan_review_widget_shows_text(self, text: str) -> bool:
+        """True when a mounted plan-review widget's body overlaps `text`.
+
+        Only plan-review widgets (`_is_plan_review`) are considered, so
+        non-plan ASSISTANT cards are never suppressed.
+        """
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None:
+            return False
+        by_step = getattr(adapter, "_clarification_input_by_step", None) or {}
+        for widget in by_step.values():
+            if not getattr(widget, "_is_plan_review", False):
+                continue
+            body = str(getattr(widget, "_body_markdown", "") or "").strip()
+            if not body:
+                continue
+            if self._text_overlaps_plan_body(text, body):
+                return True
         return False
 
     def _cognition_reason_already_visible(self, card: Any) -> bool:
