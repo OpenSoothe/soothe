@@ -57,18 +57,18 @@ class SqliteWorkspaceStateStore:
 
     Args:
         db_path: Path to the SQLite database file.
-        run_id: Unique run identifier (for logging and future multi-run support).
+        loop_id: Unique loop identifier (for logging and future multi-loop support).
     """
 
-    def __init__(self, *, db_path: Path, run_id: str) -> None:
+    def __init__(self, *, db_path: Path, loop_id: str) -> None:
         self._db_path = db_path
-        self._run_id = run_id
+        self._loop_id = loop_id
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
-        logger.debug("SqliteWorkspaceStateStore initialized: db=%s, run=%s", db_path, run_id)
+        logger.debug("SqliteWorkspaceStateStore initialized: db=%s, loop=%s", db_path, loop_id)
 
     def _execute(
         self,
@@ -252,4 +252,4 @@ class SqliteWorkspaceStateStore:
             self._conn.commit()
 
         await asyncio.to_thread(_cleanup)
-        logger.debug("State store cleaned up for run %s", self._run_id)
+        logger.debug("State store cleaned up for loop %s", self._loop_id)

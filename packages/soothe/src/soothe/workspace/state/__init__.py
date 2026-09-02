@@ -6,10 +6,12 @@ the rest of the workspace sync subsystem.
 """
 
 from soothe.workspace.state.factory import create_workspace_state_store
+from soothe.workspace.state.postgres import PostgresWorkspaceStateStore
 from soothe.workspace.state.protocol import WorkspaceStateStore
 from soothe.workspace.state.sqlite import SqliteWorkspaceStateStore
 
 __all__ = [
+    "PostgresWorkspaceStateStore",
     "SqliteWorkspaceStateStore",
     "WorkspaceStateStore",
     "create_workspace_state_store",

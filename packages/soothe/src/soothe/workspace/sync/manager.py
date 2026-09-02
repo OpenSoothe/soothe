@@ -8,6 +8,7 @@ uploader for each run.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,7 +41,7 @@ class WorkspaceManager:
         cas_root: Root directory for the CAS cache.
         backend: Remote storage backend (or `None` for local-only mode).
         state_store_factory: Callable that creates a `WorkspaceStateStore`
-            for a given run_id and workspace_dir.
+            for a given loop_id and workspace_dir.
     """
 
     def __init__(
@@ -49,7 +50,7 @@ class WorkspaceManager:
         workspaces_root: Path,
         cas_root: Path,
         backend: WorkspaceSyncBackend | None = None,
-        state_store_factory: type[WorkspaceStateStore] | None = None,
+        state_store_factory: Callable[..., WorkspaceStateStore] | None = None,
     ) -> None:
         self._workspaces_root = workspaces_root
         self._cas_root = cas_root
@@ -95,7 +96,7 @@ class WorkspaceManager:
         state_store: WorkspaceStateStore | None = None
         if self._state_store_factory is not None:
             state_store = self._state_store_factory(
-                run_id=run_id,
+                loop_id=run_id,
                 workspace_dir=root,
             )
 

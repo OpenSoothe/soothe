@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- PostgreSQL-backed `WorkspaceStateStore` for workspace sync, completing the unified persistence backend (PostgreSQL mode now uses the `soothe_metadata` database for workspace file/blob/checkpoint/artifact state, consistent with cron and display card stores).
+
 ### Changed
 - Move the rail module from `soothe-autopilot` into the `soothe` package as `soothe.rails`, consolidating rail definitions, prompt fragments, and builtin rail YAMLs into the core package.
+- Renamed `run_id` to `loop_id` across the workspace state subsystem for consistency with the display-card store naming convention.
 
 ## [v1.0.4] - 2026-09-01
 

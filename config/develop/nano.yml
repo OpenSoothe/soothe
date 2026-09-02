@@ -303,6 +303,7 @@ tools:
     token: "${DEEPXIV_API_KEY}"
 
 persistence:
+  default_backend: sqlite
   # Unused while default_backend is sqlite; kept for a quick Postgres flip:
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
   soothe_postgres_dsn: "${SOOTHE_POSTGRES_DSN}"

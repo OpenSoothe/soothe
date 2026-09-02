@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 
 def create_workspace_state_store(
     config: Any,
-    run_id: str,
+    loop_id: str,
     workspace_dir: Path | None = None,
 ) -> WorkspaceStateStore:
     """Create a workspace state store based on `persistence.default_backend`.
 
     Args:
         config: SootheConfig instance.
-        run_id: Unique run identifier.
+        loop_id: Unique loop identifier.
         workspace_dir: Workspace root directory (required for SQLite mode).
 
     Returns:
@@ -43,12 +43,13 @@ def create_workspace_state_store(
         if workspace_dir is None:
             raise ValueError("workspace_dir is required for SQLite workspace state store")
         db_path = workspace_dir / ".workspace" / "state.db"
-        return SqliteWorkspaceStateStore(db_path=db_path, run_id=run_id)
+        return SqliteWorkspaceStateStore(db_path=db_path, loop_id=loop_id)
 
     if backend == "postgresql":
-        raise NotImplementedError(
-            "PostgresWorkspaceStateStore is not yet implemented; "
-            "use SQLite mode for workspace sync development"
-        )
+        from soothe.workspace.state.postgres import PostgresWorkspaceStateStore
+
+        dsn = config.resolve_postgres_dsn_for_database("metadata")
+        logger.info("Workspace state store backend=postgresql db=metadata loop=%s", loop_id)
+        return PostgresWorkspaceStateStore(dsn=dsn, loop_id=loop_id)
 
     raise ValueError(f"Unknown persistence backend: {backend!r}")

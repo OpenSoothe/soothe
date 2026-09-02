@@ -73,7 +73,7 @@ This guide implements the workspace sync subsystem specified in RFC-906. The sub
 **Tasks**:
 - [x] Implement `WorkspaceStateStore` protocol in `state/protocol.py`
 - [x] Implement `SqliteWorkspaceStateStore` in `state/sqlite.py`
-- [ ] Implement `PostgresWorkspaceStateStore` in `state/postgres.py` (deferred — SQLite mode sufficient for development)
+- [x] Implement `PostgresWorkspaceStateStore` in `state/postgres.py` (deferred — SQLite mode sufficient for development)
 - [x] Implement `create_workspace_state_store()` factory in `state/factory.py`
 - [x] Implement `WorkspaceManager` in `sync/manager.py`
 - [x] Implement `Workspace` handle in `sync/workspace.py`

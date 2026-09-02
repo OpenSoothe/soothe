@@ -16,7 +16,7 @@ from soothe.workspace.state.sqlite import SqliteWorkspaceStateStore
 async def store(tmp_path: Path) -> SqliteWorkspaceStateStore:
     """Fresh SQLite state store."""
     db_path = tmp_path / "state.db"
-    s = SqliteWorkspaceStateStore(db_path=db_path, run_id="run-001")
+    s = SqliteWorkspaceStateStore(db_path=db_path, loop_id="run-001")
     yield s
     await s.close()
 
