@@ -501,10 +501,8 @@ class SootheDaemon(DaemonHandlersMixin):
             )
             loop.set_default_executor(self._default_executor)
 
-            # RFC-221: apply env overrides (e.g. SOOTHE_DISTRIBUTED) before factory init
-            from soothe_daemon.config import apply_env_overrides
-
-            apply_env_overrides(self._daemon_config)
+            # RFC-221: env overrides are applied natively by pydantic-settings
+            # (env_prefix="SOOTHE_DAEMON_" + env_nested_delimiter="__")
 
             if self._config.persistence.postgres_base_dsn:
                 from soothe_nano.persistence.postgres_provisioning import (
@@ -799,7 +797,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.exception("[Autopilot] failed to construct daemon-owned AutopilotService")
                 self._autopilot_service = None
 
-            # Reap orphaned worker_pool subprocesses left after crashes / restarts.
+            # Reap orphaned process_pool subprocesses left after crashes / restarts.
             try:
                 from soothe_daemon.persistence import reap_stale_soothe_worker_processes
 
@@ -830,8 +828,8 @@ class SootheDaemon(DaemonHandlersMixin):
                         display_loop_purger=self._make_display_loop_purger(),
                     )
 
-            # RFC-221: pre-warm runner pool (worker_pool or thread_pool).
-            if self._daemon_config.worker_pool.enabled or self._daemon_config.thread_pool.enabled:
+            # RFC-221: pre-warm runner pool (process_pool or thread_pool).
+            if self._daemon_config.process_pool.enabled or self._daemon_config.thread_pool.enabled:
                 try:
                     await self._runner_factory.initialize_pool()
                 except Exception as exc:
@@ -912,7 +910,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     self._periodic_loop_status_reconciliation()
                 )
             reap_cfg = self._daemon_config.stale_worker_reap
-            if self._daemon_config.worker_pool.enabled and reap_cfg.enabled:
+            if self._daemon_config.process_pool.enabled and reap_cfg.enabled:
                 self._stale_worker_reap_task = asyncio.create_task(
                     self._periodic_stale_worker_reap()
                 )
@@ -1189,7 +1187,7 @@ class SootheDaemon(DaemonHandlersMixin):
         )
 
     async def _periodic_stale_worker_reap(self) -> None:
-        """Reap orphaned worker_pool subprocesses on a fixed interval."""
+        """Reap orphaned process_pool subprocesses on a fixed interval."""
         from soothe_daemon.persistence.process_cleanup import periodic_stale_worker_reap
 
         reap_cfg = self._daemon_config.stale_worker_reap
@@ -1391,7 +1389,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 )
                 # Close the autopilot-side gap: the persistence-layer demote
                 # above only flips the loop row. If this is an autopilot
-                # worker loop, also release the WorkerPool slot and
+                # worker loop, also release the ProcessPool slot and
                 # WorkspaceReservation it held — otherwise a lost
                 # completion chunk leaves them pinned and (with strict
                 # workspace overlap) blocks every pending goal sharing

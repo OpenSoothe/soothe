@@ -47,6 +47,7 @@ from soothe.config.models import (
     VectorStoreProviderConfig,
     VectorStoreRouter,
     WorkspaceMountConfig,
+    WorkspaceSyncConfig,
     parse_model_specs,
 )
 from soothe.config.ownership import validate_nano_file_ownership
@@ -571,6 +572,9 @@ class SootheConfig(BaseSettings):
 
     workspace_mount: WorkspaceMountConfig = Field(default_factory=WorkspaceMountConfig)
     """Container workspace path mapping."""
+
+    workspace_sync: WorkspaceSyncConfig = Field(default_factory=WorkspaceSyncConfig)
+    """Durable object-store workspace sync backend (RFC-906)."""
 
     optimization: OptimizationConfig = Field(default_factory=OptimizationConfig)
     """Semantic optimization for risk and relationship heuristics."""

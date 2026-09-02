@@ -78,8 +78,8 @@ class ChannelsConfig(BaseModel):
     send_max_retries: int = Field(default=3, ge=1, description="Max retry attempts for outbound")
 
 
-class WorkerPoolConfig(BaseModel):
-    """Persistent worker pool configuration.
+class ProcessPoolConfig(BaseModel):
+    """Persistent process pool configuration.
 
     Pre-warms N worker processes at daemon startup to eliminate ~8s per-query
     overhead (subprocess spawn + SootheRunner init). Workers create fresh
@@ -97,7 +97,7 @@ class WorkerPoolConfig(BaseModel):
     For high-concurrency scenarios, consider PGBouncer as external connection proxy.
 
     Args:
-    enabled: Enable persistent worker pool mode.
+    enabled: Enable persistent process pool mode.
     min_pool_size: Minimum workers to keep pooled (startup baseline).
     max_pool_size: Maximum workers to scale up under load.
     idle_timeout_seconds: Idle worker timeout before graceful exit.
@@ -190,12 +190,12 @@ class WorkerPoolConfig(BaseModel):
         return max(self.min_pool_size, self.max_pool_size)
 
 
-class DistributedConfig(BaseModel):
-    """Distributed loop execution configuration (Ray actors or local multiprocessing)."""
+class RayConfig(BaseModel):
+    """Ray distributed loop execution configuration (Ray actors)."""
 
     enabled: bool = Field(
         default=False,
-        description="Enable distributed mode (Ray actors). Set SOOTHE_DISTRIBUTED=true to enable.",
+        description="Enable Ray distributed mode (Ray actors).",
     )
 
 
@@ -259,12 +259,136 @@ class ThreadPoolConfig(BaseModel):
         return max(self.min_pool_size, self.max_pool_size)
 
 
+class FirecrackerConfig(BaseModel):
+    """Firecracker microVM runner configuration (RFC-221 substrate).
+
+    Executes Soothe agent loops inside AWS Firecracker microVMs for strong
+    per-loop isolation. Each VM runs the same `_pool_worker_body` /
+    `SootheRunner` code as the process pool, but bridges stream chunks
+    host↔guest over virtio-vsock instead of `multiprocessing.Queue`.
+
+    Linux-only at runtime: vsock (`AF_VSOCK`) and the `firecracker` binary
+    require a Linux host. The module is import-safe on non-Linux and only
+    fails when instantiated — mirroring the Ray soft-dependency rule.
+
+    Args:
+    enabled: Enable Firecracker microVM runner mode.
+    kernel_image_path: Path to the pre-built kernel image (vmlinux).
+    rootfs_image_path: Path to the pre-built rootfs image (ext4).
+    firecracker_binary_path: Path to the `firecracker` binary.
+    min_pool_size: Minimum warm microVMs at daemon startup.
+    max_pool_size: Maximum microVMs to scale up under load.
+    vsock_port_base: Base vsock port (per-VM port = base + worker_index).
+    vm_cpu_count: vCPUs per microVM.
+    vm_mem_mib: Memory per microVM (MiB).
+    idle_timeout_seconds: Idle VM timeout before graceful shutdown.
+    max_requests_per_worker: Max requests before VM respawn.
+    request_timeout_seconds: Default per-request timeout (0 = no timeout).
+    reuse_runner: Reuse one SootheRunner per VM between requests.
+    warmup_runner: Create cached SootheRunner at VM startup when reuse_runner is true.
+    warmup_core_agent: Materialize LazyCoreAgent during VM warmup when warmup_runner is true.
+    workspace_mount_mode: How the agent workspace is surfaced into the guest.
+    extra_kernel_args: Extra kernel command-line arguments appended at boot.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Firecracker microVM runner (strong per-loop isolation)",
+    )
+    kernel_image_path: str = Field(
+        default="",
+        description="Path to the pre-built kernel image (vmlinux)",
+    )
+    rootfs_image_path: str = Field(
+        default="",
+        description="Path to the pre-built rootfs image (ext4)",
+    )
+    firecracker_binary_path: str = Field(
+        default="firecracker",
+        description="Path to the `firecracker` binary",
+    )
+    min_pool_size: int = Field(
+        default=1,
+        ge=1,
+        le=64,
+        description="Minimum warm microVMs at daemon startup",
+    )
+    max_pool_size: int = Field(
+        default=4,
+        ge=1,
+        le=128,
+        description="Maximum microVMs to scale up under load",
+    )
+    vsock_port_base: int = Field(
+        default=1024,
+        ge=1024,
+        le=65535,
+        description="Base vsock port (per-VM port = base + worker_index)",
+    )
+    vm_cpu_count: int = Field(
+        default=2,
+        ge=1,
+        le=32,
+        description="vCPUs per microVM",
+    )
+    vm_mem_mib: int = Field(
+        default=2048,
+        ge=256,
+        le=65536,
+        description="Memory per microVM (MiB)",
+    )
+    idle_timeout_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Idle VM timeout before graceful shutdown (seconds)",
+    )
+    max_requests_per_worker: int = Field(
+        default=100,
+        ge=1,
+        description="Max requests before VM respawn (prevents memory buildup)",
+    )
+    request_timeout_seconds: int = Field(
+        default=0,
+        ge=0,
+        le=1_209_600,
+        description="Default per-request timeout in seconds (0 = no timeout)",
+    )
+    reuse_runner: bool = Field(
+        default=True,
+        description="Reuse one SootheRunner per VM between requests",
+    )
+    warmup_runner: bool = Field(
+        default=True,
+        description="Create cached SootheRunner at VM startup when reuse_runner is true",
+    )
+    warmup_core_agent: bool = Field(
+        default=True,
+        description=("Materialize LazyCoreAgent during VM warmup when warmup_runner is true"),
+    )
+    workspace_mount_mode: str = Field(
+        default="virtiofs",
+        description=(
+            "How the agent workspace is surfaced into the guest: "
+            "'virtiofs' (local single-host) or 'sync' (workspace_sync S3 backend)"
+        ),
+    )
+    extra_kernel_args: str = Field(
+        default="",
+        description="Extra kernel command-line arguments appended at boot",
+    )
+
+    def get_effective_pool_size(self) -> int:
+        """Get effective max pool size, ensuring max >= min."""
+        return max(self.min_pool_size, self.max_pool_size)
+
+
 class StaleWorkerReapConfig(BaseModel):
-    """Periodic reap of orphaned `multiprocessing.spawn` worker_pool children."""
+    """Periodic reap of orphaned `multiprocessing.spawn` process_pool children."""
 
     enabled: bool = Field(
         default=True,
-        description="Run periodic stale worker cleanup (effective when worker_pool is enabled)",
+        description="Run periodic stale worker cleanup (effective when process_pool is enabled)",
     )
     interval_seconds: int = Field(
         default=1800,
@@ -365,15 +489,16 @@ class MemoryProfilingConfig(BaseModel):
 
 __all__ = [
     "AKSKConfig",
-    "DistributedConfig",
+    "FirecrackerConfig",
     "IdentityConfig",
     "LoopGcConfig",
     "LoopStatusReconciliationConfig",
     "MemoryProfilingConfig",
+    "ProcessPoolConfig",
+    "RayConfig",
     "StaleWorkerReapConfig",
     "ThreadPoolConfig",
     "TokenConfig",
     "TransportConfig",
     "WebSocketConfig",
-    "WorkerPoolConfig",
 ]

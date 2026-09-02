@@ -2292,7 +2292,7 @@ class MessageRouter:
         so the next `await_clarification` node entry uses the new policy
         without waiting for a new turn. Returns `{"applied": False}` when no
         goal is running or the runner backend doesn't support hot-swap yet
-        (worker_pool / distributed); the caller may retry on the next turn.
+        (process_pool / ray); the caller may retry on the next turn.
         """
         d = self._daemon
         request_id = msg.get("request_id")

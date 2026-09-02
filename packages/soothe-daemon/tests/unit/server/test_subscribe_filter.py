@@ -18,7 +18,7 @@ async def test_subscribe_rejects_autopilot_worker_loop_id() -> None:
     transport.name = "test"
     client_id = await manager.create_session(transport, None)
 
-    # autopilot__wNNN is the WorkerPool-owned namespace.
+    # autopilot__wNNN is the ProcessPool-owned namespace.
     result = await manager.subscribe_loop(client_id, "autopilot__w001")
 
     assert result is False

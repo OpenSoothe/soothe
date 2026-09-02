@@ -167,9 +167,9 @@ Separate from `nano.yml` — loaded as `SootheDaemonConfig`. Controls transports
 | Field | Purpose | Default |
 |-------|---------|---------|
 | `thread_pool.request_timeout_seconds` | Wall-clock cap per client turn / loop run on a worker thread (`0` = no timeout) | **1209600** (14 days) |
-| `worker_pool.request_timeout_seconds` | Same cap when process-based worker pool is enabled | **1209600** (14 days) |
+| `process_pool.request_timeout_seconds` | Same cap when process-based worker pool is enabled | **1209600** (14 days) |
 | `thread_pool.idle_timeout_seconds` | Idle thread shutdown | 120s |
-| `worker_pool.stuck_worker_timeout_seconds` | Heartbeat-based stuck worker detection | 180s |
+| `process_pool.stuck_worker_timeout_seconds` | Heartbeat-based stuck worker detection | 180s |
 
 Interactive CLI/TUI goals and autopilot dispatches share the thread-pool request timeout. Set `0` only when you accept unbounded worker occupancy.
 

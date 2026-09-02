@@ -143,7 +143,7 @@ async def test_autopilot_loop_demoted_releases_worker_via_hook(
     """Demoting a stale autopilot-owned loop calls AutopilotService.reconcile_stale_worker.
 
     This closes the gap where the persistence-layer demote flipped the loop
-    row to idle but left the WorkerPool slot + WorkspaceReservation pinned
+    row to idle but left the ProcessPool slot + WorkspaceReservation pinned
     on the autopilot side (the "ghost-active worker" failure). The hook is
     fail-soft: a missing autopilot service (autopilot disabled) must not
     break reconciliation.

@@ -11,15 +11,16 @@ from soothe.config import SOOTHE_HOME
 
 from soothe_daemon.config.models import (
     ChannelsConfig,
-    DistributedConfig,
+    FirecrackerConfig,
     IdentityConfig,
     LoopGcConfig,
     LoopStatusReconciliationConfig,
     MemoryProfilingConfig,
+    ProcessPoolConfig,
+    RayConfig,
     StaleWorkerReapConfig,
     ThreadPoolConfig,
     TransportConfig,
-    WorkerPoolConfig,
 )
 
 if TYPE_CHECKING:
@@ -62,7 +63,7 @@ class SootheDaemonConfig(BaseSettings):
         default_factory=IdentityConfig,
         description=(
             "Identity service configuration (AKSK auth, JWT tokens, external mapping). "
-            "Disabled by default for backward compatibility."
+            "Disabled by default."
         ),
     )
 
@@ -172,7 +173,7 @@ class SootheDaemonConfig(BaseSettings):
     )
     stale_worker_reap: StaleWorkerReapConfig = Field(
         default_factory=StaleWorkerReapConfig,
-        description="Periodic cleanup of orphaned worker_pool subprocesses",
+        description="Periodic cleanup of orphaned process_pool subprocesses",
     )
 
     # --- Memory profiling -------------------------------------------
@@ -184,17 +185,21 @@ class SootheDaemonConfig(BaseSettings):
 
     # --- Loop runner mode (RFC-221) -----------------------------------------
 
-    distributed: DistributedConfig = Field(
-        default_factory=DistributedConfig,
-        description="Distributed loop execution configuration (Ray actors)",
+    ray: RayConfig = Field(
+        default_factory=RayConfig,
+        description="Ray distributed loop execution configuration (Ray actors).",
     )
-    worker_pool: WorkerPoolConfig = Field(
-        default_factory=WorkerPoolConfig,
-        description="Persistent worker pool configuration (local multiprocessing)",
+    process_pool: ProcessPoolConfig = Field(
+        default_factory=ProcessPoolConfig,
+        description="Persistent process pool configuration (local multiprocessing spawn)",
     )
     thread_pool: ThreadPoolConfig = Field(
         default_factory=ThreadPoolConfig,
         description="Thread pool configuration (shared-memory async execution)",
+    )
+    firecracker: FirecrackerConfig = Field(
+        default_factory=FirecrackerConfig,
+        description="Firecracker microVM runner configuration (strong per-loop isolation)",
     )
 
     # --- Linkage to agent core ---------------------------------------------
@@ -216,6 +221,7 @@ class SootheDaemonConfig(BaseSettings):
 
         with Path(path).open() as f:
             data = yaml.safe_load(f) or {}
+
         return cls(**data)
 
     @classmethod
@@ -251,28 +257,32 @@ class SootheDaemonConfig(BaseSettings):
     def validate_runner_mode(self) -> str:
         """Validate exactly one runner mode is enabled.
 
-        Returns the enabled mode name: "worker_pool", "thread_pool", or "distributed".
+        Returns the enabled mode name: "process_pool", "thread_pool",
+        "ray", or "firecracker".
 
         Raises:
         ValueError: If no mode is enabled, or multiple modes are enabled.
         """
         enabled_modes = []
-        if self.worker_pool.enabled:
-            enabled_modes.append("worker_pool")
+        if self.process_pool.enabled:
+            enabled_modes.append("process_pool")
         if self.thread_pool.enabled:
             enabled_modes.append("thread_pool")
-        if self.distributed.enabled:
-            enabled_modes.append("distributed")
+        if self.ray.enabled:
+            enabled_modes.append("ray")
+        if self.firecracker.enabled:
+            enabled_modes.append("firecracker")
 
         if len(enabled_modes) == 0:
             raise ValueError(
                 "No runner mode enabled. Set exactly one: "
-                "worker_pool.enabled=true, thread_pool.enabled=true, or distributed.enabled=true"
+                "process_pool.enabled=true, thread_pool.enabled=true, "
+                "ray.enabled=true, or firecracker.enabled=true"
             )
         if len(enabled_modes) > 1:
             raise ValueError(
                 f"Multiple runner modes enabled ({', '.join(enabled_modes)}). "
-                "Enable exactly one: worker_pool, thread_pool, or distributed"
+                "Enable exactly one: process_pool, thread_pool, ray, or firecracker"
             )
 
         return enabled_modes[0]

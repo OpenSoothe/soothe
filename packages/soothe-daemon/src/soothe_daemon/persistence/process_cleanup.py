@@ -55,7 +55,7 @@ def _looks_like_soothe_spawn(cmdline: str, soothe_root: Path | None) -> bool:
         return True
     if any(marker in cmdline for marker in _SOOTHE_MARKERS):
         return True
-    # worker_pool children often show only spawn_main in ps(1) output
+    # process_pool children often show only spawn_main in ps(1) output
     return "spawn_main" in cmdline
 
 

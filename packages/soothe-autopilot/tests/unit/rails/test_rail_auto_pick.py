@@ -17,6 +17,7 @@ from soothe.rails.selector import (
     resolve_rail_for_job,
     resolve_rail_id,
 )
+
 from soothe_autopilot.jobs.rail_selection import write_rail_selection
 
 

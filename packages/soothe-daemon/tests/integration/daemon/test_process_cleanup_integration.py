@@ -1,4 +1,4 @@
-"""Integration tests for stale worker_pool subprocess cleanup.
+"""Integration tests for stale process_pool subprocess cleanup.
 
 Exercises ``reap_stale_soothe_worker_processes`` against a real short-lived
 ``multiprocessing.spawn`` child so we do not only rely on mocked ``ps`` output.
@@ -23,7 +23,7 @@ def _spawn_child_sleep(seconds: float) -> None:
 @pytest.mark.integration
 @pytest.mark.slow
 def test_reap_terminates_orphaned_spawn_child() -> None:
-    """Orphan worker_pool child (parent exited) is reaped on cleanup."""
+    """Orphan process_pool child (parent exited) is reaped on cleanup."""
     ctx = get_context("spawn")
     proc = ctx.Process(target=_spawn_child_sleep, args=(30.0,), daemon=True)
     proc.start()

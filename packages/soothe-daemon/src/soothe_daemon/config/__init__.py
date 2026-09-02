@@ -1,15 +1,15 @@
 """Daemon configuration: `SootheDaemonConfig` + nested schemas."""
 
-from soothe_daemon.config.env import apply_env_overrides
 from soothe_daemon.config.models import (
     ACPConfig,
     ChannelsConfig,
-    DistributedConfig,
+    FirecrackerConfig,
     IdentityConfig,
+    ProcessPoolConfig,
+    RayConfig,
     ThreadPoolConfig,
     TransportConfig,
     WebSocketConfig,
-    WorkerPoolConfig,
 )
 from soothe_daemon.config.settings import (
     SootheDaemonConfig,
@@ -20,14 +20,14 @@ from soothe_daemon.config.settings import (
 __all__ = [
     "ACPConfig",
     "ChannelsConfig",
-    "DistributedConfig",
+    "FirecrackerConfig",
     "IdentityConfig",
+    "ProcessPoolConfig",
+    "RayConfig",
     "SootheDaemonConfig",
     "ThreadPoolConfig",
     "TransportConfig",
     "WebSocketConfig",
-    "WorkerPoolConfig",
-    "apply_env_overrides",
     "default_daemon_config_path",
     "default_soothe_config_path",
 ]

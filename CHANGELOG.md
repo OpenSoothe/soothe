@@ -8,14 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `FirecrackerLoopRunner` — a fourth `LoopRunnerProtocol` substrate that executes Soothe agent loops inside AWS Firecracker microVMs for strong per-loop isolation, selectable via `firecracker.enabled=True`. Pools warm microVMs and bridges stream chunks host↔guest over virtio-vsock; reuses `_pool_worker_body` / `SootheRunner` unchanged. Linux-only at runtime; import-safe on non-Linux (mirrors the Ray soft-dependency pattern).
 - MinIO object storage to the dev docker-compose stack (default profile), providing a local S3-compatible endpoint for the fsspec workspace sync backend (`s3://soothe/...`); the `soothe` bucket is provisioned automatically by a `soothe-minio-init` sidecar. S3 API on host port 19100, console on host port 19101 (avoids port conflict with triarch's MinIO on 19000).
 - `workspace_sync` section in the dev `nano.yml` config, wiring the fsspec workspace sync backend to the dev MinIO S3 endpoint (`s3://soothe/` bucket, endpoint `http://127.0.0.1:${SOOTHE_MINIO_PORT:-19100}`, credentials via `SOOTHE_MINIO_ROOT_USER` / `SOOTHE_MINIO_ROOT_PASSWORD` env vars).
-- `scripts/dev_workspace_sync_backup.py` — dev utility that constructs the S3 backend via `construct_sync_backend`, writes agent output files, creates a SNAPSHOT checkpoint (CAS blobs + manifest + checkpoint payload), publishes artifacts, and verifies the snapshot landed in MinIO S3.
 - PostgreSQL-backed `WorkspaceStateStore` for workspace sync, completing the unified persistence backend (PostgreSQL mode now uses the `soothe_metadata` database for workspace file/blob/checkpoint/artifact state, consistent with cron and display card stores).
 
 ### Changed
 - Move the rail module from `soothe-autopilot` into the `soothe` package as `soothe.rails`, consolidating rail definitions, prompt fragments, and builtin rail YAMLs into the core package.
 - Renamed `run_id` to `loop_id` across the workspace state subsystem for consistency with the display-card store naming convention.
+- Renamed loop runner classes for clarity: `PoolLoopRunner` → `ProcessLoopRunner`, `WorkerPool` → `ProcessPool`, `PoolMetrics` → `ProcessPoolMetrics`, `WorkerPoolConfig` → `ProcessPoolConfig`, `DistributedConfig` → `RayConfig`. Config YAML keys renamed: `worker_pool` → `process_pool`, `distributed` → `ray`. Mode strings renamed: `"worker_pool"` → `"process_pool"`, `"distributed"` → `"ray"`. Removed the `SOOTHE_DISTRIBUTED` env var (use `SOOTHE_DAEMON_RAY__ENABLED=true` via pydantic-settings). Removed the `apply_env_overrides` shim and `config/env.py` module (dead code).
 
 ### Fixed
 - Suppress the duplicate raw plan-markdown `AssistantMessage` card in the TUI when a plan-review `StructuredAskUserWidget` already displays the same plan body.

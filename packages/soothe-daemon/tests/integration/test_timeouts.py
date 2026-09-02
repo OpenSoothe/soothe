@@ -109,12 +109,8 @@ def timeout_ack() -> float:
     return get_timeout("ACK", 5.0, 1.0)
 
 
-# Legacy compatibility - maps to the existing integration_llm_idle_timeout
 def integration_llm_idle_timeout() -> float:
-    """Seconds to wait for daemon idle after an LLM-backed turn (override via env).
-
-    This is the legacy function preserved for backward compatibility.
-    """
+    """Seconds to wait for daemon idle after an LLM-backed turn (override via env)."""
     raw = os.getenv("SOOTHE_INTEGRATION_LLM_IDLE_TIMEOUT", "").strip()
     if raw:
         try:

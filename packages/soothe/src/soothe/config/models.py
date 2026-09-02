@@ -630,6 +630,44 @@ class WorkspaceReservationConfig(BaseModel):
     strict_overlap: bool = True
 
 
+class WorkspaceSyncConfig(BaseModel):
+    """Durable object-store backend for agent workspace materialization (RFC-906).
+
+    When ``source_uri`` is set, the daemon constructs an
+    :class:`~soothe.workspace.sync.FsspecSyncBackend` via
+    :func:`~soothe.workspace.sync.construct_sync_backend` to materialize
+    resources, checkpoint dirty files, and publish artifacts to the
+    configured S3/GCS/Azure bucket.
+
+    Args:
+        source_uri: Object-store URI (e.g. ``s3://bucket/prefix``).
+            Only ``s3``, ``gs``, and ``az`` schemes are permitted.
+        storage_options: Backend-specific options forwarded to fsspec
+            (endpoint_url, credentials, etc.). Prefer environment variables
+            or IAM roles over explicit credential dicts for production.
+        publish_prefix: Artifact publication prefix. Defaults to
+            ``<source_uri>/artifacts/`` when unset.
+    """
+
+    source_uri: str | None = Field(
+        default=None,
+        description="Object-store URI for workspace sync (s3://, gs://, az://).",
+    )
+    storage_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Backend-specific fsspec storage options (endpoint_url, credentials, etc.).",
+    )
+    publish_prefix: str | None = Field(
+        default=None,
+        description="Artifact publication prefix; defaults to <source_uri>/artifacts/.",
+    )
+
+    @property
+    def is_enabled(self) -> bool:
+        """True when ``source_uri`` is set."""
+        return bool(self.source_uri)
+
+
 class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory scratchpad.
 

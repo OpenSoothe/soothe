@@ -135,7 +135,7 @@ class WorkerProcess:
 
 
 @dataclass
-class PoolMetrics:
+class ProcessPoolMetrics:
     """Pool utilization and performance metrics."""
 
     total_workers: int
@@ -712,7 +712,7 @@ def _pool_worker_body(
     logger.info("Worker %s exiting after %d requests", worker_id, requests_completed)
 
 
-class WorkerPool:
+class ProcessPool:
     """Singleton pool of persistent worker processes for loop execution.
 
     Pre-warms N worker processes at daemon startup. Each worker has two queues:
@@ -729,7 +729,7 @@ class WorkerPool:
     - Shrinks back to min_pool_size when load decreases
 
     Architecture:
-    Daemon → LoopRunnerFactory → WorkerPool (singleton)
+    Daemon → LoopRunnerFactory → ProcessPool (singleton)
     ↓
     WorkerProcess[0..N]
     ← request_queue (dispatch requests)
@@ -742,7 +742,7 @@ class WorkerPool:
     - Shutdown: signal all workers to exit, wait, then force-kill
     """
 
-    _shared_pool: WorkerPool | None = None
+    _shared_pool: ProcessPool | None = None
     _pool_lock: asyncio.Lock | None = None
 
     def __init__(
@@ -806,7 +806,7 @@ class WorkerPool:
     @classmethod
     async def get_shared_instance(
         cls, config: SootheConfig, daemon_config: SootheDaemonConfig
-    ) -> WorkerPool:
+    ) -> ProcessPool:
         """Get or create the singleton pool instance."""
         if cls._shared_pool is not None:
             return cls._shared_pool
@@ -818,8 +818,8 @@ class WorkerPool:
             if cls._shared_pool is not None:
                 return cls._shared_pool
 
-            pool_config = daemon_config.worker_pool
-            pool = WorkerPool(
+            pool_config = daemon_config.process_pool
+            pool = ProcessPool(
                 config=config,
                 min_pool_size=pool_config.min_pool_size,
                 max_pool_size=pool_config.get_effective_pool_size(),
@@ -879,7 +879,7 @@ class WorkerPool:
             self._dispatch_stats_task = asyncio.create_task(self._periodic_dispatch_stats())
 
         logger.info(
-            "WorkerPool: pre-warmed %d workers (min=%d, max=%d, idle_timeout=%ds, max_requests=%d)",
+            "ProcessPool: pre-warmed %d workers (min=%d, max=%d, idle_timeout=%ds, max_requests=%d)",
             self._min_pool_size,
             self._min_pool_size,
             self._max_pool_size,
@@ -903,7 +903,7 @@ class WorkerPool:
         except TimeoutError:
             pending = sum(1 for event in events if not event.is_set())
             logger.warning(
-                "WorkerPool: %d/%d baseline workers still warming after %ds",
+                "ProcessPool: %d/%d baseline workers still warming after %ds",
                 pending,
                 len(events),
                 timeout,
@@ -955,7 +955,7 @@ class WorkerPool:
         self._workers[worker_id] = worker
         self._start_worker_bridge(worker_id)
 
-        logger.debug("WorkerPool: spawned worker %s", worker_id)
+        logger.debug("ProcessPool: spawned worker %s", worker_id)
         return worker, warmup_done_event
 
     def _start_worker_bridge(self, worker_id: str) -> None:
@@ -992,7 +992,7 @@ class WorkerPool:
                 if not self._running:
                     break
                 logger.debug(
-                    "WorkerPool: bridge read failed worker=%s",
+                    "ProcessPool: bridge read failed worker=%s",
                     worker_id,
                     exc_info=True,
                 )
@@ -1000,7 +1000,7 @@ class WorkerPool:
 
             if not isinstance(msg, tuple) or len(msg) != 3:
                 logger.debug(
-                    "WorkerPool: bridge ignoring malformed message worker=%s: %r",
+                    "ProcessPool: bridge ignoring malformed message worker=%s: %r",
                     worker_id,
                     msg,
                 )
@@ -1022,7 +1022,7 @@ class WorkerPool:
         if msg_type == "heartbeat":
             worker.last_heartbeat_at = datetime.now()
             logger.debug(
-                "WorkerPool: heartbeat from worker=%s request_id=%s elapsed=%.1fs",
+                "ProcessPool: heartbeat from worker=%s request_id=%s elapsed=%.1fs",
                 worker_id,
                 request_id,
                 payload.get("elapsed_seconds", 0) if isinstance(payload, dict) else 0,
@@ -1034,7 +1034,7 @@ class WorkerPool:
             if response_queue is not None:
                 await response_queue.put(("timeout", payload))
             logger.warning(
-                "WorkerPool: worker %s request %s timed out",
+                "ProcessPool: worker %s request %s timed out",
                 worker_id,
                 request_id,
             )
@@ -1045,7 +1045,7 @@ class WorkerPool:
             if response_queue is not None:
                 await response_queue.put(("cancelled", payload))
             logger.info(
-                "WorkerPool: worker %s request %s cancelled cooperatively",
+                "ProcessPool: worker %s request %s cancelled cooperatively",
                 worker_id,
                 request_id,
             )
@@ -1067,7 +1067,7 @@ class WorkerPool:
                     )
                 except TimeoutError:
                     logger.warning(
-                        "WorkerPool: asyncio response queue full, dropping chunk request_id=%s",
+                        "ProcessPool: asyncio response queue full, dropping chunk request_id=%s",
                         request_id,
                     )
             else:
@@ -1076,7 +1076,7 @@ class WorkerPool:
                 worker.last_heartbeat_at = datetime.now()
         else:
             logger.debug(
-                "WorkerPool: no pending route for request_id=%s (%s); discarding",
+                "ProcessPool: no pending route for request_id=%s (%s); discarding",
                 request_id,
                 msg_type,
             )
@@ -1097,7 +1097,7 @@ class WorkerPool:
                 raise
             except Exception:
                 logger.exception(
-                    "WorkerPool: abandon drain failed for worker=%s request_id=%s",
+                    "ProcessPool: abandon drain failed for worker=%s request_id=%s",
                     worker.worker_id,
                     request_id,
                 )
@@ -1132,7 +1132,7 @@ class WorkerPool:
                     saw_terminal = True
                     worker.status = WorkerStatus.CLEANING_UP
                     logger.info(
-                        "WorkerPool: client disconnected; worker %s request %s ended with "
+                        "ProcessPool: client disconnected; worker %s request %s ended with "
                         "%s after %d undelivered chunk(s)",
                         worker.worker_id,
                         request_id,
@@ -1143,7 +1143,7 @@ class WorkerPool:
                 if msg_type == "ready":
                     return
                 logger.debug(
-                    "WorkerPool: unexpected msg_type=%s in abandon drain for request_id=%s",
+                    "ProcessPool: unexpected msg_type=%s in abandon drain for request_id=%s",
                     msg_type,
                     request_id,
                 )
@@ -1168,7 +1168,7 @@ class WorkerPool:
         aio_q = self._pending_responses.get(req_id)
         if aio_q is None:
             logger.warning(
-                "WorkerPool: worker %s died while busy but no pending route (request_id=%s)",
+                "ProcessPool: worker %s died while busy but no pending route (request_id=%s)",
                 worker.worker_id,
                 req_id,
             )
@@ -1192,14 +1192,14 @@ class WorkerPool:
         except Exception:
             worker.dead_failure_routed = False
             logger.exception(
-                "WorkerPool: failed to deliver dead-worker error for request_id=%s",
+                "ProcessPool: failed to deliver dead-worker error for request_id=%s",
                 req_id,
             )
 
     async def _handle_dead_worker(self, worker: WorkerProcess) -> None:
         """Recover from a dead OS process: fail in-flight work and respawn the slot."""
         logger.warning(
-            "WorkerPool: worker %s OS process ended (exitcode=%s, busy=%s, request_id=%s)",
+            "ProcessPool: worker %s OS process ended (exitcode=%s, busy=%s, request_id=%s)",
             worker.worker_id,
             worker.process.exitcode,
             worker.status == WorkerStatus.BUSY,
@@ -1222,7 +1222,7 @@ class WorkerPool:
             backoff = min(30.0, 0.2 * (2.0 ** min(streak - 5, 8)))
             crash_log = Path(SOOTHE_HOME) / "logs" / "pool_worker_bootstrap.log"
             logger.error(
-                "WorkerPool: worker %s died %d times in quick succession; "
+                "ProcessPool: worker %s died %d times in quick succession; "
                 "waiting %.1fs before respawn (if the child crashes on startup, see %s)",
                 wid,
                 streak,
@@ -1234,7 +1234,7 @@ class WorkerPool:
         try:
             await self._respawn_worker(worker)
         except Exception:
-            logger.exception("WorkerPool: failed to respawn dead worker %s", worker.worker_id)
+            logger.exception("ProcessPool: failed to respawn dead worker %s", worker.worker_id)
 
     async def _worker_health_watchdog(self) -> None:
         """Stuck/dead worker detection and idle stale-queue drain (no chunk relay;)."""
@@ -1253,7 +1253,7 @@ class WorkerPool:
                         heartbeat_age = (now - worker.last_heartbeat_at).total_seconds()
                         if heartbeat_age > self._stuck_worker_timeout_seconds:
                             logger.warning(
-                                "WorkerPool: worker %s stuck (no heartbeat for %.0fs, request_id=%s)",
+                                "ProcessPool: worker %s stuck (no heartbeat for %.0fs, request_id=%s)",
                                 worker_id,
                                 heartbeat_age,
                                 worker.current_request_id,
@@ -1264,7 +1264,7 @@ class WorkerPool:
                         elapsed = (now - worker.last_activity).total_seconds()
                         if elapsed > self._stuck_worker_timeout_seconds * 2:
                             logger.warning(
-                                "WorkerPool: worker %s never sent heartbeat (%.0fs since dispatch, request_id=%s)",
+                                "ProcessPool: worker %s never sent heartbeat (%.0fs since dispatch, request_id=%s)",
                                 worker_id,
                                 elapsed,
                                 worker.current_request_id,
@@ -1293,7 +1293,7 @@ class WorkerPool:
                     last_kind = msg[0]
                 if drained:
                     logger.debug(
-                        "WorkerPool: drained %d stale response(s) from idle worker %s (last=%s)",
+                        "ProcessPool: drained %d stale response(s) from idle worker %s (last=%s)",
                         drained,
                         worker_id,
                         last_kind,
@@ -1304,7 +1304,7 @@ class WorkerPool:
     async def _handle_stuck_worker(self, worker: WorkerProcess) -> None:
         """Handle a worker that hasn't sent heartbeat for too long."""
         logger.warning(
-            "WorkerPool: terminating stuck worker %s (request_id=%s)",
+            "ProcessPool: terminating stuck worker %s (request_id=%s)",
             worker.worker_id,
             worker.current_request_id,
         )
@@ -1327,11 +1327,11 @@ class WorkerPool:
         try:
             await self._respawn_worker(worker)
         except Exception:
-            logger.exception("WorkerPool: failed to respawn stuck worker %s", worker.worker_id)
+            logger.exception("ProcessPool: failed to respawn stuck worker %s", worker.worker_id)
 
     async def _respawn_worker(self, dead_worker: WorkerProcess) -> None:
         """Replace a dead worker with a fresh one."""
-        logger.warning("WorkerPool: respawning dead worker %s", dead_worker.worker_id)
+        logger.warning("ProcessPool: respawning dead worker %s", dead_worker.worker_id)
 
         # Clean up dead process
         if dead_worker.process.is_alive():
@@ -1380,12 +1380,12 @@ class WorkerPool:
             if msg_type == "ready":
                 return
             if msg_type == "chunk":
-                logger.debug("WorkerPool: discarding stray chunk while awaiting worker ready")
+                logger.debug("ProcessPool: discarding stray chunk while awaiting worker ready")
                 continue
             if msg_type == "heartbeat":
                 continue
             logger.warning(
-                "WorkerPool: unexpected %s while awaiting worker ready",
+                "ProcessPool: unexpected %s while awaiting worker ready",
                 msg_type,
             )
 
@@ -1425,7 +1425,7 @@ class WorkerPool:
             self._next_worker_index += 1
             spawn_config = _spawn_safe_config(self._config)
             logger.info(
-                "WorkerPool: scaling up, spawning extra worker %s (active=%d, max=%d)",
+                "ProcessPool: scaling up, spawning extra worker %s (active=%d, max=%d)",
                 worker_id,
                 active_count + 1,
                 self._max_pool_size,
@@ -1509,7 +1509,7 @@ class WorkerPool:
                         "see daemon logs."
                     )
                 logger.info(
-                    "WorkerPool: worker %s exited during dispatch handoff "
+                    "ProcessPool: worker %s exited during dispatch handoff "
                     "(often idle timeout vs acquire); recovering",
                     worker.worker_id,
                 )
@@ -1580,19 +1580,19 @@ class WorkerPool:
         """
         worker_id = self._workers_by_loop_id.get(loop_id)
         if worker_id is None:
-            logger.debug("WorkerPool: no active request for loop_id=%s", loop_id)
+            logger.debug("ProcessPool: no active request for loop_id=%s", loop_id)
             return
 
         worker = self._workers.get(worker_id)
         if worker is None:
-            logger.debug("WorkerPool: worker %s not found for loop_id=%s", worker_id, loop_id)
+            logger.debug("ProcessPool: worker %s not found for loop_id=%s", worker_id, loop_id)
             return
 
         # Set the cancellation Event (inherited by worker process at spawn)
         worker.cancel_event.set()
 
         logger.info(
-            "WorkerPool: cancellation signal sent for loop_id=%s to worker=%s",
+            "ProcessPool: cancellation signal sent for loop_id=%s to worker=%s",
             loop_id,
             worker_id,
         )
@@ -1773,7 +1773,7 @@ class WorkerPool:
                 pass
         self._abandon_drain_tasks.clear()
 
-        logger.info("WorkerPool: shutting down %d workers", len(self._workers))
+        logger.info("ProcessPool: shutting down %d workers", len(self._workers))
 
         loop = asyncio.get_event_loop()
 
@@ -1793,7 +1793,7 @@ class WorkerPool:
                     )
                 except TimeoutError:
                     logger.warning(
-                        "WorkerPool: worker %s did not exit gracefully, terminating",
+                        "ProcessPool: worker %s did not exit gracefully, terminating",
                         worker.worker_id,
                     )
                     worker.process.terminate()
@@ -1801,16 +1801,16 @@ class WorkerPool:
         # Force kill any remaining
         for worker in self._workers.values():
             if worker.process.is_alive():
-                logger.warning("WorkerPool: killing worker %s", worker.worker_id)
+                logger.warning("ProcessPool: killing worker %s", worker.worker_id)
                 worker.process.kill()
                 worker.process.join(timeout=2)
 
         self._workers.clear()
         self._workers_by_loop_id.clear()
         self._pending_responses.clear()
-        logger.info("WorkerPool: shutdown complete")
+        logger.info("ProcessPool: shutdown complete")
 
-    def get_metrics(self) -> PoolMetrics:
+    def get_metrics(self) -> ProcessPoolMetrics:
         """Return pool utilization and performance metrics."""
         idle = sum(1 for w in self._workers.values() if w.status == WorkerStatus.IDLE)
         busy = sum(1 for w in self._workers.values() if w.status == WorkerStatus.BUSY)
@@ -1825,7 +1825,7 @@ class WorkerPool:
         if self._metrics_latencies:
             avg_latency = sum(self._metrics_latencies[-100:]) / len(self._metrics_latencies[-100:])
 
-        return PoolMetrics(
+        return ProcessPoolMetrics(
             total_workers=self._max_pool_size,
             idle_workers=idle,
             busy_workers=busy,
@@ -1838,7 +1838,7 @@ class WorkerPool:
         )
 
 
-class PoolLoopRunner:
+class ProcessLoopRunner:
     """Runs agent loops using the persistent worker pool.
 
     Implements LoopRunnerProtocol for integration with QueryEngine.
@@ -1854,17 +1854,17 @@ class PoolLoopRunner:
         self._loop_id = loop_id
         self._config = config
         self._daemon_config = daemon_config
-        self._pool: WorkerPool | None = None
+        self._pool: ProcessPool | None = None
 
     async def run(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
         """Delegate to shared pool, stream results."""
-        pool = await WorkerPool.get_shared_instance(self._config, self._daemon_config)
+        pool = await ProcessPool.get_shared_instance(self._config, self._daemon_config)
         self._pool = pool
 
         async for chunk in pool.submit(request):
             yield chunk
 
-    async def _resolve_pool(self) -> WorkerPool:
+    async def _resolve_pool(self) -> ProcessPool:
         """Return the shared pool, fetching it if `run` hasn't yet bound it.
 
         `cancel` / `is_idle` / `force_kill` may be called before `run`
@@ -1872,7 +1872,7 @@ class PoolLoopRunner:
         shared instance here keeps those paths safe to call pre-dispatch.
         """
         if self._pool is None:
-            self._pool = await WorkerPool.get_shared_instance(self._config, self._daemon_config)
+            self._pool = await ProcessPool.get_shared_instance(self._config, self._daemon_config)
         return self._pool
 
     async def cancel(self) -> None:
@@ -1891,7 +1891,7 @@ class PoolLoopRunner:
         await pool.force_kill_worker_by_loop_id(self._loop_id, timeout=timeout)
 
     def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap clarification mode — not yet supported for worker_pool mode.
+        """Hot-swap clarification mode — not yet supported for process_pool mode.
 
         Subprocess workers don't expose their `SootheRunner` to the main
         process. Returns `False` so the caller falls back to the next-turn
@@ -1902,10 +1902,10 @@ class PoolLoopRunner:
 
 
 __all__ = [
-    "WorkerPool",
+    "ProcessPool",
     "WorkerProcess",
     "WorkerStatus",
-    "PoolLoopRunner",
-    "PoolMetrics",
+    "ProcessLoopRunner",
+    "ProcessPoolMetrics",
     "_pool_worker",
 ]

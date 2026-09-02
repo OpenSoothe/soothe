@@ -72,7 +72,7 @@ daemon/persistence/
 ```
 
 - **CLI**: `python -m soothe_daemon.persistence` (optional `--dry-run`) — manual reap when the daemon is stopped or after crashes.
-- **Automatic**: start/stop one-shot reap; with `worker_pool.enabled` and `stale_worker_reap.enabled`, periodic reap every `stale_worker_reap.interval_seconds` (default 1800s) via an asyncio task (does not block the event loop).
+- **Automatic**: start/stop one-shot reap; with `process_pool.enabled` and `stale_worker_reap.enabled`, periodic reap every `stale_worker_reap.interval_seconds` (default 1800s) via an asyncio task (does not block the event loop).
 
 ---
 

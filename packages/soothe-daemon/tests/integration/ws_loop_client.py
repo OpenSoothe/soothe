@@ -1,8 +1,7 @@
 """Loop-scoped WebSocket helpers for integration tests (RFC-503, RFC-450).
 
 These wrap the protocol-1 ``request`` / ``subscribe`` / ``notify`` flows so
-tests use the daemon's ``loop_*`` RPC methods directly — no legacy
-backward-compat layer.
+tests use the daemon's ``loop_*`` RPC methods directly.
 
 Under protocol-1, the daemon's ``MessageRouter`` sends response envelopes of
 the form ``{proto: "1", type: "response", result: {...}, id: request_id}``.

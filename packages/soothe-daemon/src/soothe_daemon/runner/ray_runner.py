@@ -22,7 +22,7 @@ class RayLoopRunner:
     """Manages one `LoopRunnerActor` (Ray remote actor) per `loop_id`.
 
     One instance per loop. Created by `LoopRunnerFactory` when
-    `SootheDaemonConfig.distributed.enabled=True`.
+    `SootheDaemonConfig.ray.enabled=True`.
     """
 
     def __init__(self, loop_id: str, config: SootheConfig) -> None:

@@ -1345,7 +1345,7 @@ class ThreadPool:
     async def force_cancel_worker_by_loop_id(self, loop_id: str, timeout: float = 10.0) -> None:
         """Force-cancel the worker mapped to `loop_id` (cancel backstop).
 
-        Mirrors `WorkerPool.force_kill_worker_by_loop_id` for the thread
+        Mirrors `ProcessPool.force_kill_worker_by_loop_id` for the thread
         runtime: resolves `loop_id` → `worker_id` then delegates to
         `force_cancel_worker`. No-op when no worker is mapped.
         """

@@ -65,7 +65,7 @@ loop_status_reconciliation:
   stale_running_seconds: 180  # ~6 heartbeat windows
   batch_size: 100
 
-# Stale worker reap (also requires worker_pool.enabled)
+# Stale worker reap (also requires process_pool.enabled)
 stale_worker_reap:
   enabled: true
   interval_seconds: 1800
