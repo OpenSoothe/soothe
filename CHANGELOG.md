@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.5] - 2026-09-03
+
 ### Added
 - `QueuedGoalsBar` — a dedicated TUI widget that renders all queued goals as selectable rows above the chat input, replacing the old per-goal message cards. Supports multiple queued goals, keyboard navigation (Up/Down), Enter to submit, Up arrow to edit, Esc to cancel, and a Ctrl+q shortcut to focus the bar with a visual activation flash.
 - `BoxLiteLoopRunner` — a fifth `LoopRunnerProtocol` substrate that executes Soothe agent loops inside lightweight containers via the `boxlite` Python SDK for cross-platform per-loop isolation, selectable via `loop_runner.runner_mode='boxlite'`. Unlike Firecracker (Linux-only), BoxLite works on Linux, macOS, and Windows — it uses the `boxlite` embeddable VM runtime and exec stream stdin/stdout for host↔container communication instead of vsock and Docker. Pools warm containers and bridges stream chunks host↔container over the boxlite exec stream; reuses `_pool_worker_body` / `SootheRunner` unchanged. The module is import-safe everywhere; `LoopRunnerFactory` validates `container_image`/`rootfs_path` presence at construction time.
@@ -22,9 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move the rail module from `soothe-autopilot` into the `soothe` package as `soothe.rails`, consolidating rail definitions, prompt fragments, and builtin rail YAMLs into the core package.
 - Renamed `run_id` to `loop_id` across the workspace state subsystem for consistency with the display-card store naming convention.
 - Renamed loop runner classes for clarity: `PoolLoopRunner` → `ProcessLoopRunner`, `WorkerPool` → `ProcessPool`, `PoolMetrics` → `ProcessPoolMetrics`, `WorkerPoolConfig` → `ProcessPoolConfig`, `DistributedConfig` → `RayConfig`. Config YAML keys renamed: `worker_pool` → `process_pool`, `distributed` → `ray`. Mode strings renamed: `"worker_pool"` → `"process_pool"`, `"distributed"` → `"ray"`. Removed the `SOOTHE_DISTRIBUTED` env var (use `SOOTHE_DAEMON_LOOP_RUNNER__RUNNER_MODE=ray` via pydantic-settings). Removed the `apply_env_overrides` shim and `config/env.py` module (dead code).
+- Bump `soothe-nano` floor to `1.2.23` (submodule pinned accordingly).
 
 ### Fixed
 - Suppress the duplicate raw plan-markdown `AssistantMessage` card in the TUI when a plan-review `StructuredAskUserWidget` already displays the same plan body.
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v1.0.4...v1.0.5
 
 ## [v1.0.4] - 2026-09-01
 
