@@ -264,6 +264,18 @@ persistence:
   archive_retention_days: 90
   archive_max_count: 1000
 
+vector_stores:
+  - name: sqlite_vec_default
+    provider_type: sqlite_vec
+    dsn: null
+    index_type: hnsw
+    url: null
+    api_key: null
+    grpc_port: 50051
+
+vector_store_router:
+  default: sqlite_vec_default:soothe_default
+
 observability:
   log_file_level: INFO
   log_file_path: null
@@ -343,15 +355,3 @@ optimization:
     llm_confidence_threshold: 0.7
   structured_plan:
     enabled: true
-
-vector_stores:
-  - name: sqlite_vec_default
-    provider_type: sqlite_vec
-    dsn: null
-    index_type: hnsw
-    url: null
-    api_key: null
-    grpc_port: 50051
-
-vector_store_router:
-  default: sqlite_vec_default:soothe_default

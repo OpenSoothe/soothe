@@ -285,40 +285,27 @@ embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
-agent:
-  middleware:
-    llm_rate_limit:
-      rpm_limit: 180
-      concurrent_limit: 4
-      global_concurrent_limit: 18
+persistence:
+  default_backend: sqlite
+
+vector_stores:
+  - name: sqlite_vec_dev
+    provider_type: sqlite_vec
+    dsn: null
+    index_type: hnsw
+    url: null
+    api_key: null
+    grpc_port: 50051
+
+vector_store_router:
+  default: sqlite_vec_dev:soothe_default
 
 tools:
   wizsearch:
     default_engines:
       - duckduckgo
       - bing
-  http_requests:
-    allow_dangerous_requests: false
-  deepxiv:
-    token: "${DEEPXIV_API_KEY}"
 
-persistence:
-  default_backend: sqlite
-  # Unused while default_backend is sqlite; kept for a quick Postgres flip:
-  postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
-  soothe_postgres_dsn: "${SOOTHE_POSTGRES_DSN}"
-  postgres:
-    pool_max_idle_seconds: 90
-    pool_max_lifetime_seconds: 900
-
-# Workspace sync — durable object-store backend for agent workspace
-# materialization, checkpointing, and artifact publication (RFC-906).
-# Dev MinIO: s3://soothe/ bucket on the soothe-minio container (default
-# profile). S3 API on host port ${SOOTHE_MINIO_PORT:-19100}; console on
-# ${SOOTHE_MINIO_CONSOLE_PORT:-19101}. Credentials via env vars below.
-# The construct_sync_backend factory passes endpoint_url/key/secret to
-# fsspec's s3fs; client_kwargs.endpoint_url is the boto3-style override
-# that s3fs maps to the S3 endpoint.
 workspace_sync:
   source_uri: "s3://soothe/"
   storage_options:
@@ -339,17 +326,3 @@ observability:
 
 security:
   allow_paths_outside_workspace: true
-  whitelist_paths_bypass: []
-  whitelist_commands_bypass: []
-
-vector_stores:
-  - name: sqlite_vec_dev
-    provider_type: sqlite_vec
-    dsn: null
-    index_type: hnsw
-    url: null
-    api_key: null
-    grpc_port: 50051
-
-vector_store_router:
-  default: sqlite_vec_dev:soothe_default
