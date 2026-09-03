@@ -48,6 +48,7 @@ from soothe_cli.tui.widgets.messages import (
 )
 from soothe_cli.tui.widgets.pinned_goal_bar import PinnedGoalBar
 from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
+from soothe_cli.tui.widgets.queued_goals_bar import QueuedGoalsBar
 from soothe_cli.tui.widgets.status import StatusBar
 from soothe_cli.tui.widgets.welcome import WelcomeBanner
 
@@ -130,6 +131,13 @@ class SootheApp(
             "ctrl+g",
             "toggle_pinned_goal",
             "Toggle Pinned Goal",
+            show=False,
+            priority=True,
+        ),
+        Binding(
+            "ctrl+q",
+            "focus_queued_goals",
+            "Focus Queued Goals",
             show=False,
             priority=True,
         ),
@@ -496,6 +504,13 @@ class SootheApp(
             default_visible=plan_visible,
         )
         with Container(id="bottom-app-container"):
+            # Queued goals bar — inside the docked bottom container, above
+            # the thinking row and chat input. Hidden when the queue is
+            # empty; shows all pending queued goals as selectable rows.
+            # Placed inside #bottom-app-container (rather than as a separate
+            # docked sibling) because Textual does not stack multiple
+            # docked-to-same-edge widgets — they overlap instead.
+            yield QueuedGoalsBar(id="queued-goals")
             with Container(id="thinking-status"):
                 yield TipRow(id="tip-row")
             yield ChatInput(

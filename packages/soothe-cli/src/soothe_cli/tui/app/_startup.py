@@ -646,9 +646,8 @@ class _StartupMixin:
         # Discard any messages queued while connecting
         if self._pending_messages:
             self._pending_messages.clear()
-            for w in self._queued_widgets:
-                w.remove()
             self._queued_widgets.clear()
+            self._refresh_queued_goal_tips()
         self._deferred_actions.clear()
 
     @staticmethod

@@ -20,6 +20,7 @@ from soothe_cli.runtime.token_events_debug import TokenEventTrace
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.messages import AssistantMessage, UserMessage
 from soothe_cli.tui.widgets.pinned_goal_bar import PinnedGoalBar
+from soothe_cli.tui.widgets.queued_goals_bar import QueuedGoalsBar
 
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
@@ -519,6 +520,23 @@ class _UIMixin:
         # Re-enabled: evaluate visibility and content from the current
         # scroll position.
         self._sync_pinned_goal_visibility()
+
+    def action_focus_queued_goals(self) -> None:
+        """Focus the queued goals bar (Ctrl+q).
+
+        When the bar has queued goals, moves keyboard focus to it so the
+        user can navigate with arrow keys, edit with Enter, or cancel
+        with Esc. When the queue is empty, this is a no-op.
+        """
+        if self.screen.is_modal:
+            return
+        try:
+            bar = self.query_one("#queued-goals", QueuedGoalsBar)
+        except NoMatches:
+            return
+        if not bar.has_goals:
+            return
+        bar.activate()
 
     def _on_chat_scroll_y_changed(self, _old: float, _new: float) -> None:
         """React to chat scroll position changes to show/hide the pinned bar.

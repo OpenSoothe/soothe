@@ -38,6 +38,7 @@ from soothe_cli.tui.widgets.messages import (
     SkillMessage,
     SummarizationMessage,
 )
+from soothe_cli.tui.widgets.queued_goals_bar import QueuedGoalsBar
 
 logger = logging.getLogger(__name__)
 
@@ -66,17 +67,40 @@ class _MessagesMixin:
     """Message widget lifecycle, store management, queue, interrupt/quit, toggles, editor, and events."""
 
     def _refresh_queued_goal_tips(self) -> None:
-        """Show queue interaction tips on the most recently queued goal only."""
-        if not self._queued_widgets:
+        """Sync the queued goals bar with the current queue state.
+
+        Feeds the current ``_pending_messages`` snapshot to the
+        ``QueuedGoalsBar`` so it re-renders all rows.  Shows queue
+        interaction tips on the bar when the tail goal is a normal-mode
+        goal and the agent is running.
+        """
+        self._sync_queued_goals_bar()
+        if not self._pending_messages:
             return
-        tip_index: int | None = None
+        show_tips = False
         if self._pending_messages and self._pending_messages[-1].mode == "normal":
-            pending_tail_index = len(self._pending_messages) - 1
-            if pending_tail_index < len(self._queued_widgets):
-                tip_index = pending_tail_index
-        for index, widget in enumerate(self._queued_widgets):
-            with suppress(Exception):
-                widget.set_show_queue_tips(tip_index is not None and index == tip_index)
+            show_tips = True
+        try:
+            bar = self.query_one("#queued-goals", QueuedGoalsBar)
+        except Exception:
+            # NoMatches, ScreenStackError, or no app/screen in test stubs.
+            return
+        with suppress(Exception):
+            bar.set_show_tips(show_tips)
+
+    def _sync_queued_goals_bar(self) -> None:
+        """Push the current ``_pending_messages`` snapshot to the bar widget.
+
+        Safe to call when the bar is not yet mounted (e.g. during startup
+        or in unit tests using stubs) — the call is silently skipped.
+        """
+        try:
+            bar = self.query_one("#queued-goals", QueuedGoalsBar)
+        except Exception:
+            # NoMatches, ScreenStackError, or no app/screen in test stubs.
+            return
+        goals = list(self._pending_messages)
+        bar.set_goals(goals)
 
     def _has_pending_chat_input(self) -> bool:
         """Return whether chat input has draft content that should be preserved."""
@@ -676,18 +700,15 @@ class _MessagesMixin:
         await self._set_spinner(None)
 
     def _pop_last_queued_entry(self) -> Any | None:
-        """Pop the latest queued message and paired widget, if available."""
+        """Pop the latest queued message, if available.
+
+        Removes the tail entry from ``_pending_messages`` and refreshes
+        the ``QueuedGoalsBar`` so the row disappears.
+        """
         if not self._pending_messages:
             return None
         msg = self._pending_messages.pop()
-        if self._queued_widgets:
-            widget = self._queued_widgets.pop()
-            widget.remove()
-            self._refresh_queued_goal_tips()
-        else:
-            logger.warning(
-                "Queued-widget deque empty while pending-messages was not; widget/message tracking may be out of sync"
-            )
+        self._refresh_queued_goal_tips()
         return msg
 
     def _restore_last_queued_goal_to_input(self) -> bool:
@@ -713,11 +734,10 @@ class _MessagesMixin:
         return True
 
     def _discard_queue(self) -> None:
-        """Clear pending messages, deferred actions, and queued widgets."""
+        """Clear pending messages, deferred actions, and queued goals bar."""
         self._pending_messages.clear()
-        for w in self._queued_widgets:
-            w.remove()
         self._queued_widgets.clear()
+        self._refresh_queued_goal_tips()
         self._deferred_actions.clear()
 
     def _cancel_last_queued_message(self) -> bool:
@@ -738,6 +758,86 @@ class _MessagesMixin:
         if queue_tail.mode != "normal":
             return False
         return self._restore_last_queued_goal_to_input()
+
+    def cancel_queued_goal_at_index(self, index: int) -> bool:
+        """Cancel the queued goal at ``index`` without restoring it to input.
+
+        Args:
+            index: Zero-based index into ``_pending_messages`` (0 = head/oldest).
+
+        Returns:
+            ``True`` when a goal was cancelled, ``False`` when the index is
+            out of range.
+        """
+        if index < 0 or index >= len(self._pending_messages):
+            return False
+        # deque doesn't support del[] — convert to list, remove, rebuild.
+        items = list(self._pending_messages)
+        msg = items.pop(index)
+        self._pending_messages.clear()
+        self._pending_messages.extend(items)
+        self._refresh_queued_goal_tips()
+        self.notify(f"Cancelled queued goal: {msg.text[:60]}", timeout=2)
+        return True
+
+    def edit_queued_goal_at_index(self, index: int) -> bool:
+        """Move the queued goal at ``index`` into the chat input for editing.
+
+        Only normal-mode goals can be edited; shell/command goals are skipped
+        to avoid clobbering the input with a mode prefix.
+
+        Args:
+            index: Zero-based index into ``_pending_messages`` (0 = head/oldest).
+
+        Returns:
+            ``True`` when the goal was moved to input, ``False`` otherwise.
+        """
+        if index < 0 or index >= len(self._pending_messages):
+            return False
+        if self._has_pending_chat_input():
+            return False
+        items = list(self._pending_messages)
+        msg = items[index]
+        if msg.mode != "normal":
+            return False
+        items.pop(index)
+        self._pending_messages.clear()
+        self._pending_messages.extend(items)
+        if self._chat_input:
+            self._chat_input.value = msg.text
+        self._refresh_queued_goal_tips()
+        self.notify("Queued goal moved to input", timeout=2)
+        return True
+
+    def submit_queued_goal_at_index(self, index: int) -> bool:
+        """Submit the queued goal at ``index`` for immediate execution.
+
+        Pops the goal from the queue and processes it right away, bypassing
+        the normal FIFO order.  Only valid when no agent/worker is already
+        running, since submitting while busy would just re-queue the goal.
+
+        Args:
+            index: Zero-based index into ``_pending_messages`` (0 = head/oldest).
+
+        Returns:
+            ``True`` when the goal was submitted, ``False`` when the index is
+            out of range or an agent is already running.
+        """
+        if index < 0 or index >= len(self._pending_messages):
+            return False
+        if self._agent_running or self._shell_running or self._processing_pending:
+            self.notify("Agent is busy — goal stays queued", timeout=2)
+            return False
+        items = list(self._pending_messages)
+        msg = items.pop(index)
+        self._pending_messages.clear()
+        self._pending_messages.extend(items)
+        self._refresh_queued_goal_tips()
+        import asyncio
+
+        asyncio.ensure_future(self._process_message(msg.text, msg.mode))
+        self.notify(f"Submitting: {msg.text[:60]}", timeout=2)
+        return True
 
     def _defer_action(self, action: DeferredAction) -> None:
         """Queue a deferred action, replacing any existing action of the same kind.
@@ -943,13 +1043,25 @@ class _MessagesMixin:
 
         # Close completion popup or exit slash/shell command mode
         if self._chat_input:
-            # When queue has pending goals and input is idle, Esc cancels the
-            # latest queued normal goal (without interrupting current work).
+            # When queue has pending goals and input is idle, Esc cancels a
+            # queued normal goal (without interrupting current work). If the
+            # QueuedGoalsBar is focused, cancel the selected goal; otherwise
+            # cancel the latest (tail) goal.
             if not self._has_pending_chat_input():
-                queue_tail = self._pending_messages[-1] if self._pending_messages else None
-                if queue_tail is not None and queue_tail.mode == "normal":
-                    if self._cancel_last_queued_message():
-                        return
+                cancelled = False
+                try:
+                    bar = self.query_one("#queued-goals", QueuedGoalsBar)
+                except Exception:
+                    # NoMatches, ScreenStackError, or no app/screen in test stubs.
+                    bar = None
+                if bar is not None and self.focused is bar:
+                    cancelled = bar.cancel_selected()
+                if not cancelled:
+                    queue_tail = self._pending_messages[-1] if self._pending_messages else None
+                    if queue_tail is not None and queue_tail.mode == "normal":
+                        cancelled = self._cancel_last_queued_message()
+                if cancelled:
+                    return
             if self._chat_input.dismiss_completion():
                 return
             if self._chat_input.exit_mode():

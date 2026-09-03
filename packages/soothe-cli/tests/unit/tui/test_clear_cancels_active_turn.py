@@ -31,6 +31,7 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app._lc_loop_id = "old-loop"
     app._clear_loop_session_overrides = MagicMock()
     app._mount_message = AsyncMock()
+    app._refresh_queued_goal_tips = MagicMock()
     app.query_one = MagicMock(side_effect=NoMatches())
 
     with patch("soothe_cli.tui.app._execution.asyncio.wait_for", new=AsyncMock()):

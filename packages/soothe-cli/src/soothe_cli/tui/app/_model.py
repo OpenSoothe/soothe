@@ -486,6 +486,7 @@ class _ModelMixin:
             # Clear conversation (similar to /clear, without creating a new loop)
             self._pending_messages.clear()
             self._queued_widgets.clear()
+            self._refresh_queued_goal_tips()
             await self._clear_messages()
             self._reset_loop_token_usage(None)
             self._update_status("")

@@ -32,6 +32,18 @@ Screen {
     display: none;
 }
 
+/* Queued goals bar — inside #bottom-app-container, above the thinking row
+   and chat input. Hidden when the queue is empty; shows all pending queued
+   goals as selectable rows. Not docked separately because Textual overlaps
+   multiple docked-to-same-edge widgets. Focus styling (background, border,
+   color, text-style) is defined in QueuedGoalsBar.DEFAULT_CSS. */
+#queued-goals {
+    height: auto;
+    max-height: 40vh;
+    width: 100%;
+    display: none;
+}
+
 /* Chat area - main scrollable messages area */
 #chat {
     height: 1fr;
