@@ -1,21 +1,12 @@
 """BoxLite container-based loop runner — one warm boxlite box per worker slot.
 
-A fifth `LoopRunnerProtocol` substrate (RFC-221) selected by
-`LoopRunnerFactory` when `loop_runner.runner_mode='boxlite'`. Each container
-runs the same `_pool_worker_body` / `SootheRunner` code as the process pool,
-but bridges stream chunks host↔container over the **boxlite exec stream**
-(stdin/stdout of a long-lived `box.exec()` call) instead of
-`multiprocessing.Queue`.
+Selected by `LoopRunnerFactory` when `loop_runner.runner_mode='boxlite'`.
+Each container runs the same worker body as the process pool, but bridges
+stream chunks host↔container over the boxlite exec stream (stdin/stdout of a
+long-lived `box.exec()` call) instead of `multiprocessing.Queue`.
 
-**Cross-platform — supported on Linux, macOS, and Windows.** Unlike
-Firecracker (which requires `AF_VSOCK`, KVM, and a Linux host), BoxLite
-uses the `boxlite` Python SDK (an embeddable VM runtime) and standard
-networking, making it usable on any host with the `boxlite` package
-installed. The module is import-safe everywhere (no `boxlite` import at
-module level); `LoopRunnerFactory` validates `boxlite` importability and
-`container_image` presence at construction time. The factory imports this
-module lazily inside the `boxlite` branch only, so thread/process/ray/
-firecracker paths never pay the import cost.
+Cross-platform (Linux, macOS, Windows); the `boxlite` SDK is imported lazily
+so the module is import-safe everywhere.
 """
 
 from __future__ import annotations
@@ -50,31 +41,31 @@ _MAX_FRAME_BYTES = 64 * 1024 * 1024  # 64 MiB safety cap
 # Terminal message types (mirror pool_runner._TERMINAL_RESPONSE_TYPES).
 _TERMINAL_RESPONSE_TYPES = frozenset({"done", "error", "timeout", "cancelled"})
 
-# The guest-side worker entrypoint script. Executed inside the container via
-# `box.exec()`. Reads pickled length-prefixed frames from stdin (the
-# ("request", request_id, (LoopRunRequest, spawn_safe_config)) tuple),
-# executes the loop, and writes pickled length-prefixed frames to stdout
-# using the same (msg_type, request_id, payload) 3-tuple convention.
+# Guest-side worker entrypoint, executed inside the container via `box.exec()`.
+# Speaks the same length-prefixed pickled frame protocol as the host side.
+# Uses os.read() on the raw fd (not sys.stdin.buffer.read) because buffered
+# read(n) can return empty on a pipe with partial data.
 _WORKER_ENTRYPOINT = r"""
-import sys, struct, pickle, asyncio, threading, time
+import sys, os, struct, pickle, asyncio
 
-def _recv_exactly(stdin, n):
+def _recv_exactly(fd, n):
+    # Read exactly n bytes from file descriptor fd (blocking).
     buf = bytearray()
     while len(buf) < n:
-        chunk = stdin.buffer.read(n - len(buf))
+        chunk = os.read(fd, n - len(buf))
         if not chunk:
             return None if not buf else bytes(buf)
         buf.extend(chunk)
     return bytes(buf)
 
-def _recv_frame(stdin):
-    header = _recv_exactly(stdin, 4)
+def _recv_frame(fd):
+    header = _recv_exactly(fd, 4)
     if header is None:
         return None
     (length,) = struct.unpack("!I", header)
     if length == 0 or length > 64 * 1024 * 1024:
-        raise ValueError(f"Invalid frame length: {length}")
-    payload = _recv_exactly(stdin, length)
+        raise ValueError("Invalid frame length: " + str(length))
+    payload = _recv_exactly(fd, length)
     if payload is None:
         return None
     return pickle.loads(payload)
@@ -90,13 +81,14 @@ def main():
     from soothe.runner._worker_utils import cancel_orphan_loop_tasks
     from soothe_daemon.runner.worker_logging import configure_loop_runner_worker_logging
 
+    stdin_fd = sys.stdin.buffer.fileno()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     cached_runner = None
 
     while True:
         try:
-            frame = _recv_frame(sys.stdin)
+            frame = _recv_frame(stdin_fd)
         except Exception:
             break
         if frame is None:
@@ -108,7 +100,7 @@ def main():
             continue
         req, config = payload
         configure_loop_runner_worker_logging(config, req.loop_id)
-        cached_runner, _ = _run_single(loop, req, request_id, config, cached_runner)
+        cached_runner = _run_single(loop, req, request_id, config, cached_runner)
 
     loop.close()
 
@@ -159,7 +151,7 @@ def _run_single(loop, req, request_id, config, cached_runner):
         except _asyncio.CancelledError:
             _send_frame(sys.stdout, ("cancelled", request_id, None))
         except TimeoutError:
-            _send_frame(sys.stdout, ("timeout", request_id, RuntimeError(f"Request exceeded timeout")))
+            _send_frame(sys.stdout, ("timeout", request_id, RuntimeError("Request exceeded timeout")))
         except Exception as exc:
             _send_frame(sys.stdout, ("error", request_id, exc))
         finally:
@@ -167,7 +159,7 @@ def _run_single(loop, req, request_id, config, cached_runner):
             _send_frame(sys.stdout, ("ready", request_id, None))
 
     _execute()
-    return cached_runner, None
+    return cached_runner
 
 if __name__ == "__main__":
     main()
@@ -201,15 +193,10 @@ def _parse_header(header: bytes) -> int:
 
 
 class _ExecStreamBridge:
-    """Host-side reader that drains boxlite exec stdout into an asyncio queue.
+    """Drain boxlite exec stdout into an asyncio queue as decoded frames.
 
-    The boxlite ``Execution`` object returned by ``box.exec()`` exposes
-    ``stdout()`` as an async iterator of byte chunks. This bridge reads
-    those chunks, reassembles length-prefixed pickled frames, and pushes
-    the decoded 3-tuples into an ``asyncio.Queue``.
-
-    Cancel = send a ``"cancel"`` frame via ``stdin().send_input()``;
-    force-kill = stop the box (handled by the pool).
+    Reassembles length-prefixed pickled frames from the `Execution.stdout()`
+    async iterator and pushes the decoded 3-tuples into `response_queue`.
     """
 
     def __init__(
@@ -283,7 +270,7 @@ class _ExecStreamBridge:
             return
         try:
             frame = _pack_frame(("cancel", request_id, None))
-            asyncio.get_event_loop().run_in_executor(None, self._stdin.send_input, frame)
+            self._stdin.send_input(frame)
         except Exception:
             logger.debug(
                 "ExecStreamBridge: cancel send failed worker_index=%d",
@@ -320,14 +307,7 @@ class BoxLiteWorker:
     @property
     def is_alive(self) -> bool:
         """True when the box is still running."""
-        if self.box is None:
-            return False
-        try:
-            # boxlite Box doesn't expose a simple is_alive; check via info if needed.
-            # For now, trust that the box is alive if it was started and not stopped.
-            return self.box is not None
-        except Exception:
-            return False
+        return self.box is not None
 
     def mark_busy(self, loop_id: str, request_id: str) -> None:
         """Mark this container as executing a request."""
@@ -349,15 +329,10 @@ class BoxLiteWorker:
 class BoxLiteWorkerPool:
     """Singleton pool of warm boxlite containers for loop execution.
 
-    Mirrors `ProcessPool`'s shape (singleton, pre-warm, submit → async
-    generator, cancel_request, force_kill_worker_by_loop_id) so
-    `QueryEngine` is fully decoupled per RFC-221.
-
-    Each container runs the configured OCI image, which contains a
-    guest-side entrypoint that imports `_pool_worker_body` and speaks the
-    exec stream frame protocol. `submit(request)` acquires an idle container,
-    sends the `LoopRunRequest` (pickled, spawn-safe) via exec stdin, and
-    returns the bridge's async generator.
+    Mirrors `ProcessPool` shape (singleton, pre-warm, `submit`,
+    `cancel_request`, `force_kill_worker_by_loop_id`). `submit(request)`
+    acquires an idle container, sends the `LoopRunRequest` via exec stdin,
+    and returns the bridge async generator.
     """
 
     _shared_pool: BoxLiteWorkerPool | None = None
@@ -427,7 +402,7 @@ class BoxLiteWorkerPool:
                 cls._shared_pool = None
 
     async def _start(self) -> None:
-        """Pre-warm `min_pool_size` containers at daemon startup."""
+        """Pre-warm min_pool_size containers at daemon startup."""
         import boxlite
 
         self._runtime = boxlite.Boxlite.default()
@@ -467,14 +442,13 @@ class BoxLiteWorkerPool:
     # -- container lifecycle ------------------------------------------------
 
     async def _spawn_warm_container(self) -> BoxLiteWorker:
-        """Start one warm boxlite container and begin the worker exec loop."""
+        """Start one warm boxlite container."""
         import boxlite
 
         worker_id = f"boxlite-{uuid.uuid4().hex[:8]}"
         container_index = self._next_container_index
         self._next_container_index += 1
 
-        # Create the box via boxlite API.
         box_opts_kwargs: dict[str, Any] = {
             "cpus": self._container_cpu_count,
             "memory_mib": self._container_mem_mib,
@@ -524,9 +498,8 @@ class BoxLiteWorkerPool:
     async def submit(self, request: LoopRunRequest) -> AsyncIterator[StreamChunk]:
         """Acquire an idle container, send the request, stream results.
 
-        Mirrors `ProcessPool.submit`'s structure: acquire a worker under the
-        dispatch semaphore, register routing, send the request via exec stdin,
-        then drain the response queue yielding chunks until a terminal frame.
+        Yields chunks until a terminal frame (`done`/`error`/`timeout`/
+        `cancelled`).
         """
         request_id = uuid.uuid4().hex[:16]
 
@@ -559,7 +532,6 @@ class BoxLiteWorkerPool:
             worker.mark_busy(request.loop_id, request_id)
 
             # Start the worker exec: run the entrypoint script inside the container.
-            # The script reads pickled frames from stdin and writes them to stdout.
             assert worker.box is not None
             spawn_safe = spawn_safe_config(self._config)
             execution = await worker.box._box.exec(
@@ -577,11 +549,18 @@ class BoxLiteWorkerPool:
             worker.bridge = bridge
             await bridge.start_reader()
 
-            # Send the request frame via exec stdin.
+            # Send the request frame via exec stdin (sync call, non-blocking).
             stdin = execution.stdin()
             if stdin is not None:
                 frame = _pack_frame(("request", request_id, (request, spawn_safe)))
-                await asyncio.get_event_loop().run_in_executor(None, stdin.send_input, frame)
+                try:
+                    stdin.send_input(frame)
+                except Exception:
+                    logger.debug(
+                        "BoxLiteWorkerPool: stdin send_input failed for request=%s",
+                        request_id,
+                        exc_info=True,
+                    )
 
         stream_complete = False
         error_payload: BaseException | None = None
@@ -654,7 +633,6 @@ class BoxLiteWorkerPool:
         for worker in self._workers.values():
             if worker.busy_loop_id is None and worker.is_alive:
                 return worker
-        # Scale up if under max.
         if len(self._workers) < self._max_pool_size:
             try:
                 return await self._spawn_warm_container()
@@ -722,7 +700,6 @@ class BoxLiteWorkerPool:
         await self._shutdown_container(worker)
         self._workers.pop(worker_id, None)
         self._pending_responses.pop(worker.busy_request_id or "", None)
-        # Respawn a warm container to maintain pool size.
         if self._running and len(self._workers) < self._min_pool_size:
             try:
                 await self._spawn_warm_container()
@@ -731,7 +708,6 @@ class BoxLiteWorkerPool:
                     "BoxLiteWorkerPool: failed to respawn container after force-kill",
                     exc_info=True,
                 )
-        # Wake any dispatch waiters.
         cond = self._worker_available
         if cond is not None:
             async with cond:
@@ -756,7 +732,6 @@ class BoxLiteWorkerPool:
                     )
                     await self._shutdown_container(worker)
                     self._workers.pop(worker_id, None)
-            # Maintain min pool size.
             while self._running and len(self._workers) < self._min_pool_size:
                 try:
                     await self._spawn_warm_container()
@@ -766,7 +741,6 @@ class BoxLiteWorkerPool:
                         exc_info=True,
                     )
                     break
-            # Wake dispatch waiters if a container freed up.
             cond = self._worker_available
             if cond is not None:
                 async with cond:
@@ -779,12 +753,12 @@ class BoxLiteWorkerPool:
 
 
 class BoxLiteLoopRunner:
-    """Runs agent loops using the BoxLite boxlite container worker pool.
+    """Runs agent loops using the shared BoxLite container pool.
 
-    Implements `LoopRunnerProtocol` for integration with `QueryEngine`.
-    One instance per `loop_id`, created by `LoopRunnerFactory` when
-    `loop_runner.runner_mode='boxlite'`. Mirrors `ProcessLoopRunner`'s structure —
-    only the transport (boxlite exec stream vs mp.Queue) and container lifecycle differ.
+    Implements `LoopRunnerProtocol`; one instance per `loop_id`, created by
+    `LoopRunnerFactory` when `loop_runner.runner_mode='boxlite'`. Mirrors
+    `ProcessLoopRunner` — only the transport (boxlite exec stream vs
+    `mp.Queue`) and container lifecycle differ.
     """
 
     def __init__(
@@ -806,7 +780,7 @@ class BoxLiteLoopRunner:
             yield chunk
 
     async def _resolve_pool(self) -> BoxLiteWorkerPool:
-        """Return the shared pool, fetching it if `run` hasn't yet bound it."""
+        """Return the shared pool, fetching it if run has not yet bound it."""
         if self._pool is None:
             self._pool = await BoxLiteWorkerPool.get_shared_instance(
                 self._config, self._daemon_config
@@ -829,11 +803,10 @@ class BoxLiteLoopRunner:
         await pool.force_kill_worker_by_loop_id(self._loop_id, timeout=timeout)
 
     def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap clarification mode — not yet supported for boxlite mode.
+        """Hot-swap clarification mode — not supported for boxlite mode.
 
-        Container workers don't expose their `SootheRunner` to the main process.
+        Container workers do not expose their `SootheRunner` to the host.
         Returns `False` so the caller falls back to the next-turn path.
-        (Future: add a `set_clarification_mode` frame to the exec protocol.)
         """
         return False
 

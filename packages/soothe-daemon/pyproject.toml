@@ -56,7 +56,7 @@ dependencies = [
     # <49: cryptography 49 dropped macOS x86_64/universal2 wheels (arm64-only).
     # Intel Macs otherwise fall back to a long Rust sdist build.
     "cryptography>=41.0,<49",
-    # BoxLite container isolation — cross-platform micro-VM alternative to Firecracker
+    # BoxLite container isolation — cross-platform micro-VM alternative
     "boxlite>=0.10.0,<1.0.0",
 ]
 
