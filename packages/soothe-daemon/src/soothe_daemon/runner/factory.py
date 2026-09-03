@@ -38,11 +38,11 @@ class LoopRunnerFactory:
         if (
             identity_runtime is not None
             and identity_runtime.enabled
-            and mode in ("process_pool", "firecracker")
+            and mode in ("process_pool", "firecracker", "boxlite")
         ):
             raise ValueError(
                 f"Identity service requires thread_pool mode: {mode} uses "
-                "subprocess/VM spawn and cannot propagate IdentityService to "
+                "subprocess/VM/container spawn and cannot propagate IdentityService to "
                 "isolated workers."
             )
 
@@ -108,6 +108,21 @@ class LoopRunnerFactory:
                 fc.vm_cpu_count,
                 fc.vm_mem_mib,
             )
+        elif mode == "boxlite":
+            bl = daemon_config.loop_runner.boxlite
+            if not bl.container_image and not bl.rootfs_path:
+                raise ValueError(
+                    "Container image or rootfs_path not set. Set "
+                    "loop_runner.boxlite.container_image or "
+                    "loop_runner.boxlite.rootfs_path."
+                )
+            logger.info(
+                "LoopRunnerFactory: boxlite mode (min=%d, max=%d containers, cpu=%d, mem=%dMiB)",
+                bl.min_pool_size,
+                bl.max_pool_size,
+                bl.container_cpu_count,
+                bl.container_mem_mib,
+            )
 
     async def get_shared_execution_pool(self) -> Any | None:
         """Return the shared thread/process pool, if this factory uses one."""
@@ -129,6 +144,12 @@ class LoopRunnerFactory:
             return await FirecrackerWorkerPool.get_shared_instance(
                 self._agent_config, self._daemon_config
             )
+        if self._mode == "boxlite":
+            from soothe_daemon.runner.boxlite_runner import BoxLiteWorkerPool
+
+            return await BoxLiteWorkerPool.get_shared_instance(
+                self._agent_config, self._daemon_config
+            )
         return None
 
     async def initialize_pool(self) -> None:
@@ -148,6 +169,12 @@ class LoopRunnerFactory:
             await FirecrackerWorkerPool.get_shared_instance(self._agent_config, self._daemon_config)
             self._pool_initialized = True
             logger.info("LoopRunnerFactory: firecracker microVM pool pre-warmed")
+        elif self._mode == "boxlite":
+            from soothe_daemon.runner.boxlite_runner import BoxLiteWorkerPool
+
+            await BoxLiteWorkerPool.get_shared_instance(self._agent_config, self._daemon_config)
+            self._pool_initialized = True
+            logger.info("LoopRunnerFactory: boxlite container pool pre-warmed")
         elif self._mode == "thread_pool":
             from soothe_daemon.runner.thread_runner import ThreadPool
 
@@ -177,6 +204,11 @@ class LoopRunnerFactory:
 
             await FirecrackerWorkerPool.close_shared_instance()
             logger.info("LoopRunnerFactory: firecracker microVM pool shutdown")
+        elif self._mode == "boxlite":
+            from soothe_daemon.runner.boxlite_runner import BoxLiteWorkerPool
+
+            await BoxLiteWorkerPool.close_shared_instance()
+            logger.info("LoopRunnerFactory: boxlite container pool shutdown")
         elif self._mode == "thread_pool":
             from soothe_daemon.runner.thread_runner import ThreadPool
 
@@ -199,6 +231,10 @@ class LoopRunnerFactory:
             from soothe_daemon.runner.firecracker_runner import FirecrackerLoopRunner
 
             return FirecrackerLoopRunner(loop_id, self._agent_config, self._daemon_config)
+        if self._mode == "boxlite":
+            from soothe_daemon.runner.boxlite_runner import BoxLiteLoopRunner
+
+            return BoxLiteLoopRunner(loop_id, self._agent_config, self._daemon_config)
         if self._mode == "thread_pool":
             from soothe_daemon.runner.thread_runner import ThreadLoopRunner
 

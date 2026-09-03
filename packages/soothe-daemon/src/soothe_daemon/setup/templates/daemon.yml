@@ -92,6 +92,7 @@ memory_profiling:
 #   process_pool:    Process-based isolation (subprocess spawn, ~8s overhead)
 #   ray:             Ray cluster for horizontal scaling
 #   firecracker:     Firecracker microVM isolation (strongest isolation, Linux ONLY)
+#   boxlite:         Boxlite container isolation (cross-platform, requires boxlite package)
 loop_runner:
   runner_mode: thread_pool
 
@@ -151,3 +152,20 @@ loop_runner:
     warmup_core_agent: true                  # materialize LazyCoreAgent during warmup
     workspace_mount_mode: virtiofs           # virtiofs (local) | sync (S3 backend)
     extra_kernel_args: ""                    # extra kernel cmdline args at boot
+
+  # BoxLite — container isolation via the boxlite Python SDK (RFC-221).
+  # Cross-platform: works on Linux, macOS, and Windows (requires `boxlite` package).
+  boxlite:
+    container_image: ""                      # OCI image with Soothe worker env + entrypoint
+    rootfs_path: ""                          # local OCI layout dir (overrides container_image)
+    min_pool_size: 1                         # warm containers at daemon startup
+    max_pool_size: 4                         # max containers under load
+    container_cpu_count: 2                   # CPU cores per container
+    container_mem_mib: 2048                  # memory per container (MiB)
+    idle_timeout_seconds: 300                # idle container shutdown grace
+    max_requests_per_worker: 100             # respawn after N requests
+    request_timeout_seconds: 0               # 0 = no timeout
+    reuse_runner: true                       # reuse one SootheRunner per container
+    warmup_runner: true                      # cache SootheRunner at container startup
+    warmup_core_agent: true                  # materialize LazyCoreAgent during warmup
+    workspace_mount_mode: bind               # bind (local) | sync (S3 backend)

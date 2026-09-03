@@ -2,6 +2,7 @@
 
 from soothe_daemon.config.models import (
     ACPConfig,
+    BoxLiteConfig,
     ChannelsConfig,
     FirecrackerConfig,
     IdentityConfig,
@@ -24,6 +25,7 @@ from soothe_daemon.config.settings import (
 
 __all__ = [
     "ACPConfig",
+    "BoxLiteConfig",
     "ChannelsConfig",
     "FirecrackerConfig",
     "IdentityConfig",

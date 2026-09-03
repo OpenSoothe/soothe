@@ -514,6 +514,22 @@ wheels = [
 ]
 
 [[package]]
+name = "boxlite"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/bc/eb749c50d8a28836a73e357ce0d47ffbccfeba7c7ebdeca690541a69c4b1/boxlite-0.10.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:9fddcfa094e05eececb60e9b8f824ff5ebcb79bf8dcd53f7955870bdb95e08c9" },
+    { url = "https://files.pythonhosted.org/packages/60/c0/986a7dd3bd12e9f3c5d9d5faccf17452db2ef8eaed358b541e2e25645d84/boxlite-0.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:39aef5fd36cf5fad95ad9b6a0254b406a724fcaf616b8bd75f218d73e7decd10" },
+    { url = "https://files.pythonhosted.org/packages/c5/68/25422160521338b4973eb7624bf93bc1af727a11c5b689968bb07415aad8/boxlite-0.10.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:8ee2d7101ef8b923e9cfb857446c677315b9ebdddd11b07ca85e90fa72feb3cd" },
+    { url = "https://files.pythonhosted.org/packages/1d/5e/70af5e615673fba1e585bce52bc6e00c6b52ce7df9a26ad56783f9bc3525/boxlite-0.10.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:2114917f91632948920e9adf5243e959b1aaad609474f933305bd10fe5a0292d" },
+    { url = "https://files.pythonhosted.org/packages/a9/1d/88be8384a619e0eb5f6c32a8034a5be3d658cbcc222f90404784621135e0/boxlite-0.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:96569c71ac5d02f62e387ec06b5e6b46e5d3fb2b0f132e5a81d20c90b56fabce" },
+    { url = "https://files.pythonhosted.org/packages/1f/89/207334e3f3dae0e37e8cee73e8f0a1a60179139d356f78df63a49192df0d/boxlite-0.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:c308be1d84bca9c55865c5f323e806c4a2fb6efc565a3cd3c72d01045cceef87" },
+    { url = "https://files.pythonhosted.org/packages/3c/b3/7acdd94cf8d45bccff569cc35d31f42cd5d7293e2d4ea6d0ff7a52b4ce9d/boxlite-0.10.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:f26ac3ecd27b267522cbec99cea16c85b03c9a51e46fb767a31dda9e4c973265" },
+    { url = "https://files.pythonhosted.org/packages/27/dc/1b5ce0fabcc8e77271ef2ec2a38aa0e8e7b1cc40a95e1f1dc983860200ad/boxlite-0.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:e4aba86d207777b73e5253bd5074aca9b954528017cb61bae7ee4e4ff76a98ff" },
+    { url = "https://files.pythonhosted.org/packages/6c/5c/48b19c06ed681ccc80293ad17b44c023e481ce4e14c5bafcf804e6eada0e/boxlite-0.10.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:7df9b68b1a7efb6a29b37bf24d1daefe52b3d3dee26b56083ddf7cf5b97df8c5" },
+]
+
+[[package]]
 name = "bracex"
 version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -7411,6 +7427,7 @@ name = "soothe-daemon"
 source = { editable = "packages/soothe-daemon" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "boxlite" },
     { name = "cryptography" },
     { name = "dingtalk-stream" },
     { name = "discord-py" },
@@ -7458,6 +7475,7 @@ dev = [
 requires-dist = [
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=0.3.0,<1.0.0" },
     { name = "aiohttp", specifier = ">=3.9.0,<4.0.0" },
+    { name = "boxlite", specifier = ">=0.10.0,<1.0.0" },
     { name = "cryptography", specifier = ">=41.0,<49" },
     { name = "dingtalk-stream", specifier = ">=0.24.0,<1.0.0" },
     { name = "discord-py", specifier = ">=2.5.2,<3.0.0" },
