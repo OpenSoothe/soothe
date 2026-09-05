@@ -645,7 +645,7 @@ class CognitionStepMessage(Vertical):
         return max(0, width - 2)
 
     def _step_task_activity_content(self) -> Content:
-        """To-do then Tool-use (task markers, tool preview, notes) under the step title."""
+        """Tool-use then To-do (task markers, tool preview, notes) under the step title."""
         g = get_glyphs()
         try:
             colors = theme.get_theme_colors(self)
@@ -1643,7 +1643,7 @@ def create_subagent_card(
     """Create an intake-only orphan SubAgent card (shared step-card style path).
 
     In-step `task` delegations stay on the parent step card. This factory only
-    sets orphan fields (`_subagent_type`, etc.); header meta, To-do / Tool-use
+    sets orphan fields (`_subagent_type`, etc.); header meta, Tool-use / To-do
     activity, and footers use the same `CognitionStepMessage` methods.
 
     Args:

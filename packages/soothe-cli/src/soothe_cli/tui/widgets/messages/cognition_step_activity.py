@@ -663,7 +663,7 @@ class StepCardStatusLine:
 
 
 class StepActivityTree:
-    """Pure render: To-do + Tool-use sections under the step title.
+    """Pure render: Tool-use + To-do sections under the step title.
 
     Task rows are flat markers under Tool-use. While a task is running, the marker
     line shows that task's subgraph tool count. Nested child tool lines are not
@@ -686,14 +686,14 @@ class StepActivityTree:
         max_cols: int | None = None,
         glyph_override: str | None = None,
     ) -> Content:
-        """To-do section then Tool-use section (task markers + main tool preview).
+        """Tool-use section then To-do section (task markers + main tool preview).
 
         `max_cols` bounds each rendered line to the terminal width so tool
         rows never wrap; `None` preserves the prior fixed-cap behavior.
         `glyph_override` is the card header glyph (subagent glyph for orphan
         SubAgent cards) so the activity gutters align to the right of that dot.
 
-        Layout: the section header (`To-do` / `Tool-use`) sits on a `⎿`
+        Layout: the section header (`Tool-use` / `To-do`) sits on a `⎿`
         body-gutter line; its items (tool rows, todo markers, notes, `+N
         more`) are indented one column beyond the section label so they nest
         under the header without a tree glyph.
@@ -715,29 +715,7 @@ class StepActivityTree:
             return Content("")
 
         first_block = True
-        if todo_items:
-            first_block = False
-            parts.append(Content.styled(f"{section_gutter}To-do", theme.SECONDARY_TEXT_STYLE))
-            for item in todo_items:
-                content = str(item.get("content") or "").strip()
-                if not content:
-                    continue
-                status = str(item.get("status") or "pending")
-                phase = todo_status_phase(status)
-                animate = phase == "running" and step_status == "running"
-                icon = phase_icon(
-                    phase,
-                    g,
-                    spinner_position=spinner_position,
-                    animate_running=animate,
-                )
-                tone = task_tool_row_tone_for_phase(phase, colors)
-                parts.append("\n")
-                parts.append(Content.styled(f"{item_gutter}{icon} {content}", tone))
-
         if has_tools:
-            if not first_block:
-                parts.append("\n")
             first_block = False
             parts.append(Content.styled(f"{section_gutter}Tool-use", theme.SECONDARY_TEXT_STYLE))
 
@@ -805,5 +783,27 @@ class StepActivityTree:
                     continue
                 parts.append("\n")
                 parts.append(Content.styled(f"{item_gutter}· {t}", theme.SECONDARY_TEXT_STYLE))
+
+        if todo_items:
+            if not first_block:
+                parts.append("\n")
+            first_block = False
+            parts.append(Content.styled(f"{section_gutter}To-do", theme.SECONDARY_TEXT_STYLE))
+            for item in todo_items:
+                content = str(item.get("content") or "").strip()
+                if not content:
+                    continue
+                status = str(item.get("status") or "pending")
+                phase = todo_status_phase(status)
+                animate = phase == "running" and step_status == "running"
+                icon = phase_icon(
+                    phase,
+                    g,
+                    spinner_position=spinner_position,
+                    animate_running=animate,
+                )
+                tone = task_tool_row_tone_for_phase(phase, colors)
+                parts.append("\n")
+                parts.append(Content.styled(f"{item_gutter}{icon} {content}", tone))
 
         return Content.assemble(*parts) if parts else Content("")
