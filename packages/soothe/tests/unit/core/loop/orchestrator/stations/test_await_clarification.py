@@ -24,6 +24,12 @@ class _StubStateManager:
     """Stub state manager with loop_id for goal_unblocked event emission."""
 
     loop_id: str = "test-loop-123"
+    mark_calls: list[tuple[Any, str]] = field(default_factory=list)
+
+    async def mark_goal_awaiting_clarification(
+        self, goal_record: Any, *, reason: str = "clarification"
+    ) -> None:
+        self.mark_calls.append((goal_record, reason))
 
 
 @dataclass
@@ -39,6 +45,7 @@ class _StubCtx:
     clarification_resume_answers: list[str] | None = None
     ce: Any = None
     ce_goal_id: str | None = None
+    goal_record: Any = None
 
     @property
     def clarification_policy(self) -> Any:
@@ -492,3 +499,63 @@ async def test_clarification_requested_step_id_empty_without_resume_ticket() -> 
     requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
     assert requested[0].get("step_id", "") == ""
+
+
+async def test_first_turn_marks_goal_parked_for_clarification() -> None:
+    """The first-turn pause marks the goal index as `awaiting_clarification`."""
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    goal_record = type("Goal", (), {"goal_id": "g-park"})()
+    ctx = _StubCtx(policy=policy, goal_record=goal_record)
+
+    await node_await_clarification(ctx, _pending_state())
+
+    assert len(ctx.state_manager.mark_calls) == 1
+    marked_goal, reason = ctx.state_manager.mark_calls[0]
+    assert marked_goal is goal_record
+    assert reason == "execute"  # carries the clarification origin node
+
+
+async def test_first_turn_mark_failure_does_not_break_park() -> None:
+    """A mark failure must not abort the clarification flow — the mark is
+    best-effort, like the CE save."""
+
+    class _BoomStateManager(_StubStateManager):
+        async def mark_goal_awaiting_clarification(
+            self, goal_record: Any, *, reason: str = "clarification"
+        ) -> None:
+            raise RuntimeError("db unavailable")
+
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    ctx = _StubCtx(
+        policy=policy,
+        state_manager=_BoomStateManager(),
+        goal_record=type("Goal", (), {"goal_id": "g"})(),
+    )
+
+    result = await node_await_clarification(ctx, _pending_state())  # must not raise
+    assert result["pending_clarification_answer"] is not None
+
+
+async def test_resume_turn_does_not_remark_goal_parked() -> None:
+    """On the resume turn the goal is already parked; do not re-mark."""
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    goal_record = type("Goal", (), {"goal_id": "g-resume"})()
+    ctx = _StubCtx(
+        policy=policy,
+        goal_record=goal_record,
+        clarification_resume_answers=["x"],
+    )
+
+    await node_await_clarification(ctx, _pending_state())
+
+    assert ctx.state_manager.mark_calls == []  # no first-turn mark on resume
+
+
+async def test_first_turn_without_goal_record_skips_mark_safely() -> None:
+    """A run with no `goal_record` skips the mark without error."""
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
+    ctx = _StubCtx(policy=policy)  # goal_record defaults to None
+
+    result = await node_await_clarification(ctx, _pending_state())
+    assert result["pending_clarification_answer"] is not None
+    assert ctx.state_manager.mark_calls == []

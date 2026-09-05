@@ -14,10 +14,17 @@ class GoalIndexEntry(BaseModel):
     # Identity (CE lookup key)
     goal_id: str = Field(description="Goal identifier (CE lookup key)")
 
-    # Status (for loop-level tracking, CE GoalNode has full status)
-    status: Literal["running", "completed", "failed", "cancelled", "interrupted"] = Field(
-        default="running", description="Goal execution status"
-    )
+    # Status (for loop-level tracking; CE GoalNode has full status).
+    # `awaiting_clarification` marks a goal parked for a clarification so
+    # the orphan-loop repair preserves the running state on the next load.
+    status: Literal[
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "interrupted",
+        "awaiting_clarification",
+    ] = Field(default="running", description="Goal execution status")
 
     # Thread assignment (for metrics, not goal content)
     thread_id: str = Field(description="Thread that executed this goal")

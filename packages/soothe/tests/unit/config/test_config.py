@@ -117,8 +117,8 @@ class TestSootheConfig:
     def test_llm_rate_limit_enabled_by_default(self) -> None:
         cfg = SootheConfig()
         assert cfg.agent.middleware.llm_rate_limit.enabled is True
-        assert cfg.agent.middleware.llm_rate_limit.global_concurrent_limit == 4
-        assert cfg.agent.middleware.llm_rate_limit.concurrent_limit == 2
+        assert cfg.agent.middleware.llm_rate_limit.global_concurrent_limit == 10
+        assert cfg.agent.middleware.llm_rate_limit.concurrent_limit == 4
 
     def test_loop_concurrency_defaults(self) -> None:
         cfg = SootheConfig()

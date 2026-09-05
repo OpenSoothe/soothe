@@ -167,7 +167,9 @@ class StrangeLoopCheckpoint(BaseModel):
         idx = goal_index if goal_index is not None else self.current_goal_index
         if idx is not None and 0 <= idx < len(self.goal_history):
             goal = self.goal_history[idx]
-            if is_goal_index_in_flight(goal.status):
+            # `awaiting_clarification` is not in-flight (the orphan repair
+            # skips it) but must still be terminalizable by the fatal handler.
+            if is_goal_index_in_flight(goal.status) or goal.status == "awaiting_clarification":
                 goal.status = goal_status  # type: ignore[assignment]
                 goal.completed_at = datetime.now(UTC)
 
@@ -293,12 +295,11 @@ def _repair_orphaned_running_loop(out: dict[str, Any]) -> None:
 
     When `pump_graph` crashes before the graph can transition the
     checkpoint to `idle`, the checkpoint is flushed to disk with
-    `status="running"` and the active goal stays `status="running"`
-    forever. This function marks the active goal as `cancelled` and sets
-    the loop status to `idle`.
-
-    The repair is conservative: it only touches the goal at
-    `current_goal_index` and only if that goal is still `running`.
+    `status="running"` and the active goal stays `running` forever.
+    This function marks the active goal as `cancelled` and sets the
+    loop status to `idle`. A goal parked for a clarification
+    (`awaiting_clarification`) is preserved as-is so the resume flow
+    recovers the live LangGraph interrupt.
     """
     from soothe.sloop.state.status_vocabulary import is_goal_index_in_flight
 
@@ -322,6 +323,22 @@ def _repair_orphaned_running_loop(out: dict[str, Any]) -> None:
             goal_status = goal.get("status", "")
         else:
             goal_status = getattr(goal, "status", "")
+
+        # A goal parked for a clarification is intentionally paused, not a
+        # crashed orphan — preserve running state + the goal index so the
+        # resume flow recovers the live LangGraph interrupt.
+        if goal_status == "awaiting_clarification":
+            # idx is already int-coerced above; write it back so the resume
+            # branch sees a clean int (not a JSONB string).
+            out["current_goal_index"] = idx
+            import logging as _logging
+
+            _logging.getLogger(__name__).info(
+                "Preserved loop parked for clarification on load: loop_id=%s goal_index=%s",
+                out.get("loop_id", "unknown"),
+                idx,
+            )
+            return
 
         if is_goal_index_in_flight(goal_status):
             now_iso = datetime.now(UTC).isoformat()

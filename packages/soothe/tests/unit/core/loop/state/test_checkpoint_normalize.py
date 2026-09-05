@@ -102,3 +102,75 @@ def test_normalize_repairs_orphaned_running_loop_with_string_goal_index() -> Non
     checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
     assert checkpoint.status == "idle"
     assert checkpoint.current_goal_index == -1
+
+
+def test_normalize_preserves_loop_parked_for_clarification() -> None:
+    """A loop parked for a clarification must not be demoted to idle.
+
+    A goal marked `awaiting_clarification` is intentionally paused; the
+    repair preserves the running state so the resume flow recovers the
+    live interrupt via `Command(resume=...)`.
+    """
+    normalized = normalize_checkpoint_data(
+        {
+            "loop_id": "loop-1",
+            "thread_ids": ["t1"],
+            "current_thread_id": "t1",
+            "status": "running",
+            "goal_history": [
+                {"goal_id": "g1", "thread_id": "t1", "status": "awaiting_clarification"},
+            ],
+            "current_goal_index": 0,
+        },
+        loop_id="loop-1",
+    )
+    # Running state preserved: not demoted to idle, goal index intact.
+    assert normalized["status"] == "running"
+    assert normalized["current_goal_index"] == 0
+    assert normalized["goal_history"][0]["status"] == "awaiting_clarification"
+    checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
+    assert checkpoint.status == "running"
+    assert checkpoint.current_goal_index == 0
+    assert checkpoint.goal_history[0].status == "awaiting_clarification"
+
+
+def test_normalize_preserves_loop_parked_for_clarification_with_string_index() -> None:
+    """The park guard writes back a clean int `current_goal_index` when
+    JSONB deserialization left it as a string."""
+    normalized = normalize_checkpoint_data(
+        {
+            "loop_id": "loop-d",
+            "thread_ids": ["t1"],
+            "current_thread_id": "t1",
+            "status": "running",
+            "goal_history": [
+                {"goal_id": "g1", "thread_id": "t1", "status": "awaiting_clarification"},
+            ],
+            "current_goal_index": "0",
+        },
+        loop_id="loop-d",
+    )
+    assert normalized["status"] == "running"
+    assert normalized["current_goal_index"] == 0
+    assert normalized["goal_history"][0]["status"] == "awaiting_clarification"
+
+
+def test_normalize_still_repairs_running_goal_when_not_parked() -> None:
+    """A genuinely orphaned `running` goal is still repaired to idle/
+    cancelled — the park guard does not mask crash recovery."""
+    normalized = normalize_checkpoint_data(
+        {
+            "loop_id": "loop-e",
+            "thread_ids": ["t1"],
+            "current_thread_id": "t1",
+            "status": "running",
+            "goal_history": [
+                {"goal_id": "g1", "thread_id": "t1", "status": "running"},
+            ],
+            "current_goal_index": 0,
+        },
+        loop_id="loop-e",
+    )
+    assert normalized["status"] == "idle"
+    assert normalized["current_goal_index"] == -1
+    assert normalized["goal_history"][0]["status"] == "cancelled"
