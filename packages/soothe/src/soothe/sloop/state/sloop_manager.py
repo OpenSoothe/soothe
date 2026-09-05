@@ -1035,6 +1035,52 @@ class StrangeLoopStateManager:
         # Save checkpoint
         await self.save(checkpoint)
 
+    async def mark_goal_awaiting_clarification(
+        self,
+        goal_record: GoalIndexEntry | None,
+        *,
+        reason: str = "awaiting_clarification",
+    ) -> None:
+        """Mark the active goal as parked for a clarification.
+
+        Sets the active goal's status to `awaiting_clarification` (not
+        terminal) and leaves the loop `status="running"` so the orphan-loop
+        repair on the next worker load preserves the running state and the
+        resume flow recovers the live LangGraph interrupt via
+        `Command(resume=...)`. Called before the graph parks on an interrupt
+        (tool approval, ask_user, plan-mode review).
+
+        Unlike `mark_goal_interrupted` (cancel -> loop `idle`), the loop
+        stays `running` so the running-resume branch handles recovery.
+
+        Args:
+            goal_record: Goal index entry to mark. `None` -> no-op.
+            reason: Short discriminator for logs.
+        """
+        if self._checkpoint is None:
+            logger.warning("mark_goal_awaiting_clarification: no checkpoint to update")
+            return
+
+        checkpoint = self._checkpoint
+        if goal_record is not None:
+            target_goal = self._resolve_goal_in_history(checkpoint, goal_record)
+            if target_goal is not None and target_goal.status == "running":
+                target_goal.status = "awaiting_clarification"  # type: ignore[assignment]
+                logger.info(
+                    "mark_goal_awaiting_clarification: goal=%s reason=%s",
+                    target_goal.goal_id,
+                    reason,
+                )
+            elif target_goal is not None:
+                logger.debug(
+                    "mark_goal_awaiting_clarification: goal=%s already %s; leaving status",
+                    target_goal.goal_id,
+                    target_goal.status,
+                )
+
+        checkpoint.updated_at = datetime.now(UTC)
+        await self.save(checkpoint, include_goal_history=True)
+
     async def mark_goal_interrupted(
         self,
         goal_record: GoalIndexEntry | None,

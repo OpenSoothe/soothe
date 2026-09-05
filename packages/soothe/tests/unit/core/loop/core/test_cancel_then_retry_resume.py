@@ -455,3 +455,130 @@ class TestCancelRetryContinueLifecycle:
         applied = cp.force_terminal_status(terminal_status="cancelled", goal_status="cancelled")
         assert applied is True
         assert goal.status == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# Clarification park → resume (manual tool approval / ask_user)
+# ---------------------------------------------------------------------------
+
+
+class TestClarificationParkResume:
+    """Clarification park preserves running state and stays resumable.
+
+    Chains the real `mark_goal_awaiting_clarification` mutation, the real
+    `normalize_checkpoint_data` repair guard, and `force_terminal_status` /
+    finalize transitions so a regression in any link surfaces here.
+    """
+
+    @pytest.mark.asyncio
+    async def test_park_marks_goal_and_keeps_loop_running(self) -> None:
+        """`mark_goal_awaiting_clarification` flips `running` ->
+        `awaiting_clarification` and leaves the loop `running`."""
+        cp = _make_checkpoint(goal_status="running", iteration=2)
+        mgr = _real_state_manager(cp)
+        goal = cp.goal_history[0]
+
+        await mgr.mark_goal_awaiting_clarification(goal, reason="tool_approval")
+
+        assert goal.status == "awaiting_clarification"
+        assert goal.completed_at is None
+        # Loop stays running (not demoted to idle) — the key difference
+        # from the cancel path, so the running-resume branch handles it.
+        assert cp.status == "running"
+        assert cp.current_goal_index == 0
+
+    @pytest.mark.asyncio
+    async def test_park_preserves_state_through_normalize_checkpoint(self) -> None:
+        """A parked loop survives the orphan-loop repair on worker reload."""
+        from soothe.sloop.state.checkpoint import normalize_checkpoint_data
+
+        cp = _make_checkpoint(goal_status="running", iteration=2)
+        mgr = _real_state_manager(cp)
+        await mgr.mark_goal_awaiting_clarification(cp.goal_history[0], reason="tool_approval")
+
+        # Serialize as the backend would (model_dump -> dict) then reload.
+        normalized = normalize_checkpoint_data(
+            cp.model_dump(mode="json"),
+            loop_id=cp.loop_id,
+        )
+
+        assert normalized["status"] == "running"
+        assert normalized["current_goal_index"] == 0
+        assert normalized["goal_history"][0]["status"] == "awaiting_clarification"
+
+    @pytest.mark.asyncio
+    async def test_park_then_running_resume_branch_recovers(self) -> None:
+        """After park + reload, the `status == "running"` branch recovers.
+
+        The running-resume branch only needs `status="running"` and a valid
+        goal index; it does not inspect the goal's awaiting status.
+        """
+        cp = _make_checkpoint(goal_status="running", iteration=4)
+        mgr = _real_state_manager(cp)
+        await mgr.mark_goal_awaiting_clarification(cp.goal_history[0], reason="tool_approval")
+
+        assert cp.status == "running"
+        assert 0 <= cp.current_goal_index < len(cp.goal_history)
+        goal_record = cp.goal_history[cp.current_goal_index]
+        exec_cp = cp.execution_checkpoint or {}
+        iteration = int(exec_cp.get("iteration") or 0)
+        assert goal_record.goal_id == "loop-1_goal_0"
+        assert iteration == 4
+
+    @pytest.mark.asyncio
+    async def test_force_terminal_transitions_parked_goal(self) -> None:
+        """`force_terminal_status` can still terminalize a parked goal."""
+        cp = _make_checkpoint(goal_status="running", iteration=0)
+        mgr = _real_state_manager(cp)
+        goal = cp.goal_history[0]
+
+        await mgr.mark_goal_awaiting_clarification(goal, reason="tool_approval")
+        assert goal.status == "awaiting_clarification"
+
+        applied = cp.force_terminal_status(terminal_status="cancelled", goal_status="cancelled")
+        assert applied is True
+        assert goal.status == "cancelled"
+        assert cp.status == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_finalize_completes_parked_goal(self) -> None:
+        """A parked goal still finalizes to `completed` after resume.
+
+        `_apply_goal_finalize_memory` sets `completed` unconditionally (no
+        in-flight gate), so a parked goal completes normally once execution
+        finishes.
+        """
+        cp = _make_checkpoint(goal_status="running", iteration=0)
+        mgr = _real_state_manager(cp)
+        goal = cp.goal_history[0]
+
+        await mgr.mark_goal_awaiting_clarification(goal, reason="tool_approval")
+        assert goal.status == "awaiting_clarification"
+
+        mgr._apply_goal_finalize_memory(goal)
+        assert goal.status == "completed"
+        assert goal.completed_at is not None
+
+    @pytest.mark.asyncio
+    async def test_park_none_goal_record_is_noop(self) -> None:
+        """`mark_goal_awaiting_clarification(None)` is a no-op."""
+        cp = _make_checkpoint(goal_status="running", iteration=0)
+        mgr = _real_state_manager(cp)
+
+        await mgr.mark_goal_awaiting_clarification(None, reason="no_active_goal")
+
+        assert cp.goal_history[0].status == "running"
+        assert cp.status == "running"
+
+    @pytest.mark.asyncio
+    async def test_park_idempotent_on_already_parked_goal(self) -> None:
+        """Re-marking an already-parked goal leaves the status unchanged."""
+        cp = _make_checkpoint(goal_status="running", iteration=0)
+        mgr = _real_state_manager(cp)
+        goal = cp.goal_history[0]
+
+        await mgr.mark_goal_awaiting_clarification(goal, reason="tool_approval")
+        assert goal.status == "awaiting_clarification"
+        # Second mark: status is no longer "running", so it is a no-op.
+        await mgr.mark_goal_awaiting_clarification(goal, reason="tool_approval")
+        assert goal.status == "awaiting_clarification"

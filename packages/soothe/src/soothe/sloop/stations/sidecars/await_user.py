@@ -119,6 +119,22 @@ async def node_await_clarification(
                 await ctx.ce.save()
             except Exception:
                 logger.warning("[await_clarification] CE save before pause failed", exc_info=True)
+        # Mark the goal index as parked so the orphan-loop repair on the
+        # next worker load preserves the running state. The manual path
+        # pauses inside `policy.answer` below via a LangGraph interrupt
+        # and does not flow through `park_for_clarification`.
+        goal_record = getattr(ctx, "goal_record", None)
+        if goal_record is not None:
+            try:
+                await ctx.state_manager.mark_goal_awaiting_clarification(
+                    goal_record,
+                    reason=request.origin_node or "clarification",
+                )
+            except Exception:
+                logger.warning(
+                    "[await_clarification] mark_goal_awaiting_clarification failed",
+                    exc_info=True,
+                )
     else:
         logger.info(
             "[await_clarification] resume turn; skipping clarification_requested re-emit "

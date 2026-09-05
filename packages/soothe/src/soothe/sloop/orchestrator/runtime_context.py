@@ -96,11 +96,29 @@ class LoopRuntimeContext:
         When a Context Engine handle is wired (`ce` + `ce_goal_id`), calls
         `mark_awaiting_clarification` so Autopilot skips redispatch
         (`BLOCKED_STATES`). Solo / no-CE runs log only.
+
+        Also marks the loop checkpoint's active goal index entry as
+        `awaiting_clarification` so the orphan-loop repair on the next
+        worker load preserves the running state instead of demoting it.
         """
         logger.info(
             "[ClarificationRelay] goal status -> awaiting_clarification (reason=%s)",
             reason,
         )
+        # Mark the loop checkpoint goal index as parked (independent of CE
+        # so no-CE runs still survive a worker restart while paused).
+        goal_record = self.goal_record
+        if goal_record is not None:
+            try:
+                await self.state_manager.mark_goal_awaiting_clarification(
+                    goal_record,
+                    reason=reason or "clarification",
+                )
+            except Exception:
+                logger.exception(
+                    "[ClarificationRelay] mark_goal_awaiting_clarification failed for goal %s",
+                    getattr(goal_record, "goal_id", "unknown"),
+                )
         ce = self.ce
         goal_id = self.ce_goal_id
         if ce is None or not goal_id:
