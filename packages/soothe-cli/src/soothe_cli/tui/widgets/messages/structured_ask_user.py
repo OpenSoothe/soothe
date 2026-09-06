@@ -732,18 +732,24 @@ class StructuredAskUserWidget(Vertical):
                         markup=False,
                     )
         with Vertical(classes="saq-question-body"):
+            header_text = self._question_header(self._current_q)
+            question_text = self._question_question(self._current_q)
             yield Static(
-                self._question_header(self._current_q),
+                header_text,
                 classes="saq-question-title",
                 id="saq-qtitle",
                 markup=False,
             )
-            yield Static(
-                self._question_question(self._current_q),
-                classes="saq-description",
-                id="saq-desc",
-                markup=False,
-            )
+            # Suppress the description body when it duplicates the header
+            # (tool-approval QuestionSpecs set header == question) so the
+            # prompt text is not rendered twice.
+            if question_text and question_text != header_text:
+                yield Static(
+                    question_text,
+                    classes="saq-description",
+                    id="saq-desc",
+                    markup=False,
+                )
             with Vertical(classes="saq-option-list"):
                 options = self._question_options(self._current_q)
                 # Guard: if options are missing/malformed, fall back to a
