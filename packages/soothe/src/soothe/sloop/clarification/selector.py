@@ -27,8 +27,6 @@ def build_default_clarification_policy(
     autopilot_retry_on_fail: bool = True,
     tool_approval_pipeline: ToolApprovalPipeline | None = None,
     manual_allow_rules: bool = False,
-    # Backward-compat alias (deprecated).
-    degrade_low_confidence: bool | None = None,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -58,8 +56,6 @@ def build_default_clarification_policy(
         manual_allow_rules: Manual mode only — let allow rules auto-approve
             `tool_approval` actions instead of asking the human
             (`tool_approval.manual_scope: ambiguous_only`).
-        degrade_low_confidence: Deprecated alias for
-            `degrade_to_manual_on_failure`. When set, overrides the new flag.
 
     Raises:
         ValueError: if `mode == "auto"` but `veritas_answer` is not provided.
@@ -74,8 +70,6 @@ def build_default_clarification_policy(
         if veritas_answer is None:
             msg = "auto mode requires veritas_answer callable"
             raise ValueError(msg)
-        if degrade_low_confidence is not None:
-            degrade_to_manual_on_failure = degrade_low_confidence
         return AutoClarificationPolicy(
             veritas_answer,
             min_confidence=min_confidence,

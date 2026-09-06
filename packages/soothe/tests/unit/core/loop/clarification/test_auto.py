@@ -431,14 +431,12 @@ def test_degrade_to_manual_on_failure_property() -> None:
         _veritas_returning(VeritasAnswerSchema(answers=["x"], confidence=0.9, defer=False)),
     )
     assert policy.degrade_to_manual_on_failure is True
-    assert policy.degrade_low_confidence is True  # backward-compat alias
 
     policy2 = AutoClarificationPolicy(
         _veritas_returning(VeritasAnswerSchema(answers=["x"], confidence=0.9, defer=False)),
         degrade_to_manual_on_failure=False,
     )
     assert policy2.degrade_to_manual_on_failure is False
-    assert policy2.degrade_low_confidence is False
 
 
 def test_autopilot_retry_on_fail_property() -> None:
@@ -452,23 +450,6 @@ def test_autopilot_retry_on_fail_property() -> None:
         autopilot_retry_on_fail=False,
     )
     assert policy2.autopilot_retry_on_fail is False
-
-
-# ---- backward compat: degrade_low_confidence alias ----
-
-
-@pytest.mark.asyncio
-async def test_degrade_low_confidence_alias_still_works() -> None:
-    """The old degrade_low_confidence flag name still works as an alias."""
-    fallback = _AnnounceFallback()
-    policy = AutoClarificationPolicy(
-        _veritas_returning(VeritasAnswerSchema(answers=["guess"], confidence=0.2, defer=False)),
-        interactive_fallback=fallback,  # type: ignore[arg-type]
-        degrade_low_confidence=True,  # old name
-    )
-    ans = await policy.answer(_request())
-    assert ans is fallback._answer  # noqa: SLF001
-    assert fallback.upgrade_calls == 1
 
 
 # ---- force_manual_origins (unchanged) ----

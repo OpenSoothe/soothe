@@ -126,6 +126,7 @@ class InteractiveClarificationPolicy:
             action_requests,
             workspace_root=request.loop_state.workspace_summary,
             auto_approve=self._manual_allow_rules,
+            allowlist=list(request.loop_state.tool_approval_allowlist),
         )
         if result is None:
             return None

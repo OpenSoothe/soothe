@@ -38,6 +38,10 @@ class LoopStateView:
     Format: `"Q: {question}\\nA: {answer} (source={source}, conf={confidence})"`.
     Empty tuple when no prior clarifications exist (first clarification in a goal).
     """
+    tool_approval_allowlist: tuple[Mapping[str, Any], ...] = ()
+    """Loop-scoped `{"tool", "signature"}` records from prior human approvals.
+    Populated by the live view builder from graph state; not serialized into
+    `pending_clarification` (it is separate persisted graph state)."""
 
 
 @dataclass(frozen=True)

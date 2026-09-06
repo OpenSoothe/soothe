@@ -73,17 +73,11 @@ class AutoClarificationPolicy:
         degrade_to_manual_on_failure: bool = True,
         autopilot_retry_on_fail: bool = True,
         tool_approval_pipeline: ToolApprovalPipeline | None = None,
-        # Backward-compat alias (deprecated).
-        degrade_low_confidence: bool | None = None,
     ) -> None:
         self._veritas_answer = veritas_answer
         self._min_confidence = min_confidence
         self._interactive_fallback = interactive_fallback
         self._force_manual_origins: frozenset[str] = frozenset(force_manual_origins or ())
-        # degrade_low_confidence is the old name; if explicitly set, treat
-        # it as degrade_to_manual_on_failure for backward compat.
-        if degrade_low_confidence is not None:
-            degrade_to_manual_on_failure = degrade_low_confidence
         self._degrade_to_manual_on_failure = degrade_to_manual_on_failure
         self._autopilot_retry_on_fail = autopilot_retry_on_fail
         self._tool_approval_pipeline = tool_approval_pipeline
@@ -94,11 +88,6 @@ class AutoClarificationPolicy:
 
     @property
     def degrade_to_manual_on_failure(self) -> bool:
-        return self._degrade_to_manual_on_failure
-
-    @property
-    def degrade_low_confidence(self) -> bool:
-        """Backward-compat alias for the old flag name."""
         return self._degrade_to_manual_on_failure
 
     @property
@@ -136,6 +125,7 @@ class AutoClarificationPolicy:
             action_requests,
             workspace_root=request.loop_state.workspace_summary,
             auto_approve=not self.requires_manual(request.origin_node),
+            allowlist=list(request.loop_state.tool_approval_allowlist),
         )
         if result is not None:
             logger.info(

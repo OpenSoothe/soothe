@@ -75,6 +75,11 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
+    # Loop-scoped tool-approval allowlist. A human approval appends the
+    # action signature; later matches auto-approve at the ``allowlist`` stage
+    # so the approved call runs and retries are not re-prompted. Survives
+    # AWAIT_USER and worker restarts via the checkpointer.
+    tool_approval_allowlist: list[dict[str, Any]] | None
     # FIFO queue of captured clarifications. Every interrupt from every step
     # enters this list; the head is resolved one at a time. After the head is
     # answered, it is popped and the next entry becomes the head.

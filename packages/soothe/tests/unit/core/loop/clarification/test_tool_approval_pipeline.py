@@ -5,6 +5,8 @@ from __future__ import annotations
 from soothe.config.models import ToolApprovalConfig
 from soothe.sloop.clarification.tool_approval_pipeline import (
     ToolApprovalPipeline,
+    approval_record,
+    signature_for,
 )
 
 _DEFAULT_CONFIG = ToolApprovalConfig()
@@ -441,3 +443,142 @@ class TestBypassMode:
         """Empty action requests still defer even in bypass mode."""
         result = _pipeline().evaluate([], bypass_security=True)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Loop-scoped allowlist (IG-774)
+# ---------------------------------------------------------------------------
+
+
+class TestAllowlistSignatures:
+    def test_signature_for_command(self) -> None:
+        assert signature_for("run_command", {"command": "rm -rf /tmp/x"}) == "rm -rf /tmp/x"
+
+    def test_signature_for_path(self) -> None:
+        assert signature_for("edit_file", {"file_path": "/etc/hosts"}) == "/etc/hosts"
+
+    def test_signature_for_path_via_path_key(self) -> None:
+        assert signature_for("delete", {"path": "/tmp/y"}) == "/tmp/y"
+
+    def test_signature_for_unknown_tool(self) -> None:
+        assert signature_for("mcp_tool", {"foo": "bar"}) is None
+
+    def test_signature_for_empty_command(self) -> None:
+        assert signature_for("run_command", {}) is None
+
+    def test_approval_record_builds_dict(self) -> None:
+        rec = approval_record("run_command", {"command": "git status"})
+        assert rec == {"tool": "run_command", "signature": "git status"}
+
+    def test_approval_record_unknown_tool(self) -> None:
+        assert approval_record("mcp_tool", {"foo": "bar"}) is None
+
+
+class TestAllowlistMatching:
+    def test_allowlist_approves_escalated_command(self) -> None:
+        """rm -rf that would escalate is approved when its signature is in the
+        loop allowlist (human approved it earlier in this loop)."""
+        rec = approval_record("run_command", {"command": "rm -rf /tmp/test_folder"})
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/test_folder")],
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "approve"
+        assert result.stage == "allowlist"
+
+    def test_allowlist_does_not_bypass_deny_rule(self) -> None:
+        """A deny-rule command (su) is rejected even if its signature is in
+        the allowlist — deny rules are absolute, never overridable."""
+        rec = approval_record("run_command", {"command": "su root"})
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="su root")],
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "reject"
+        assert result.stage == "deny_rule"
+
+    def test_allowlist_no_match_still_escalates(self) -> None:
+        """A different rm command (not the approved one) still escalates."""
+        rec = approval_record("run_command", {"command": "rm -rf /tmp/test_folder"})
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/other_folder")],
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "escalate"
+        assert result.stage == "safety_check"
+
+    def test_allowlist_unknown_tool_not_matched(self) -> None:
+        """Unknown tools have no signature and are never allowlistable."""
+        rec = {"tool": "mcp_tool", "signature": "anything"}
+        result = _pipeline().evaluate(
+            [_ar("mcp_tool", foo="bar")],
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "approve"
+        assert result.stage == "default_approve"
+
+    def test_allowlist_approves_in_manual_mode(self) -> None:
+        """A human pre-approved action runs regardless of manual mode — the
+        allowlist overrides the human-relay defer for that action."""
+        rec = approval_record("run_command", {"command": "rm -rf /tmp/x"})
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/x")],
+            auto_approve=False,
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "approve"
+        assert result.stage == "allowlist"
+
+    def test_allowlist_path_tool_approved(self) -> None:
+        """A safety-escalated path tool (.git edit) is approved when
+        allowlisted."""
+        rec = approval_record("edit_file", {"file_path": "/workspace/.git/config"})
+        result = _pipeline().evaluate(
+            [_ar("edit_file", file_path="/workspace/.git/config")],
+            workspace_root="/workspace",
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "approve"
+        assert result.stage == "allowlist"
+
+    def test_allowlist_none_does_not_change_behavior(self) -> None:
+        """Passing allowlist=None is identical to not passing it."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="pytest -xvs")],
+            allowlist=None,
+        )
+        assert result is not None
+        assert result.decision == "approve"
+        assert result.stage == "default_approve"
+
+    def test_allowlist_empty_list_does_not_approve(self) -> None:
+        """An empty allowlist does not approve an escalated command."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /")],
+            allowlist=[],
+        )
+        assert result is not None
+        assert result.decision == "escalate"
+        assert result.stage == "safety_check"
+
+    def test_allowlist_skips_safety_for_matched_only(self) -> None:
+        """In a batch, an allowlisted action does not cause a different
+        action's safety escalation to be skipped — the non-allowlisted
+        action still escalates the batch."""
+        rec = approval_record("run_command", {"command": "rm -rf /tmp/test_folder"})
+        result = _pipeline().evaluate(
+            [
+                _ar("run_command", command="rm -rf /tmp/test_folder"),
+                _ar("run_command", command="shred /etc/passwd"),
+            ],
+            allowlist=[rec],
+        )
+        assert result is not None
+        assert result.decision == "escalate"
+        assert result.stage == "safety_check"

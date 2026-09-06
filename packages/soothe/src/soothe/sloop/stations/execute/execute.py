@@ -17,6 +17,7 @@ from soothe.sloop.clarification.protocol import (
     request_from_state,
     request_to_state,
 )
+from soothe.sloop.clarification.tool_approval_pipeline import approval_record
 from soothe.sloop.engine.execute.context_window_manager import ContextWindowManager
 from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.sloop.engine.execute.graph_interrupt import build_clarification_resume_payload
@@ -67,7 +68,11 @@ def _coerce_resume_ticket(raw: Any) -> ResumeTicket | None:
     return None
 
 
-def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
+def _build_loop_state_view(
+    ctx: LoopRuntimeContext,
+    *,
+    allowlist: list[dict[str, Any]] | None = None,
+) -> LoopStateView:
     state = ctx.loop_state
     goal_record = ctx.goal_record
     plan_result = ctx.scratch.plan_result
@@ -106,6 +111,7 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         active_skills=tuple(getattr(state, "activated_skill_names", []) or []),
         active_mcp_servers=tuple(getattr(state, "active_mcp_servers", []) or []),
         prior_clarifications=prior_clarifications,
+        tool_approval_allowlist=tuple(allowlist) if allowlist else (),
     )
 
 
@@ -372,6 +378,12 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     planner_ask_source: str = ""
     planner_ask_questions: tuple[str, ...] = ()
     planner_ask_confidence: float | None = None
+    # IG-774: loop-scoped tool-approval allowlist. Materialized from graph
+    # state, mutated on a human approval, threaded into the live view (so the
+    # next capture already reflects it) and written back when dirty. The dirty
+    # gate keeps a non-approving turn from wiping the persisted channel.
+    current_allowlist: list[dict[str, Any]] = list(state_dict.get("tool_approval_allowlist") or [])
+    allowlist_dirty = False
     pending_answer_state = state_dict.get("pending_clarification_answer")
     pending_request_state = state_dict.get("pending_clarification")
     if pending_answer_state and pending_request_state:
@@ -398,6 +410,31 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 # ask_user-only ledger side effect is applied below.
                 req = request_from_state(pending_request_state)
                 resume_answer_payload = build_clarification_resume_payload(req, ans)
+                # IG-774: record a human tool_approval approval so the agent's
+                # retry of the same action auto-approves instead of re-escalating.
+                if (
+                    origin_node == ORIGIN_TOOL_APPROVAL
+                    and ans.source == "human"
+                    and ans.answers
+                    and str(ans.answers[0]).strip().lower() == "approve"
+                ):
+                    req_metadata = pending_request_state.get("metadata") or {}
+                    if isinstance(req_metadata, dict):
+                        for ar in req_metadata.get("action_requests") or []:
+                            if not isinstance(ar, dict):
+                                continue
+                            rec = approval_record(
+                                str(ar.get("name") or ""),
+                                ar.get("args") or {},
+                            )
+                            if rec is not None and rec not in current_allowlist:
+                                current_allowlist.append(rec)
+                                allowlist_dirty = True
+                                logger.info(
+                                    "[execute] recorded loop allowlist signature "
+                                    "tool=%s for tool_approval approval",
+                                    rec["tool"],
+                                )
                 if origin_node != ORIGIN_TOOL_APPROVAL:
                     _append_ask_user_loop_messages(
                         state,
@@ -764,7 +801,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
         ask_step = next((s for s in ready_steps if s.kind == "ask_user"), None)
         if ask_step is not None and ask_step.questions:
-            ask_view = _build_loop_state_view(ctx)
+            ask_view = _build_loop_state_view(ctx, allowlist=current_allowlist)
             ask_iid = f"{PLANNER_ASK_INTERRUPT_PREFIX}{ask_step.id}"
             ask_request = ClarificationRequest(
                 questions=tuple(ask_step.questions),
@@ -791,7 +828,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     clarification_view: LoopStateView | None = None
     if ctx.clarification_policy is not None:
         clarification_detector = ClarificationDetector()
-        clarification_view = _build_loop_state_view(ctx)
+        clarification_view = _build_loop_state_view(ctx, allowlist=current_allowlist)
 
     from soothe.coreagent.lazy import LazyCoreAgent
 
@@ -988,6 +1025,8 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         if head_ticket:
             state.resume_ticket = head_ticket
             result["resume_ticket"] = head_ticket
+        if allowlist_dirty:
+            result["tool_approval_allowlist"] = current_allowlist
         logger.info(
             "[execute] %d clarification(s) queued; routing to await_clarification "
             "(head interrupt_id=%s)",
@@ -1027,6 +1066,8 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         else:
             result["clarification_queue"] = None
             result["clarification_resume_tickets"] = None
+        if allowlist_dirty:
+            result["tool_approval_allowlist"] = current_allowlist
         return result
 
     return {}
