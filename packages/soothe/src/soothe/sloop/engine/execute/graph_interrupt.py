@@ -395,6 +395,10 @@ def build_clarification_resume_payload(
       remaining slots default to the first answer (or `"approve"`).
     - otherwise (`ask_user` / execute) — deliver the answers verbatim so the
       `ask_user` tool returns the Q&A and the agent continues its turn.
+
+    Instructive rejects (audit ``instructive: True``) attach the safety
+    ``reason`` as a ``message`` on each reject decision so the model's
+    ``ToolMessage`` explains why the call was blocked.
     """
     if request.origin_node == ORIGIN_TOOL_APPROVAL:
         action_requests = request.metadata.get("action_requests", [])
@@ -406,10 +410,20 @@ def build_clarification_resume_payload(
         # number of answers (one answer per pending tool call).
         if n_pending == 0:
             n_pending = len(answers) if answers else 1
+        # Instructive reject: surface the safety reason as the reject
+        # message so the model's ToolMessage explains why the call was blocked.
+        audit = answer.audit if isinstance(answer.audit, dict) else {}
+        instructive_reason: str | None = None
+        if audit.get("instructive"):
+            instructive_reason = str(audit.get("reason") or "").strip() or None
         decisions: list[dict[str, Any]] = []
         for i in range(n_pending):
             ans = answers[i] if i < len(answers) else answers[0]
-            decisions.append({"type": _answer_to_decision(ans)})
+            decision_type = _answer_to_decision(ans)
+            decision: dict[str, Any] = {"type": decision_type}
+            if decision_type == "reject" and instructive_reason is not None:
+                decision["message"] = instructive_reason
+            decisions.append(decision)
         return build_tool_approval_resume_payload(
             request.origin_interrupt_id,
             decisions=decisions,

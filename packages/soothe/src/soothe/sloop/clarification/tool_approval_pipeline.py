@@ -17,17 +17,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-ApprovalDecision = Literal["approve", "reject"]
+ApprovalDecision = Literal["approve", "reject", "escalate"]
 PipelineStage = Literal["deny_rule", "safety_check", "default_approve"]
 
 
 @dataclass(frozen=True)
 class ApprovalResult:
-    """Decision returned by the pipeline for a batch of action requests."""
+    """Decision returned by the pipeline for a batch of action requests.
+
+    ``escalate`` means a banned safety rule blocked the action — a human
+    should decide whether to allow it or steer the model to an alternative.
+    """
 
     decision: ApprovalDecision
     stage: PipelineStage
     reason: str = ""
+    rule_id: str | None = None
 
 
 class ToolApprovalPipeline:
@@ -116,13 +121,21 @@ class ToolApprovalPipeline:
                 # Stage 2: safety checks (delegated to nano)
                 safety_result = self._check_safety(name, args, workspace_root)
                 if safety_result is not None:
+                    reason, rule_id = safety_result
+                    # Banned safety rules are deterministic — escalate to a
+                    # human instead of silently auto-rejecting.
                     result = ApprovalResult(
-                        "reject",
+                        "escalate",
                         "safety_check",
-                        safety_result,
+                        reason,
+                        rule_id=rule_id,
                     )
                     logger.info(
-                        "[%s] %s by stage=%s", "tool_approval", result.decision, result.stage
+                        "[%s] %s by stage=%s rule=%s",
+                        "tool_approval",
+                        result.decision,
+                        result.stage,
+                        rule_id,
                     )
                     return result
 
@@ -148,8 +161,11 @@ class ToolApprovalPipeline:
         name: str,
         args: Mapping[str, Any],
         workspace_root: str | None,
-    ) -> str | None:
-        """Run safety checks via nano's OperationSecurity. Returns reason if denied, else None."""
+    ) -> tuple[str, str | None] | None:
+        """Run safety checks via nano's OperationSecurity.
+
+        Returns ``(reason, rule_id)`` if denied, else ``None``.
+        """
         from soothe_nano.security.operation_guard import (
             WorkspaceToolOperationSecurity,
             build_operation_security_request,
@@ -167,7 +183,7 @@ class ToolApprovalPipeline:
         )
         decision = self._security_evaluator.evaluate(request, ctx)
         if decision.verdict == "deny":
-            return decision.reason
+            return decision.reason, decision.rule_id
         return None
 
     def _matches_any_rule(

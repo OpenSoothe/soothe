@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Route banned safety-rule tool approvals to a human via a new `escalate` pipeline outcome instead of silently auto-rejecting. In autopilot (no human relay) the action degrades to an instructive reject that surfaces the safety reason in the model's `ToolMessage`, steering it toward an alternative tool. Manual mode always escalates to the human approval card. Deny-list rules still reject outright.
+- Make the step circuit breaker progress-aware: a deterministic stall (same failure-mode signature across re-dispatches) triggers a guided retry that steers the model off the stuck approach before tripping fatally. A second identical stall after guidance trips the breaker. Non-deterministic failures reset the budget.
+
 ### Fixed
 - Preserve loops parked for clarification across worker restarts. The orphan-loop repair in `normalize_checkpoint_data` demoted a loop paused on a manual tool approval / ask_user interrupt to `idle`/`cancelled`, orphaning the live LangGraph interrupt and wedging the loop — every `continue`/`retry` then fatalled with "Goal completion reached without plan result". The active goal index entry is now marked `awaiting_clarification` when the graph parks (`mark_goal_awaiting_clarification` on `StrangeLoopStateManager`, wired into both the manual `interrupt` path in `await_clarification` and the auto-defer `park_for_clarification` path); the repair recognizes this status as intentionally paused and preserves the running state so the resume flow recovers the iteration cursor and resumes the interrupt via `Command(resume=...)`. `force_terminal_status` can still transition a parked goal on a later fatal.
 

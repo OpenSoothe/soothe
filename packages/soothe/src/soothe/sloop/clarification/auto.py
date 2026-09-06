@@ -128,10 +128,8 @@ class AutoClarificationPolicy:
     async def _answer_tool_approval(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Deny-list-first pipeline evaluation for tool_approval origins.
 
-        In auto mode the pipeline auto-approves any action that passes deny +
-        safety checks (absence of deny = implicit allow). In manual mode
-        (force-manual origins), the pipeline still runs deny/safety (safety
-        property) but defers non-matching actions to the human relay.
+        ``escalate`` (banned safety rule) routes to the human relay when one
+        is attached; under autopilot it degrades to an instructive reject.
         """
         action_requests = request.metadata.get("action_requests", [])
         result = self._tool_approval_pipeline.evaluate(
@@ -146,6 +144,32 @@ class AutoClarificationPolicy:
                 result.stage,
                 result.reason,
             )
+            # Banned safety action → escalate to a human when one is attached.
+            if result.decision == "escalate":
+                if self._interactive_fallback is not None:
+                    logger.info(
+                        "[clarification] tool_approval safety escalate rule=%s; "
+                        "routing to human relay",
+                        result.rule_id,
+                    )
+                    return await self._delegate_to_fallback(request)
+                # Autopilot — degrade to an instructive reject.
+                logger.info(
+                    "[clarification] tool_approval safety escalate rule=%s; "
+                    "autopilot degrade-to-instructive-reject",
+                    result.rule_id,
+                )
+                return ClarificationAnswer(
+                    answers=("reject",),
+                    source="static",
+                    confidence=1.0,
+                    audit={
+                        "stage": result.stage,
+                        "reason": result.reason,
+                        "rule_id": result.rule_id,
+                        "instructive": True,
+                    },
+                )
             return ClarificationAnswer(
                 answers=(result.decision,),
                 source="static",

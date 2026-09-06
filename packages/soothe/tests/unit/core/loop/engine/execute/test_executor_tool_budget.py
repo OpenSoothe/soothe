@@ -244,10 +244,11 @@ async def test_empty_stream_step_marks_failure_not_success() -> None:
 
 @pytest.mark.asyncio
 async def test_redispatch_circuit_breaker_trips_after_max() -> None:
-    """The re-dispatch counter must trip after max_redispatch dispatches.
+    """Progress-aware breaker: guided retry on deterministic stall, then fatal.
 
-    The counter persists on LoopState across graph re-entries. After
-    max_redispatch dispatches, the step is force-failed with error_type=fatal.
+    Counter persists on LoopState across re-entries. A deterministic stall
+    (same failure-mode signature) triggers a guided retry first and resets
+    the count; a second identical stall after guidance trips fatally.
     """
     config = MagicMock()
     config.agent.loop.max_redispatch_per_step = 2
@@ -282,14 +283,35 @@ async def test_redispatch_circuit_breaker_trips_after_max() -> None:
     assert len(results2) == 1
     assert results2[0].success is False
 
-    # Third dispatch: counter = 3 > max=2 → circuit breaker trips
+    # Third dispatch: counter = 3 > max=2, but failure mode is repeating
+    # (deterministic stall) and no guided retry yet → guided retry injected,
+    # count reset, step dispatched again. Not a fatal trip.
     ex3 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
     out3 = [item async for item in ex3.execute(decision, state)]
     results3 = [x for x in out3 if isinstance(x, StepExecutionRecord)]
     assert len(results3) == 1
     assert results3[0].success is False
-    assert results3[0].error_type == "fatal"
-    assert "circuit breaker" in (results3[0].error or "").lower()
+    # Guided retry was injected (not fatal); guidance message consumed.
+    assert state.step_guided_retry_done.get(step.id) is True
+    assert "circuit breaker" not in (results3[0].error or "").lower()
+
+    # Fourth dispatch: count was reset to 1 by the guided retry, so this is
+    # count = 2 (still under max=2). Step dispatched and fails again.
+    ex4 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    out4 = [item async for item in ex4.execute(decision, state)]
+    results4 = [x for x in out4 if isinstance(x, StepExecutionRecord)]
+    assert len(results4) == 1
+    assert results4[0].success is False
+
+    # Fifth dispatch: count = 3 > max=2, guided retry already done →
+    # circuit breaker trips fatally now.
+    ex5 = Executor(agent, max_parallel_steps=1, config=config, context_engine=ce)
+    out5 = [item async for item in ex5.execute(decision, state)]
+    results5 = [x for x in out5 if isinstance(x, StepExecutionRecord)]
+    assert len(results5) == 1
+    assert results5[0].success is False
+    assert results5[0].error_type == "fatal"
+    assert "circuit breaker" in (results5[0].error or "").lower()
 
 
 @pytest.mark.asyncio

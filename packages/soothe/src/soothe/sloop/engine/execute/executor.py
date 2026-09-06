@@ -487,6 +487,74 @@ class Executor:
             ),
         )
 
+    # ------------------------------------------------------------------
+    # Progress-aware circuit breaker helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _failure_mode_signature(
+        *,
+        step_error: str | None,
+        step_error_type: str | None,
+        tool_call_count: int,
+        had_recoverable_tool_errors: bool,
+        outcome: dict[str, Any] | None = None,
+    ) -> str:
+        """Coarse failure-mode signature for a dispatch.
+
+        Same signature across dispatches → deterministic stall → guided
+        retry before tripping. Different signature → model is trying new
+        approaches → budget resets.
+        """
+        if outcome and isinstance(outcome, dict):
+            wd = outcome.get("watchdog")
+            if isinstance(wd, dict) and wd.get("type"):
+                return f"watchdog:{wd['type']}"
+        if step_error_type == "fatal":
+            return f"fatal:{(step_error or '')[:80]}"
+        if step_error_type == "tool":
+            return f"tool:{(step_error or '')[:80]}"
+        if had_recoverable_tool_errors and tool_call_count > 0:
+            # Partial progress with recoverable tool errors — bucket by
+            # the error message so repeated blocks collapse to one signature.
+            return f"recoverable:{(step_error or '')[:80]}"
+        if tool_call_count == 0:
+            return "empty"
+        return f"execution:{(step_error or step_error_type or '')[:80]}"
+
+    @staticmethod
+    def _guided_retry_message(step: StepAction, failure_mode: str) -> str:
+        """Steer the model off a stuck approach before the breaker trips."""
+        # rm -rf blocked → steer toward filesystem tools.
+        if failure_mode.startswith("recoverable:") and "rm" in failure_mode.lower():
+            return (
+                "Your previous `rm -rf` shell command was blocked by the safety "
+                "rule and will be blocked again on retry. Use the `delete` tool "
+                "(per-file) or `edit_file` to remove or rewrite the target files "
+                "instead. Do not re-issue `rm -rf`. Continue the step's work."
+            )
+        if "safety" in failure_mode.lower() or "blocked by security" in failure_mode.lower():
+            return (
+                "Your previous tool call was blocked by a deterministic safety "
+                "rule and retrying the identical call will be blocked again. "
+                "Use an alternative tool or approach to accomplish the same goal. "
+                "Continue the step's work."
+            )
+        # Empty-completion stalls: nudge toward producing output / tool calls.
+        if failure_mode == "empty":
+            return (
+                "The previous dispatch produced no tool calls and no meaningful "
+                "output. Re-attempt this step: use the available tools to make "
+                f"progress on '{step.description or step.id}'. Do not repeat "
+                "the no-op output."
+            )
+        # Generic deterministic stall.
+        return (
+            f"The previous dispatch of this step stalled with: {failure_mode}. "
+            "Take a different approach to complete the step. Do not repeat the "
+            "action that caused the stall."
+        )
+
     async def _read_runtime_state(
         self,
         *,
@@ -1314,17 +1382,37 @@ class Executor:
             logger.warning("No ready steps to execute (all completed or blocked)")
             return
 
-        # Circuit breaker (cross-graph-reentry): fail steps that have been
-        # re-dispatched too many times. The counter persists on LoopState
-        # across graph re-entries (clarification routing, new iterations)
-        # within a single goal run. This catches the ``mode=parallel`` path
-        # where _execute_parallel_waves does not have its own while-True loop.
+        # Circuit breaker (cross-graph-reentry): fail steps re-dispatched
+        # too many times. Counter persists on LoopState across graph
+        # re-entries. Progress-aware: before tripping, detect a deterministic
+        # stall (same failure-mode signature) and attempt a guided retry
+        # that steers the model off the stuck approach. A second identical
+        # stall after guidance trips the breaker for real.
         max_redispatch = self._max_redispatch()
         tripped: list[StepAction] = []
         for s in ready_steps:
             count = state.step_dispatch_counts.get(s.id, 0) + 1
             state.step_dispatch_counts[s.id] = count
             if count > max_redispatch:
+                # Guided retry viable when a prior failure mode is recorded
+                # and no guided retry has been attempted yet.
+                prior_mode = state.step_failure_modes.get(s.id)
+                guided_done = state.step_guided_retry_done.get(s.id, False)
+                if prior_mode is not None and not guided_done:
+                    guidance = self._guided_retry_message(s, prior_mode)
+                    state.step_guided_retry_messages[s.id] = guidance
+                    state.step_guided_retry_done[s.id] = True
+                    # Reset count so the step gets one more dispatch with
+                    # guidance injected at step entry.
+                    state.step_dispatch_counts[s.id] = 1
+                    logger.warning(
+                        "[Execute] step %s stalled deterministically "
+                        "(mode=%s); injecting guided retry instead of "
+                        "tripping circuit breaker",
+                        s.id,
+                        prior_mode,
+                    )
+                    continue
                 logger.error(
                     "[Execute] step %s re-dispatched %d times without "
                     "completion; tripping circuit breaker (max=%d)",
@@ -2060,15 +2148,29 @@ class Executor:
             ready = [s for s in ready_all if s.id not in failed_sticky]
             if not ready:
                 break
-            # Circuit breaker: fail steps re-dispatched too many times without
-            # completion. This prevents infinite re-dispatch loops when a step
-            # "completes" but doesn't produce real progress (e.g. model failure
-            # with blocked API key → empty output → DAG re-dispatches).
+            # Circuit breaker: same progress-aware logic as the parallel path
+            # (see above). Attempt a guided retry for deterministic stalls
+            # before tripping fatally.
             tripped: list[StepAction] = []
             for s in ready:
                 count = state.step_dispatch_counts.get(s.id, 0) + 1
                 state.step_dispatch_counts[s.id] = count
                 if count > max_redispatch:
+                    prior_mode = state.step_failure_modes.get(s.id)
+                    guided_done = state.step_guided_retry_done.get(s.id, False)
+                    if prior_mode is not None and not guided_done:
+                        guidance = self._guided_retry_message(s, prior_mode)
+                        state.step_guided_retry_messages[s.id] = guidance
+                        state.step_guided_retry_done[s.id] = True
+                        state.step_dispatch_counts[s.id] = 1
+                        logger.warning(
+                            "[Execute] step %s stalled deterministically "
+                            "(mode=%s); injecting guided retry instead of "
+                            "tripping circuit breaker",
+                            s.id,
+                            prior_mode,
+                        )
+                        continue
                     logger.error(
                         "[Execute] step %s re-dispatched %d times without "
                         "completion; tripping circuit breaker (max=%d)",
@@ -2310,6 +2412,30 @@ class Executor:
             action_retries_done = 0
             max_dispatch_retries = self._dispatch_retry_max()
             dispatch_retries_done = 0
+
+            # Consume pending guided-retry guidance (written by the circuit
+            # breaker on a deterministic stall). Prepend as a human message so
+            # the model sees why the prior approach stalled.
+            guided_msg: str | None = None
+            if loop_state is not None:
+                guided_msg = loop_state.step_guided_retry_messages.pop(step.id, None)
+            if guided_msg:
+                logger.info(
+                    "[Execute] step %s consuming guided-retry guidance",
+                    step.id,
+                )
+                graph_input_messages.insert(
+                    0,
+                    LoopHumanMessage(
+                        content=guided_msg,
+                        thread_id=thread_id,
+                        iteration=None,
+                        goal_summary=None,
+                        workspace=workspace,
+                        phase="execute_step",
+                    ),
+                )
+
             stream_input_messages: list[Any] = graph_input_messages
 
             # Stream events and collect outcome metadata (RFC-211)
@@ -2743,6 +2869,21 @@ class Executor:
             ):
                 # Reset counter on a meaningful completion.
                 loop_state.step_consecutive_empty.pop(step.id, None)
+
+            # Record failure-mode signature so the breaker can detect a
+            # deterministic stall on the next re-dispatch. Clear on success.
+            if loop_state is not None:
+                if not step_success and not captured_clarification:
+                    fm = self._failure_mode_signature(
+                        step_error=step_error,
+                        step_error_type=step_error_type,
+                        tool_call_count=main_tool_call_count,
+                        had_recoverable_tool_errors=bool(has_tool_error and step_success),
+                        outcome=primary_outcome,
+                    )
+                    loop_state.step_failure_modes[step.id] = fm
+                else:
+                    loop_state.step_failure_modes.pop(step.id, None)
 
             return _ExecuteStepResult(
                 events=events,

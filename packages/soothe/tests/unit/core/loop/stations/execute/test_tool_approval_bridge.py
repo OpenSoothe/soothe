@@ -218,6 +218,42 @@ def test_build_clarification_resume_payload_ask_user() -> None:
     assert payload == {"i1": {"answers": ["run the tests"]}}
 
 
+def test_build_clarification_resume_payload_instructive_reject() -> None:
+    """Instructive reject attaches the safety reason as ``message`` on the
+    reject decision so the model's ToolMessage explains why the call was blocked."""
+    req = _bridge_request(ORIGIN_TOOL_APPROVAL)
+    ans = answer_from_state(
+        {
+            "answers": ["reject"],
+            "source": "static",
+            "confidence": 1.0,
+            "defer": False,
+            "audit": {
+                "stage": "safety_check",
+                "reason": "Command blocked by security rule: rm\\s+-rf\\b",
+                "rule_id": "command.dangerous.rm_rf",
+                "instructive": True,
+            },
+        }
+    )
+    payload = build_clarification_resume_payload(req, ans)  # type: ignore[arg-type]
+    decisions = payload["i1"]["decisions"]
+    assert len(decisions) == 1
+    assert decisions[0]["type"] == "reject"
+    assert decisions[0]["message"] == "Command blocked by security rule: rm\\s+-rf\\b"
+
+
+def test_build_clarification_resume_payload_non_instructive_reject_no_message() -> None:
+    """A plain human reject (no instructive audit) has no ``message`` field."""
+    req = _bridge_request(ORIGIN_TOOL_APPROVAL)
+    ans = _bridge_answer(("reject",))  # default audit={}
+    payload = build_clarification_resume_payload(req, ans)  # type: ignore[arg-type]
+    decisions = payload["i1"]["decisions"]
+    assert len(decisions) == 1
+    assert decisions[0]["type"] == "reject"
+    assert "message" not in decisions[0]
+
+
 # ---------------------------------------------------------------------------
 # AutoClarificationPolicy routing: tool_approval is veritas-evaluated by default
 # ---------------------------------------------------------------------------

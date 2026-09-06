@@ -904,6 +904,33 @@ class LoopState(BaseModel):
             "detection. Persists across graph re-entries within a goal run."
         ),
     )
+    # Per-step failure-mode signature of the last dispatch. When the same
+    # mode repeats, the breaker treats it as a deterministic stall and
+    # attempts a guided retry before tripping fatally.
+    step_failure_modes: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-step failure-mode signature of the last dispatch, for "
+            "deterministic-stall detection. Persists across graph re-entries."
+        ),
+    )
+    # Per-step flag: True once a guided retry was injected for this step.
+    step_guided_retry_done: dict[str, bool] = Field(
+        default_factory=dict,
+        description=(
+            "Per-step flag: True once a guided retry was injected. "
+            "Persists across graph re-entries within a goal run."
+        ),
+    )
+    # Per-step pending guided-retry message. The breaker writes here and
+    # resets the dispatch count; the executor consumes it at step entry.
+    step_guided_retry_messages: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-step pending guided-retry message. The executor "
+            "consumes and clears this on the next dispatch."
+        ),
+    )
 
     # Cross-turn clarification memory (RFC-622 enhancement). Append-only log of
     # resolved clarifications within this goal run, so veritas can reference

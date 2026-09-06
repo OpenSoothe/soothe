@@ -116,7 +116,8 @@ class InteractiveClarificationPolicy:
         """Run the tool-approval pipeline pre-filter for manual mode.
 
         Returns a static answer when the pipeline resolves the batch, or
-        `None` to fall through to the human interrupt.
+        `None` to fall through to the human interrupt. ``escalate`` outcomes
+        return ``None`` so the human sees the approval card.
         """
         if request.origin_node != ORIGIN_TOOL_APPROVAL or self._tool_approval_pipeline is None:
             return None
@@ -127,6 +128,14 @@ class InteractiveClarificationPolicy:
             auto_approve=self._manual_allow_rules,
         )
         if result is None:
+            return None
+        # Banned safety action → fall through to the human interrupt so a
+        # human decides. Do not auto-resolve.
+        if result.decision == "escalate":
+            logger.info(
+                "[clarification] tool_approval safety escalate rule=%s; routing to human (manual)",
+                result.rule_id,
+            )
             return None
         logger.info(
             "[clarification] tool_approval %s by stage=%s reason=%s (manual pre-filter)",
