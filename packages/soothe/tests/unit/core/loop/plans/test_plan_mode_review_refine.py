@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, patch
 
 from soothe.sloop.plans import plan_mode_review
 from soothe.sloop.plans.plan_synthesizer import _build_refinement_trigger
+from soothe.sloop.relay.relay import LoopRelay
 
 
 def _build_ctx(
@@ -29,6 +30,8 @@ def _build_ctx(
         plan_review_comments=None,
         follow_on_exec=None,
         plan_result=None,
+        decompose_proposals=[],
+        decision=None,
     )
     loop_state = types.SimpleNamespace(
         goal="count one to five",
@@ -44,8 +47,12 @@ def _build_ctx(
     ctx = types.SimpleNamespace(
         scratch=scratch, loop_state=loop_state, ce=None, strange_loop=strange_loop
     )
-    # node_plan_review emits telemetry via ctx.emit (see plan_mode_review.py).
     ctx.emit = AsyncMock()
+
+    async def _emit(name, payload):
+        await ctx.emit(name, payload)
+
+    ctx.relay = LoopRelay(loop_id="test", emit=_emit)
     return ctx
 
 
@@ -58,15 +65,45 @@ def _refine_answer_state(comments: str) -> dict:
     }
 
 
+def _answer_state_dict(comments: str) -> dict:
+    """relay_state with a refine answer slot set."""
+    return {
+        "relay_state": {
+            "answer": _refine_answer_state(comments),
+            "inbox": [],
+            "active_origin": "plan_mode_review",
+        }
+    }
+
+
+def _pending_with_plan(ctx) -> dict:
+    """relay_state carrying the plan body in the scratch projection."""
+    return {
+        "relay_state": {
+            "inbox": [],
+            "active_origin": "plan_mode_review",
+            "answer": _refine_answer_state(""),
+            "scratch": {
+                "plan_draft_path": ctx.scratch.plan_draft_path,
+                "plan_draft_markdown": ctx.scratch.plan_draft_markdown,
+            },
+        }
+    }
+
+
 def test_refine_with_comments_sets_refinement_flag() -> None:
     """Refine with comments flags ``plan_refinement_requested`` for the node."""
     ctx = _build_ctx()
     state = {
-        "pending_clarification_answer": _refine_answer_state("reuse deepagents tokens"),
-        "pending_clarification": {
-            "plan_path": ctx.scratch.plan_draft_path,
-            "plan_markdown": ctx.scratch.plan_draft_markdown,
-        },
+        "relay_state": {
+            "answer": _refine_answer_state("reuse deepagents tokens"),
+            "inbox": [],
+            "active_origin": "plan_mode_review",
+            "scratch": {
+                "plan_draft_path": ctx.scratch.plan_draft_path,
+                "plan_draft_markdown": ctx.scratch.plan_draft_markdown,
+            },
+        }
     }
     out = plan_mode_review.handle_plan_mode_review_answer(ctx, state)
 
@@ -78,11 +115,15 @@ def test_refine_without_comments_does_not_flag_refinement() -> None:
     """Refine with no comments re-emits the same plan."""
     ctx = _build_ctx()
     state = {
-        "pending_clarification_answer": _refine_answer_state(""),
-        "pending_clarification": {
-            "plan_path": ctx.scratch.plan_draft_path,
-            "plan_markdown": ctx.scratch.plan_draft_markdown,
-        },
+        "relay_state": {
+            "answer": _refine_answer_state(""),
+            "inbox": [],
+            "active_origin": "plan_mode_review",
+            "scratch": {
+                "plan_draft_path": ctx.scratch.plan_draft_path,
+                "plan_draft_markdown": ctx.scratch.plan_draft_markdown,
+            },
+        }
     }
     out = plan_mode_review.handle_plan_mode_review_answer(ctx, state)
 
@@ -100,11 +141,15 @@ def test_node_plan_review_refines_on_refine_resume() -> None:
     ctx = _build_ctx(plan_markdown="# Plan\n\nOriginal plan.")
     ctx.scratch.plan_review_comments = "reuse deepagents tokens"
     state = {
-        "pending_clarification_answer": _refine_answer_state("reuse deepagents tokens"),
-        "pending_clarification": {
-            "plan_path": ctx.scratch.plan_draft_path,
-            "plan_markdown": ctx.scratch.plan_draft_markdown,
-        },
+        "relay_state": {
+            "answer": _refine_answer_state("reuse deepagents tokens"),
+            "inbox": [],
+            "active_origin": "plan_mode_review",
+            "scratch": {
+                "plan_draft_path": ctx.scratch.plan_draft_path,
+                "plan_draft_markdown": ctx.scratch.plan_draft_markdown,
+            },
+        }
     }
 
     # ``handle_plan_mode_review_answer`` already ran (simulated by setting the
@@ -150,7 +195,10 @@ def test_node_plan_review_refines_on_refine_resume() -> None:
     assert ctx.scratch.plan_review_comments is None
 
     # The returned pending carries the revised plan markdown.
-    assert "revised" in str(result["pending_clarification"].get("plan_markdown", "")).lower()
+    assert (
+        "revised"
+        in str(result["relay_state"].get("scratch", {}).get("plan_draft_markdown", "")).lower()
+    )
     mock_ledger.assert_called_once_with(ctx, revised_plan)
     mock_handle.assert_called_once_with(ctx, state)
 
@@ -160,11 +208,15 @@ def test_node_plan_review_keeps_old_draft_when_refinement_fails() -> None:
     ctx = _build_ctx(plan_markdown="# Plan\n\nOriginal plan.")
     ctx.scratch.plan_review_comments = "reuse deepagents tokens"
     state = {
-        "pending_clarification_answer": _refine_answer_state("reuse deepagents tokens"),
-        "pending_clarification": {
-            "plan_path": ctx.scratch.plan_draft_path,
-            "plan_markdown": ctx.scratch.plan_draft_markdown,
-        },
+        "relay_state": {
+            "answer": _refine_answer_state("reuse deepagents tokens"),
+            "inbox": [],
+            "active_origin": "plan_mode_review",
+            "scratch": {
+                "plan_draft_path": ctx.scratch.plan_draft_path,
+                "plan_draft_markdown": ctx.scratch.plan_draft_markdown,
+            },
+        }
     }
 
     handle_out = plan_mode_review.build_plan_mode_review_pending(ctx)
@@ -220,17 +272,21 @@ def test_build_plan_mode_review_pending_persists_comments() -> None:
     ctx = _build_ctx(plan_markdown="# Plan\n\nDraft plan.")
     ctx.scratch.plan_review_comments = "reuse deepagents tokens"
     pending = plan_mode_review.build_plan_mode_review_pending(ctx)
-    assert pending["pending_clarification"]["plan_review_comments"] == "reuse deepagents tokens"
+    assert pending["relay_state"]["scratch"]["plan_review_comments"] == "reuse deepagents tokens"
 
 
 def test_hydrate_scratch_restores_comments_from_pending() -> None:
     """hydrate_scratch_from_pending restores plan_review_comments from the pending channel."""
     ctx = _build_ctx(plan_markdown="# Plan\n\nDraft.")
     state = {
-        "pending_clarification": {
-            "plan_path": "/ws/.soothe/plans/p.md",
-            "plan_markdown": "# Plan\n\nDraft.",
-            "plan_review_comments": "fix the token counting",
+        "relay_state": {
+            "inbox": [],
+            "answer": None,
+            "scratch": {
+                "plan_draft_path": "/ws/.soothe/plans/p.md",
+                "plan_draft_markdown": "# Plan\n\nDraft.",
+                "plan_review_comments": "fix the token counting",
+            },
         }
     }
     plan_mode_review.hydrate_scratch_from_pending(ctx, state)
@@ -242,8 +298,12 @@ def test_hydrate_scratch_does_not_overwrite_existing_comments() -> None:
     ctx = _build_ctx()
     ctx.scratch.plan_review_comments = "already here"
     state = {
-        "pending_clarification": {
-            "plan_review_comments": "from channel",
+        "relay_state": {
+            "inbox": [],
+            "answer": None,
+            "scratch": {
+                "plan_review_comments": "from channel",
+            },
         }
     }
     plan_mode_review.hydrate_scratch_from_pending(ctx, state)

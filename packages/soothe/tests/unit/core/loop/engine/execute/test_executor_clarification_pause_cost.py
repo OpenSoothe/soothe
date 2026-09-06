@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import ClarificationRequest, LoopStateView
@@ -30,6 +29,8 @@ from soothe.sloop.engine.execute.step_wave_types import (
     _StreamCollectChunk,
 )
 from soothe.sloop.plans.wired_subagent_plan import _WIRED_SUBAGENT_EXPECTED_OUTPUT
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.ticket import ResumeTicket
 from soothe.sloop.state.schemas import StepAction, StepExecutionRecord
 
 
@@ -73,7 +74,7 @@ def _make_mock_agent() -> MagicMock:
     return agent
 
 
-def _make_executor(capture: ClarificationQueue | None = None) -> Executor:
+def _make_executor(capture: RelayInbox | None = None) -> Executor:
     # Mock context_engine so _record_ledger_message doesn't raise. The CE
     # ledger.record_message is a no-op MagicMock; tests here don't need real
     # ledger state.
@@ -95,7 +96,7 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
     @pytest.mark.asyncio
     async def test_deliverable_assess_skipped_when_clarification_captured(self) -> None:
         """evaluate_step_deliverable is not called when the step is paused."""
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(capture)
 
         async def fake_stream_and_collect(
@@ -146,7 +147,7 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
     @pytest.mark.asyncio
     async def test_assess_step_close_skipped_when_clarification_captured(self) -> None:
         """assess_step_close is not called when the step is paused."""
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(capture)
 
         async def fake_stream_and_collect(
@@ -193,7 +194,7 @@ class TestClarificationPauseSkipsCompletionLLMCalls:
     @pytest.mark.asyncio
     async def test_retry_loop_breaks_early_when_clarification_captured(self) -> None:
         """The retry loop breaks immediately on clarification capture — no second pass."""
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(capture)
 
         call_count = 0

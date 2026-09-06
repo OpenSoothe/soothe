@@ -7,12 +7,9 @@ import traceback
 from typing import Any
 
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
-from soothe.sloop.orchestrator.checkpoint import (
-    snapshot_has_resumable_interrupt,
-    snapshot_has_unanswered_pending,
-    strange_loop_configurable,
-)
+from soothe.sloop.orchestrator.checkpoint import strange_loop_configurable
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.relay.snapshot import snapshot_has_unanswered_pending
 from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.observability.langfuse import (
     SootheLangfuse,
@@ -93,60 +90,41 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     return out
 
 
-def _clarification_resume_command(
+async def _clarification_resume_command(
     *,
     snapshot: Any,
     resume_answers: list[str],
     loop_id: str,
+    ctx: LoopRuntimeContext | None = None,
 ) -> Any | None:
     """Build `Command(resume=…)` or orphaned-interrupt `goto` recovery.
 
-    Returns:
-        A LangGraph `Command`, or `None` when the orphaned origin cannot be
-        mapped to a safe resume station (caller falls back to normal invoke).
+    Delegates to `LoopRelay.build_resume_command` (the single owner of the
+    StrangeLoop-level resume: live `interrupt()` resume vs orphan goto).
+    Returns a LangGraph `Command`, or `None` when there is no pending
+    clarification or the orphaned origin cannot be mapped to a safe resume
+    station (caller falls back to normal invoke).
     """
-    from langgraph.types import Command
-
-    from soothe.sloop.clarification.origins import resume_node_for_clarification_origin
-    from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-
-    if snapshot_has_resumable_interrupt(snapshot):
-        logger.info(
-            "[runner] Resuming pending clarification for loop=%s with %d answer(s)",
+    if ctx is None or ctx.relay is None:
+        logger.warning(
+            "[runner] no relay on context; cannot build clarification resume (loop=%s)",
             loop_id,
-            len(resume_answers),
-        )
-        return Command(resume={"answers": resume_answers})
-
-    values = getattr(snapshot, "values", {}) or {}
-    origin = values.get("last_clarification_origin")
-    if origin is None:
-        pending = values.get("pending_clarification")
-        if isinstance(pending, dict):
-            origin = pending.get("origin_node")
-    goto = resume_node_for_clarification_origin(str(origin) if origin is not None else None)
-    if goto is None:
-        logger.error(
-            "[runner] pending clarification without live interrupt and no safe "
-            "resume station (loop=%s origin=%s); falling back to normal invocation",
-            loop_id,
-            origin,
         )
         return None
-    answer_state = answer_to_state(
-        ClarificationAnswer(answers=tuple(resume_answers), source="human")
-    )
-    logger.warning(
-        "[runner] pending clarification without live interrupt (loop=%s origin=%s); "
-        "applying answer via goto=%s",
-        loop_id,
-        origin,
-        goto,
-    )
-    return Command(
-        update={"pending_clarification_answer": answer_state},
-        goto=goto,
-    )
+    relay_state = (getattr(snapshot, "values", {}) or {}).get("relay_state")
+    ctx.relay.hydrate_from_channels(relay_state)
+    try:
+        return await ctx.relay.build_resume_command(
+            answers=resume_answers,
+            snapshot=snapshot,
+            relay_state=relay_state,
+        )
+    except Exception:
+        logger.exception(
+            "[runner] relay.build_resume_command failed (loop=%s); falling back to normal invocation",
+            loop_id,
+        )
+        return None
 
 
 async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
@@ -181,10 +159,11 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
                 # returns answers paired 1:1 with questions instead of
                 # broadcasting a single concatenated string.
                 resume_answers = [str(a) for a in answer_list] if answer_list else [answer_text]
-                resume_cmd = _clarification_resume_command(
+                resume_cmd = await _clarification_resume_command(
                     snapshot=snapshot,
                     resume_answers=resume_answers,
                     loop_id=loop_id,
+                    ctx=ctx,
                 )
                 if resume_cmd is not None:
                     graph_input = resume_cmd

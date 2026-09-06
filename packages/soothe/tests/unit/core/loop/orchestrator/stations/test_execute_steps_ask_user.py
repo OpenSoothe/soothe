@@ -11,13 +11,13 @@ import pytest
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
-from soothe.sloop.clarification.capture import ResumeTicket
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     answer_to_state,
     request_from_state,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.relay.ticket import ResumeTicket
 from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 from soothe.sloop.stations.execute.execute import (
     PLANNER_ASK_INTERRUPT_PREFIX,

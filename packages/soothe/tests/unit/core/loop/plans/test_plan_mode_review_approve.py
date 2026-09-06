@@ -14,6 +14,7 @@ from __future__ import annotations
 import types
 
 from soothe.sloop.plans.plan_mode_review import handle_plan_mode_review_answer
+from soothe.sloop.relay.relay import LoopRelay
 
 
 def _build_ctx(
@@ -26,6 +27,8 @@ def _build_ctx(
         follow_on_exec=None,
         plan_result=None,
         plan_rejected=False,
+        decompose_proposals=[],
+        decision=None,
     )
     loop_state = types.SimpleNamespace(
         goal="count one to five",
@@ -33,8 +36,13 @@ def _build_ctx(
         iteration=0,
         workspace="/ws",
     )
-    ce = None  # _record_plan_action_ledger / _record_plan_completion_ledger no-op when ce is None
-    return types.SimpleNamespace(scratch=scratch, loop_state=loop_state, ce=ce)
+    ctx = types.SimpleNamespace(scratch=scratch, loop_state=loop_state, ce=None)
+
+    async def _emit(name, payload):
+        pass
+
+    ctx.relay = LoopRelay(loop_id="test", emit=_emit)
+    return ctx
 
 
 def _approve_answer_state() -> dict:
@@ -55,16 +63,23 @@ def _reject_answer_state() -> dict:
     }
 
 
+def _state(answer_state: dict, *, scratch: dict | None = None) -> dict:
+    relay_state: dict = {"answer": answer_state, "inbox": [], "active_origin": "plan_mode_review"}
+    if scratch is not None:
+        relay_state["scratch"] = scratch
+    return {"relay_state": relay_state}
+
+
 def test_approve_sets_terminal_plan_result_on_scratch() -> None:
     """Bug #4: approve must populate ctx.scratch.plan_result so finalize does not fatal."""
     ctx = _build_ctx()
-    state = {
-        "pending_clarification_answer": _approve_answer_state(),
-        "pending_clarification": {
-            "plan_path": ctx.scratch.plan_draft_path,
-            "plan_markdown": ctx.scratch.plan_draft_markdown,
+    state = _state(
+        _approve_answer_state(),
+        scratch={
+            "plan_draft_path": ctx.scratch.plan_draft_path,
+            "plan_draft_markdown": ctx.scratch.plan_draft_markdown,
         },
-    }
+    )
     out = handle_plan_mode_review_answer(ctx, state)
 
     assert out["plan_approved_follow_on"] is True
@@ -78,9 +93,7 @@ def test_approve_sets_terminal_plan_result_on_scratch() -> None:
 def test_approve_stashes_follow_on_exec_signal() -> None:
     """approve stashes goal_prompt + plan_path for the daemon to enqueue the exec goal."""
     ctx = _build_ctx()
-    out = handle_plan_mode_review_answer(
-        ctx, {"pending_clarification_answer": _approve_answer_state()}
-    )
+    out = handle_plan_mode_review_answer(ctx, _state(_approve_answer_state()))
 
     assert out["plan_approved_follow_on"] is True
     sig = ctx.scratch.follow_on_exec
@@ -90,34 +103,28 @@ def test_approve_stashes_follow_on_exec_signal() -> None:
 
 
 def test_approve_clears_clarification_channels() -> None:
-    """approve must clear pending clarification so routers route → FINALIZE, not AWAIT_USER."""
+    """approve must clear relay_state so routers route → FINALIZE, not AWAIT_USER."""
     ctx = _build_ctx()
-    out = handle_plan_mode_review_answer(
-        ctx, {"pending_clarification_answer": _approve_answer_state()}
-    )
+    out = handle_plan_mode_review_answer(ctx, _state(_approve_answer_state()))
 
-    assert out["pending_clarification"] is None
-    assert out["pending_clarification_answer"] is None
-    assert out["last_clarification_origin"] is None
+    assert out["relay_state"]["answer"] is None
+    assert out["relay_state"]["inbox"] == []
 
 
 def test_reject_terminates_without_follow_on_exec() -> None:
     """Reject finalizes the current goal and does not execute the plan."""
     ctx = _build_ctx()
-    out = handle_plan_mode_review_answer(
-        ctx, {"pending_clarification_answer": _reject_answer_state()}
-    )
+    out = handle_plan_mode_review_answer(ctx, _state(_reject_answer_state()))
 
     assert out["plan_rejected_terminal"] is True
-    assert out["pending_clarification"] is None
-    assert out["pending_clarification_answer"] is None
+    assert out["relay_state"]["answer"] is None
     assert ctx.scratch.follow_on_exec is None
 
 
 def test_reject_leaves_no_plan_result_to_report() -> None:
     """Reject must not build a terminal PlanResult — there is nothing to summarize."""
     ctx = _build_ctx()
-    handle_plan_mode_review_answer(ctx, {"pending_clarification_answer": _reject_answer_state()})
+    handle_plan_mode_review_answer(ctx, _state(_reject_answer_state()))
 
     assert ctx.scratch.plan_rejected is True
     assert ctx.scratch.plan_result is None
@@ -134,9 +141,7 @@ def test_reject_records_no_goal_completion_ledger_entry() -> None:
         patch.object(plan_mode_review, "_record_plan_action_ledger") as action_ledger,
         patch.object(plan_mode_review, "_record_plan_completion_ledger") as completion_ledger,
     ):
-        plan_mode_review.handle_plan_mode_review_answer(
-            ctx, {"pending_clarification_answer": _reject_answer_state()}
-        )
+        plan_mode_review.handle_plan_mode_review_answer(ctx, _state(_reject_answer_state()))
 
     action_ledger.assert_not_called()
     completion_ledger.assert_not_called()

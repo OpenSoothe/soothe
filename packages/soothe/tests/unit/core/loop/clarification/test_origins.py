@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from soothe.sloop.clarification.origins import (
-    CLARIFICATION_ORIGIN_RESUME_NODE,
     CLARIFICATION_ORIGINS,
     DEFAULT_FORCE_MANUAL_ORIGINS,
     ORIGIN_EXECUTE,
     ORIGIN_PLAN_MODE_REVIEW,
     ORIGIN_RAIL_PAUSE,
     ORIGIN_TOOL_APPROVAL,
+)
+from soothe.sloop.relay.router import (
+    CLARIFICATION_ORIGIN_RESUME_NODE,
     resume_node_for_clarification_origin,
 )
 

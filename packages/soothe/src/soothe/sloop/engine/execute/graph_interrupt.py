@@ -11,12 +11,6 @@ from typing import Any, Literal
 
 from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
-from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
-from soothe.sloop.clarification.protocol import (
-    ClarificationAnswer,
-    ClarificationRequest,
-)
-
 logger = logging.getLogger(__name__)
 
 _STREAM_POLL_INTERVAL_S = 0.5
@@ -308,129 +302,6 @@ class GraphStreamChunkReader:
         await self._cancel_pending()
 
 
-def is_ask_user_interrupt(value: Any) -> bool:
-    """Return True if `value` is a structured `ask_user` interrupt payload."""
-    return isinstance(value, Mapping) and value.get("type") == "ask_user"
-
-
-def is_tool_approval_interrupt(value: Any) -> bool:
-    """Return True if `value` is a deepagents `action_requests` interrupt.
-
-       The `HumanInTheLoopMiddleware` emits this shape when a tool call matches
-       an `interrupt_on` rule. These are captured into the clarification relay
-       (`tool_approval` origin) and resolved by the multi-stage pipeline
-    or veritas fallback — never auto-approved silently.
-    """
-    return isinstance(value, Mapping) and "action_requests" in value
-
-
-def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str, Any]:
-    """Build a `Command(resume=...)` payload for residual non-clarification interrupts.
-
-    `ask_user` and `action_requests` (tool-approval) interrupts are
-    captured by the clarification relay before this function runs; they never
-    reach `pending_interrupts`. This function auto-approves any *other*
-    interrupt type that reached `pending_interrupts` — these are typically
-    deepagents middleware interrupts unrelated to clarification.
-    """
-    payload: dict[str, Any] = {}
-    for iid, value in pending_interrupts.items():
-        if is_ask_user_interrupt(value) or is_tool_approval_interrupt(value):
-            continue
-        decisions = [{"type": "approve"}]
-        payload[iid] = {"decisions": decisions}
-    return payload
-
-
-def build_tool_approval_resume_payload(
-    interrupt_id: str,
-    *,
-    decisions: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Build the resume payload for a tool-approval interrupt.
-
-    Translates the clarification relay's answer (approve/reject/edit per
-    action request) into the `{"decisions": [...]}` shape the deepagents
-    `HumanInTheLoopMiddleware` expects on `Command(resume=...)`.
-    """
-    return {interrupt_id: {"decisions": decisions}}
-
-
-# Mapping from a veritas/TUI tool-approval answer to the deepagents HITL
-# decision type the ``HumanInTheLoopMiddleware`` expects on resume.
-_APPROVE_TOKENS = frozenset({"approve", "yes", "ok", "allow", "accept", "proceed", "y"})
-_REJECT_TOKENS = frozenset({"reject", "no", "deny", "block", "cancel", "n"})
-_EDIT_TOKENS = frozenset({"edit", "modify", "change", "revise"})
-
-
-def _answer_to_decision(answer: str) -> str:
-    """Map a tool-approval answer string to a HITL `DecisionType`.
-
-    The clarification relay answers with a free-form string (from veritas or
-    the TUI input). The deepagents middleware expects `"approve"` /
-    `"edit"` / `"reject"`. Defaults to `"approve"` for unrecognized
-    positive-ish answers and `"reject"` only on an explicit reject token.
-    """
-    token = (answer or "").strip().lower()
-    if token in _REJECT_TOKENS:
-        return "reject"
-    if token in _EDIT_TOKENS:
-        return "edit"
-    return "approve"
-
-
-def build_clarification_resume_payload(
-    request: ClarificationRequest,
-    answer: ClarificationAnswer,
-) -> dict[str, Any]:
-    """Build the `Command(resume=...)` payload for a clarified interrupt.
-
-    Single resume translator for every clarification origin:
-
-    - `tool_approval` — map the relay's answer to a HITL `decisions` shape.
-      One decision per pending action request (hanging tool call). The
-      `HumanInTheLoopMiddleware` requires the decisions list length to match
-      the number of hanging tool calls — a mismatch raises `ValueError` at
-      resume time. When the answer has fewer entries than action requests,
-      remaining slots default to the first answer (or `"approve"`).
-    - otherwise (`ask_user` / execute) — deliver the answers verbatim so the
-      `ask_user` tool returns the Q&A and the agent continues its turn.
-
-    Instructive rejects (audit ``instructive: True``) attach the safety
-    ``reason`` as a ``message`` on each reject decision so the model's
-    ``ToolMessage`` explains why the call was blocked.
-    """
-    if request.origin_node == ORIGIN_TOOL_APPROVAL:
-        action_requests = request.metadata.get("action_requests", [])
-        n_pending = (
-            len(action_requests) if isinstance(action_requests, list) and action_requests else 0
-        )
-        answers = list(answer.answers) if answer.answers else ["approve"]
-        # When action_requests metadata is unavailable, fall back to the
-        # number of answers (one answer per pending tool call).
-        if n_pending == 0:
-            n_pending = len(answers) if answers else 1
-        # Instructive reject: surface the safety reason as the reject
-        # message so the model's ToolMessage explains why the call was blocked.
-        audit = answer.audit if isinstance(answer.audit, dict) else {}
-        instructive_reason: str | None = None
-        if audit.get("instructive"):
-            instructive_reason = str(audit.get("reason") or "").strip() or None
-        decisions: list[dict[str, Any]] = []
-        for i in range(n_pending):
-            ans = answers[i] if i < len(answers) else answers[0]
-            decision_type = _answer_to_decision(ans)
-            decision: dict[str, Any] = {"type": decision_type}
-            if decision_type == "reject" and instructive_reason is not None:
-                decision["message"] = instructive_reason
-            decisions.append(decision)
-        return build_tool_approval_resume_payload(
-            request.origin_interrupt_id,
-            decisions=decisions,
-        )
-    return {request.origin_interrupt_id: {"answers": list(answer.answers)}}
-
-
 __all__ = [
     "StreamChunkClass",
     "_MAX_INTERRUPT_ITERATIONS",
@@ -438,11 +309,5 @@ __all__ = [
     "_STREAM_HEARTBEAT_SENTINEL",
     "_classify_stream_chunk",
     "GraphStreamChunkReader",
-    "_answer_to_decision",
-    "build_auto_resume_payload",
-    "build_clarification_resume_payload",
-    "build_tool_approval_resume_payload",
     "DispatchTimeoutError",
-    "is_ask_user_interrupt",
-    "is_tool_approval_interrupt",
 ]

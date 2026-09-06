@@ -104,6 +104,16 @@ STRANGE_LOOP_PLAN_PHASE = "soothe.cognition.strange_loop.plan.phase"
 STRANGE_LOOP_REASONED = "soothe.cognition.strange_loop.reasoned"
 STRANGE_LOOP_CONTEXT_COMPACTED = "soothe.cognition.strange_loop.context.compacted"  # RFC-224
 
+# LoopRelay (IG-775) — interrupt/relay/resume bridge between StrangeLoop and
+# CoreAgent graphs. Replaces the informal raw-string ctx.emit calls at the
+# relay boundary (clarification_requested/answered/deferred, goal_unblocked).
+RELAY_CAPTURED = "soothe.cognition.relay.captured"
+RELAY_RESUME_COMMAND_BUILT = "soothe.cognition.relay.resume_command_built"
+RELAY_RECOVERED = "soothe.cognition.relay.recovered"
+RELAY_STALE_INTERRUPT_SKIPPED = "soothe.cognition.relay.stale_interrupt_skipped"
+RELAY_DEFERRED = "soothe.cognition.relay.deferred"
+RELAY_UNBLOCKED = "soothe.cognition.relay.unblocked"
+
 # Intake-only wired specialist lifecycle (RFC-630 §6.3.3)
 WIRED_SUBAGENT_STARTED = "soothe.cognition.wired_subagent.started"
 WIRED_SUBAGENT_COMPLETED = "soothe.cognition.wired_subagent.completed"
@@ -418,6 +428,73 @@ class StrangeLoopContextCompactionEvent(LifecycleEvent):
 
 
 # ---------------------------------------------------------------------------
+# LoopRelay events (IG-775) — interrupt/relay/resume bridge lifecycle
+# ---------------------------------------------------------------------------
+
+
+class RelayCapturedEvent(LifecycleEvent):
+    """A GraphInterrupt was captured from a CoreAgent stream into the relay inbox."""
+
+    type: Literal["soothe.cognition.relay.captured"] = "soothe.cognition.relay.captured"
+    loop_id: str
+    origin: str
+    interrupt_id: str = ""
+    step_id: str = ""
+    thread_id: str = ""
+    queue_len: int = 0
+
+
+class RelayResumeCommandBuiltEvent(LifecycleEvent):
+    """A Command(resume=...) was built for the head interrupt's fork thread."""
+
+    type: Literal["soothe.cognition.relay.resume_command_built"] = (
+        "soothe.cognition.relay.resume_command_built"
+    )
+    loop_id: str
+    shape: str  # "live_interrupt" | "orphan_goto"
+    origin: str = ""
+    goto: str = ""
+    answers: int = 0
+
+
+class RelayRecoveredEvent(LifecycleEvent):
+    """A stale or mismatched resume was recovered without crashing the loop."""
+
+    type: Literal["soothe.cognition.relay.recovered"] = "soothe.cognition.relay.recovered"
+    loop_id: str
+    reason: str
+    origin: str = ""
+
+
+class RelayStaleInterruptSkippedEvent(LifecycleEvent):
+    """A resume was skipped because the head no longer matched the parked snapshot."""
+
+    type: Literal["soothe.cognition.relay.stale_interrupt_skipped"] = (
+        "soothe.cognition.relay.stale_interrupt_skipped"
+    )
+    loop_id: str
+    ticket_id: str
+
+
+class RelayDeferredEvent(LifecycleEvent):
+    """A clarification was hard-deferred (parked) awaiting an out-of-band answer."""
+
+    type: Literal["soothe.cognition.relay.deferred"] = "soothe.cognition.relay.deferred"
+    loop_id: str
+    reason: str
+    questions: list[str] = []  # noqa: RUF012
+
+
+class RelayUnblockedEvent(LifecycleEvent):
+    """A parked clarification was resolved and the goal was unblocked."""
+
+    type: Literal["soothe.cognition.relay.unblocked"] = "soothe.cognition.relay.unblocked"
+    loop_id: str
+    goal_id: str
+    new_status: str = "pending"
+
+
+# ---------------------------------------------------------------------------
 # Protocol events
 # ---------------------------------------------------------------------------
 
@@ -692,6 +769,47 @@ _reg(
     verbosity=VerbosityTier.INTERNAL,
     summary_template="Context compacted: {tokens_before} → {tokens_after} tokens",
     priority=EventPriority.NORMAL,
+)
+
+# -- LoopRelay (IG-775) ------------------------------------------------------
+_reg(
+    RELAY_CAPTURED,
+    RelayCapturedEvent,
+    verbosity=VerbosityTier.INTERNAL,
+    summary_template="Captured {origin} (queue={queue_len})",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    RELAY_RESUME_COMMAND_BUILT,
+    RelayResumeCommandBuiltEvent,
+    verbosity=VerbosityTier.INTERNAL,
+    summary_template="Resume built: {shape}",
+)
+_reg(
+    RELAY_RECOVERED,
+    RelayRecoveredEvent,
+    verbosity=VerbosityTier.INTERNAL,
+    summary_template="Recovered: {reason}",
+)
+_reg(
+    RELAY_STALE_INTERRUPT_SKIPPED,
+    RelayStaleInterruptSkippedEvent,
+    verbosity=VerbosityTier.INTERNAL,
+    summary_template="Stale resume skipped: {ticket_id}",
+)
+_reg(
+    RELAY_DEFERRED,
+    RelayDeferredEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Deferred: {reason}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    RELAY_UNBLOCKED,
+    RelayUnblockedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Unblocked: {goal_id}",
+    priority=EventPriority.HIGH,
 )
 
 # -- Protocol: plan ----------------------------------------------------------

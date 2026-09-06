@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
+    from soothe.sloop.relay.relay import LoopRelay
 
 
 def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
@@ -120,6 +121,22 @@ class StrangeLoop:
         if self._goal_synthesis_llm is not None:
             return self._goal_synthesis_llm
         return self._fast_llm
+
+    @staticmethod
+    def _build_relay(
+        loop_id: str,
+        emit: Any,
+    ) -> LoopRelay:
+        """Construct the LoopRelay bridge for one goal run.
+
+        The relay owns the interrupt → park → resume lifecycle between the
+        StrangeLoop graph and the CoreAgent graph. Hydrated from the
+        `relay_state` graph channel at each node entry via
+        `relay.hydrate_from_channels`.
+        """
+        from soothe.sloop.relay.relay import LoopRelay
+
+        return LoopRelay(loop_id=loop_id, emit=emit)
 
     def set_clarification_mode(self, mode: str) -> bool:
         """Hot-swap the clarification policy on the live runtime context.
@@ -846,6 +863,7 @@ class StrangeLoop:
                 ce=ce_instance,
                 ce_goal_id=ce_goal.id,
                 goal_trace=active_goal_trace,
+                relay=self._build_relay(state_manager.loop_id, emit),
             )
             runtime_ctx = ctx
             self._live_runtime_ctx = ctx

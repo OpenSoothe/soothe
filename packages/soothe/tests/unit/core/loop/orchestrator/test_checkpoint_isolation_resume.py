@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,7 +14,6 @@ from soothe.sloop.orchestrator.checkpoint import (
     execute_step_thread_id,
     intake_only_invoke_config,
     intake_thread_id,
-    snapshot_has_resumable_interrupt,
     strange_loop_configurable,
     strange_loop_thread_id,
     synthesis_thread_id,
@@ -24,6 +24,9 @@ from soothe.sloop.orchestrator.runner import (
     build_loop_graph_invoke_config,
 )
 from soothe.sloop.orchestrator.stations import PLAN_REVIEW
+from soothe.sloop.relay.snapshot import (
+    snapshot_has_resumable_interrupt,
+)
 
 
 def test_strange_loop_configurable_sets_isolated_thread() -> None:
@@ -102,71 +105,93 @@ def test_snapshot_has_resumable_interrupt_absent() -> None:
     assert snapshot_has_resumable_interrupt(snap) is False
 
 
-def test_clarification_resume_command_uses_resume_when_interrupt_live() -> None:
-    snap = SimpleNamespace(
-        interrupts=(object(),),
-        tasks=(),
-        values={"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW},
-    )
-    cmd = _clarification_resume_command(
+def _make_relay_ctx(loop_id: str = "loop-1") -> tuple[MagicMock, Any]:
+    """Build a ctx with a real LoopRelay for resume-command tests."""
+    from soothe.sloop.relay.relay import LoopRelay
+
+    ctx = MagicMock()
+    events: list[tuple] = []
+
+    async def emit(event_type: str, event_data: Any) -> None:
+        events.append((event_type, event_data))
+
+    ctx.relay = LoopRelay(loop_id=loop_id, emit=emit)
+    return ctx, events
+
+
+@pytest.mark.asyncio
+async def test_clarification_resume_command_uses_resume_when_interrupt_live() -> None:
+    ctx, _ = _make_relay_ctx()
+    relay_state = {
+        "inbox": [{"request": {"origin_node": "plan_mode_review"}}],
+        "active_origin": ORIGIN_PLAN_MODE_REVIEW,
+        "answer": None,
+    }
+    snap = SimpleNamespace(interrupts=(object(),), tasks=(), values={"relay_state": relay_state})
+    cmd = await _clarification_resume_command(
         snapshot=snap,
         resume_answers=["Approve", ""],
         loop_id="loop-1",
+        ctx=ctx,
     )
     assert isinstance(cmd, Command)
     assert cmd.resume == {"answers": ["Approve", ""]}
     assert cmd.goto == ()
 
 
-def test_clarification_resume_command_goto_recovery_when_interrupt_orphaned() -> None:
-    snap = SimpleNamespace(
-        interrupts=(),
-        tasks=(),
-        values={"last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW},
-    )
-    cmd = _clarification_resume_command(
+@pytest.mark.asyncio
+async def test_clarification_resume_command_goto_recovery_when_interrupt_orphaned() -> None:
+    ctx, _ = _make_relay_ctx()
+    relay_state = {
+        "inbox": [{"request": {"origin_node": "plan_mode_review"}}],
+        "active_origin": ORIGIN_PLAN_MODE_REVIEW,
+        "answer": None,
+    }
+    snap = SimpleNamespace(interrupts=(), tasks=(), values={"relay_state": relay_state})
+    cmd = await _clarification_resume_command(
         snapshot=snap,
         resume_answers=["Approve", ""],
         loop_id="loop-1",
+        ctx=ctx,
     )
     assert isinstance(cmd, Command)
     assert cmd.resume is None
     assert cmd.goto == PLAN_REVIEW
     update = cmd.update
     assert isinstance(update, dict)
-    answer = update.get("pending_clarification_answer")
+    relay_update = update.get("relay_state")
+    assert isinstance(relay_update, dict)
+    answer = relay_update.get("answer")
     assert isinstance(answer, dict)
     assert answer.get("answers") == ["Approve", ""]
     assert answer.get("source") == "human"
 
 
-def test_clarification_resume_command_fail_closed_when_origin_missing() -> None:
-    snap = SimpleNamespace(interrupts=(), tasks=(), values={})
-    cmd = _clarification_resume_command(
+@pytest.mark.asyncio
+async def test_clarification_resume_command_fail_closed_when_origin_missing() -> None:
+    ctx, _ = _make_relay_ctx()
+    snap = SimpleNamespace(interrupts=(), tasks=(), values={"relay_state": {}})
+    cmd = await _clarification_resume_command(
         snapshot=snap,
         resume_answers=["x"],
         loop_id="loop-1",
+        ctx=ctx,
     )
     assert cmd is None
 
 
-def test_clarification_resume_command_uses_pending_origin_when_last_missing() -> None:
-    from soothe.sloop.orchestrator.stations import EXECUTE
-
-    snap = SimpleNamespace(
-        interrupts=(),
-        tasks=(),
-        values={
-            "pending_clarification": {"origin_node": "execute", "questions": ["q"]},
-        },
-    )
-    cmd = _clarification_resume_command(
+@pytest.mark.asyncio
+async def test_clarification_resume_command_no_relay_returns_none() -> None:
+    ctx = MagicMock()
+    ctx.relay = None
+    snap = SimpleNamespace(interrupts=(object(),), tasks=(), values={"relay_state": {}})
+    cmd = await _clarification_resume_command(
         snapshot=snap,
-        resume_answers=["a"],
+        resume_answers=["x"],
         loop_id="loop-1",
+        ctx=ctx,
     )
-    assert isinstance(cmd, Command)
-    assert cmd.goto == EXECUTE
+    assert cmd is None
 
 
 @pytest.mark.asyncio

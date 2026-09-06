@@ -30,7 +30,6 @@ from soothe.config.constants import (
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
-from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import ClarificationOrigin, LoopStateView
@@ -53,9 +52,6 @@ from soothe.sloop.engine.execute.graph_interrupt import (
     _STREAM_HEARTBEAT_SENTINEL,
     DispatchTimeoutError,
     GraphStreamChunkReader,
-    build_auto_resume_payload,
-    is_ask_user_interrupt,
-    is_tool_approval_interrupt,
 )
 from soothe.sloop.engine.execute.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
@@ -110,6 +106,13 @@ from soothe.sloop.engine.execute.tool_call_id import (
     _rewrite_tool_message_tool_call_id,
     _SubgraphNamespaceTaskBinder,
 )
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.outbox import (
+    build_auto_resume_payload,
+    is_ask_user_interrupt,
+    is_tool_approval_interrupt,
+)
+from soothe.sloop.relay.ticket import ResumeTicket
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -218,7 +221,7 @@ def _extract_interrupts_from_graph_interrupt(exc: GraphInterrupt) -> tuple[Inter
 def _capture_interrupts(
     interrupts: tuple[Interrupt, ...],
     detector: ClarificationDetector,
-    capture: ClarificationQueue,
+    capture: RelayInbox,
     loop_state_view: LoopStateView,
     origin_node: ClarificationOrigin,
     *,
@@ -276,7 +279,7 @@ class Executor:
         config: SootheConfig | None = None,
         loop_id: str | None = None,
         clarification_detector: ClarificationDetector | None = None,
-        clarification_capture: ClarificationQueue | None = None,
+        clarification_capture: RelayInbox | None = None,
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
         context_engine: Any | None = None,  # RFC-624 Phase 4
@@ -776,7 +779,7 @@ class Executor:
         graph_config: dict[str, Any],
         *,
         detector: ClarificationDetector | None,
-        capture: ClarificationQueue | None,
+        capture: RelayInbox | None,
         loop_state_view: LoopStateView | None,
         origin_node: ClarificationOrigin,
         step_id: str | None = None,
@@ -872,7 +875,7 @@ class Executor:
         graph_config: dict[str, Any],
         *,
         detector: ClarificationDetector | None = None,
-        capture: ClarificationQueue | None = None,
+        capture: RelayInbox | None = None,
         loop_state_view: LoopStateView | None = None,
         origin_node: ClarificationOrigin = ORIGIN_EXECUTE,
         resume_answer_payload: dict[str, Any] | None = None,

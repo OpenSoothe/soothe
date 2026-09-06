@@ -23,17 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 def _pending_clarification(state: dict[str, Any]) -> bool:
-    """True when a clarification request is pending and unanswered.
+    """True when the relay inbox has a head entry with no answer built yet.
 
-    Checks both `pending_clarification` (the head) and the
-    `clarification_queue` channel. When the queue still has entries after
-    the head is answered, the next entry surfaces here so routing continues
-    to `AWAIT_USER` until the queue drains.
+    Reads the `relay_state` channel: inbox non-empty and answer slot `None`.
     """
-    pending = state.get("pending_clarification")
-    answer = state.get("pending_clarification_answer")
-    queue = state.get("clarification_queue")
-    return (bool(pending) or bool(queue)) and not answer
+    relay_state = state.get("relay_state")
+    if not isinstance(relay_state, dict):
+        return False
+    inbox = relay_state.get("inbox")
+    if not isinstance(inbox, list) or not inbox:
+        return False
+    return relay_state.get("answer") is None
 
 
 def route_after_preprocess(state: dict[str, Any]) -> str:
@@ -142,23 +142,38 @@ def route_after_clarification(state: dict[str, Any]) -> str:
     """Return to origin station, FINALIZE on plan approve, or END on defer."""
     if state.get("last_outcome") == "deferred":
         return END
-    from soothe.sloop.clarification.origins import (
-        ORIGIN_PLAN_MODE_REVIEW,
-        resume_node_for_clarification_origin,
-    )
+    from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
+    from soothe.sloop.relay.router import resume_node_for_clarification_origin
 
-    origin = state.get("last_clarification_origin")
+    origin = _active_origin(state)
     if origin == ORIGIN_PLAN_MODE_REVIEW:
         if state.get("plan_approved_follow_on"):
             logger.debug(
                 "[routing] route_after_clarification → finalize (plan approved; exec goal follows)"
             )
             return FINALIZE
-        pending = state.get("pending_clarification")
-        if pending is not None:
+        if _pending_clarification(state):
             logger.debug("[routing] route_after_clarification → plan_review (process plan action)")
             return PLAN_REVIEW
         logger.debug("[routing] route_after_clarification → END (no pending, no approve)")
         return END
     resume = resume_node_for_clarification_origin(origin)
     return resume if resume is not None else END
+
+
+def _active_origin(state: dict[str, Any]) -> str | None:
+    """Read the active clarification origin from the `relay_state` channel."""
+    relay_state = state.get("relay_state")
+    if not isinstance(relay_state, dict):
+        return None
+    origin = relay_state.get("active_origin")
+    if origin:
+        return str(origin)
+    inbox = relay_state.get("inbox")
+    if isinstance(inbox, list) and inbox:
+        head = inbox[0]
+        if isinstance(head, dict):
+            request = head.get("request")
+            if isinstance(request, dict):
+                return request.get("origin_node")
+    return None

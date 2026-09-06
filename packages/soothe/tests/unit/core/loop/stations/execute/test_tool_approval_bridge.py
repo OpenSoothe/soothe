@@ -1,7 +1,7 @@
 """Tests for the tool-approval ↔ clarification bridge.
 
 Covers: force_manual_origins includes tool_approval, veritas prompt variant
-dispatch, _answer_to_decision mapping, and the resume-payload translator in
+dispatch, answer_to_decision mapping, and the resume-payload translator in
 node_execute that converts a relay answer into the HITL decisions shape.
 """
 
@@ -15,7 +15,7 @@ from soothe.sloop.clarification.origins import (
     ORIGIN_TOOL_APPROVAL,
 )
 from soothe.sloop.clarification.protocol import answer_from_state, request_from_state
-from soothe.sloop.engine.execute.graph_interrupt import (
+from soothe.sloop.relay.outbox import (
     build_clarification_resume_payload,
     build_tool_approval_resume_payload,
 )
@@ -62,7 +62,7 @@ def test_veritas_prompt_for_none_origin_is_default() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _answer_to_decision mapping
+# answer_to_decision mapping
 # ---------------------------------------------------------------------------
 
 
@@ -86,9 +86,9 @@ def test_veritas_prompt_for_none_origin_is_default() -> None:
     ],
 )
 def test_answer_to_decision_mapping(answer: str, expected: str) -> None:
-    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+    from soothe.sloop.relay.outbox import answer_to_decision
 
-    assert _answer_to_decision(answer) == expected
+    assert answer_to_decision(answer) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -98,25 +98,25 @@ def test_answer_to_decision_mapping(answer: str, expected: str) -> None:
 
 def test_tool_approval_resume_payload_from_approve_answer() -> None:
     """A relay 'approve' answer produces the HITL decisions shape."""
-    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+    from soothe.sloop.relay.outbox import answer_to_decision
 
-    decision_type = _answer_to_decision("approve")
+    decision_type = answer_to_decision("approve")
     payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": decision_type}])
     assert payload == {"iTA": {"decisions": [{"type": "approve"}]}}
 
 
 def test_tool_approval_resume_payload_from_reject_answer() -> None:
-    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+    from soothe.sloop.relay.outbox import answer_to_decision
 
-    decision_type = _answer_to_decision("no")
+    decision_type = answer_to_decision("no")
     payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": decision_type}])
     assert payload == {"iTA": {"decisions": [{"type": "reject"}]}}
 
 
 def test_tool_approval_resume_payload_from_edit_answer() -> None:
-    from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+    from soothe.sloop.relay.outbox import answer_to_decision
 
-    decision_type = _answer_to_decision("edit")
+    decision_type = answer_to_decision("edit")
     payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": decision_type}])
     assert payload == {"iTA": {"decisions": [{"type": "edit"}]}}
 

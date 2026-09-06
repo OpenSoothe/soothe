@@ -7,23 +7,25 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
-from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
     answer_from_state,
+    answer_to_state,
     request_from_state,
     request_to_state,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import approval_record
 from soothe.sloop.engine.execute.context_window_manager import ContextWindowManager
 from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.sloop.engine.execute.graph_interrupt import build_clarification_resume_payload
 from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
 from soothe.sloop.orchestrator.node_base import _maybe_await
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.outbox import build_clarification_resume_payload
+from soothe.sloop.relay.ticket import ResumeTicket
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -363,6 +365,18 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     decision = ctx.scratch.decision
     plan_result = ctx.scratch.plan_result
 
+    # Hydrate the relay from the relay_state channel so a fresh ainvoke
+    # reconstructs the inbox + scratch (decision/plan_result/resume_ticket)
+    # from the checkpoint before the resume path reads them.
+    relay = getattr(ctx, "relay", None)
+    relay_state_in = state_dict.get("relay_state")
+    if relay is not None and isinstance(relay_state_in, dict):
+        relay.hydrate_from_channels(relay_state_in, scratch=ctx.scratch)
+        if ctx.scratch.decision is not None and decision is None:
+            decision = ctx.scratch.decision
+        if ctx.scratch.plan_result is not None and plan_result is None:
+            plan_result = ctx.scratch.plan_result
+
     ready_n = len(decision.steps) if decision is not None else 0
     logger.info(
         "[execute] start loop_id=%s iteration=%s ready_steps=%d",
@@ -386,6 +400,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     allowlist_dirty = False
     pending_answer_state = state_dict.get("pending_clarification_answer")
     pending_request_state = state_dict.get("pending_clarification")
+    # Prefer the relay as the answer source when wired; fall back to the
+    # legacy pending_clarification* channels otherwise.
+    if relay is not None and isinstance(relay_state_in, dict):
+        consumed = relay.consume_answer(relay_state_in)
+        if consumed is not None:
+            req, ans, _ticket = consumed
+            pending_request_state = request_to_state(req)
+            pending_answer_state = answer_to_state(ans)
     if pending_answer_state and pending_request_state:
         try:
             ans = answer_from_state(pending_answer_state)
@@ -823,7 +845,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 "pending_clarification_answer": None,
             }
 
-    clarification_capture = ClarificationQueue()
+    clarification_capture = RelayInbox()
     clarification_detector: ClarificationDetector | None = None
     clarification_view: LoopStateView | None = None
     if ctx.clarification_policy is not None:

@@ -1,14 +1,11 @@
-"""Tests for the per-loop ClarificationQueue (FIFO, never drops)."""
+"""Tests for the per-loop RelayInbox (FIFO, never drops)."""
 
 from __future__ import annotations
 
-from soothe.sloop.clarification.capture import (
-    ClarificationQueue,
-    QueuedClarification,
-    ResumeTicket,
-)
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import ClarificationRequest, LoopStateView
+from soothe.sloop.relay.inbox import RelayInbox, RelayInboxEntry
+from soothe.sloop.relay.ticket import ResumeTicket
 
 
 def _view() -> LoopStateView:
@@ -39,7 +36,7 @@ class TestClarificationQueueFIFO:
     """The queue preserves every entry in FIFO order — no drops."""
 
     def test_empty_queue_head_is_none(self) -> None:
-        q = ClarificationQueue()
+        q = RelayInbox()
         assert q.head is None
         assert q.peek() is None
         assert q.head_ticket is None
@@ -47,7 +44,7 @@ class TestClarificationQueueFIFO:
         assert not q
 
     def test_enqueue_two_preserves_order(self) -> None:
-        q = ClarificationQueue()
+        q = RelayInbox()
         r1 = _request("iii-1")
         r2 = _request("iii-2")
         q.enqueue(r1, resume_ticket=ResumeTicket(thread_id="t1"), step_id="s1")
@@ -58,7 +55,7 @@ class TestClarificationQueueFIFO:
         assert q.head_ticket.thread_id == "t1"
 
     def test_dequeue_pops_head_only(self) -> None:
-        q = ClarificationQueue()
+        q = RelayInbox()
         r1 = _request("iii-1")
         r2 = _request("iii-2")
         q.enqueue(r1, resume_ticket=ResumeTicket(), step_id="s1")
@@ -70,12 +67,12 @@ class TestClarificationQueueFIFO:
         assert q.head is r2
 
     def test_dequeue_empty_returns_none(self) -> None:
-        q = ClarificationQueue()
+        q = RelayInbox()
         assert q.dequeue() is None
 
     def test_never_drops_secondary_interrupts(self) -> None:
         """The core defect fix: secondary interrupts are NOT dropped."""
-        q = ClarificationQueue()
+        q = RelayInbox()
         for i in range(5):
             q.enqueue(_request(f"iii-{i}"), resume_ticket=ResumeTicket())
         assert len(q) == 5
@@ -89,7 +86,7 @@ class TestClarificationQueueFIFO:
 
     def test_resume_ticket_per_entry(self) -> None:
         """Each entry carries its own resume ticket (thread_id)."""
-        q = ClarificationQueue()
+        q = RelayInbox()
         q.enqueue(
             _request("iii-A"),
             resume_ticket=ResumeTicket(thread_id="thread-A", step_id="step-A"),
@@ -106,7 +103,7 @@ class TestClarificationQueueFIFO:
 
     def test_head_and_head_ticket_read_only(self) -> None:
         """head / head_ticket are read-only properties — no setter."""
-        q = ClarificationQueue()
+        q = RelayInbox()
         try:
             q.head = _request("x")  # type: ignore[misc]
             raise AssertionError("should not be settable")
@@ -118,7 +115,7 @@ class TestQueuedClarificationDataclass:
     def test_entry_carries_request_ticket_step(self) -> None:
         req = _request("iii-1", origin=ORIGIN_EXECUTE)
         ticket = ResumeTicket(thread_id="t", step_id="s")
-        entry = QueuedClarification(request=req, resume_ticket=ticket, step_id="s")
+        entry = RelayInboxEntry(request=req, resume_ticket=ticket, step_id="s")
         assert entry.request is req
         assert entry.resume_ticket is ticket
         assert entry.step_id == "s"
