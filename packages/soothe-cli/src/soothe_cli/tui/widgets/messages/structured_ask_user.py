@@ -22,16 +22,16 @@ from textual.message import Message
 from textual.widgets import Button, Input, Static
 
 from soothe_cli.display import theme
+from soothe_cli.display.card import (
+    _assemble_card_header,
+    _card_body_gutter,
+)
 from soothe_cli.display.markdown_theme import (
     ThemedMarkdownRenderer,
     resolve_markdown_theme_parts,
 )
 from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
-from soothe_cli.tui.widgets.messages._helpers import (
-    _assemble_card_header,
-    _card_body_gutter,
-)
 
 logger = logging.getLogger(__name__)
 

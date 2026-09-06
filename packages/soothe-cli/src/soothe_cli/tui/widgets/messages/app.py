@@ -9,9 +9,9 @@ from textual.events import Click
 from textual.widgets import Static
 
 from soothe_cli.display import theme
+from soothe_cli.display.card import _assemble_card_header
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
-from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 
 class AppMessage(Static):

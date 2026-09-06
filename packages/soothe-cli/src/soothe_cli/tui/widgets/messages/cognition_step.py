@@ -19,6 +19,11 @@ from textual.events import Click
 from textual.widgets import Static
 
 from soothe_cli.display import theme
+from soothe_cli.display.card import (
+    _STEP_TOOL_PREVIEW_ROWS,
+    _assemble_card_header,
+    _card_body_gutter,
+)
 from soothe_cli.display.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
 from soothe_cli.display.tool_display import (
     display_width,
@@ -31,9 +36,6 @@ from soothe_cli.tui.widgets.clipboard import (
 )
 from soothe_cli.tui.widgets.messages._helpers import (
     _RUNNING_SPINNER_INTERVAL_SECONDS,
-    _STEP_TOOL_PREVIEW_ROWS,
-    _assemble_card_header,
-    _card_body_gutter,
     _is_widget_animation_visible,
     _should_refresh_now,
     _strip_success_exit_line,

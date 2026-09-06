@@ -1,11 +1,6 @@
 """Message widgets for Soothe TUI."""
 
 from soothe_cli.tui.widgets.messages._helpers import (
-    _assemble_card_header,
-    _is_widget_animation_visible,
-    _mode_color,
-    _should_refresh_now,
-    _strip_success_exit_line,
     flush_deferred_tools_refreshes,
     request_deferred_tools_refresh,
     reset_turn_tool_refresh_state,
@@ -39,11 +34,6 @@ from soothe_cli.tui.widgets.messages.user import (
 
 __all__ = [
     # Helpers
-    "_assemble_card_header",
-    "_is_widget_animation_visible",
-    "_mode_color",
-    "_should_refresh_now",
-    "_strip_success_exit_line",
     "flush_deferred_tools_refreshes",
     "request_deferred_tools_refresh",
     "reset_turn_tool_refresh_state",

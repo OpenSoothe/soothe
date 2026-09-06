@@ -8,7 +8,7 @@ from textual.containers import Vertical
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
+from soothe_cli.display.card import _assemble_card_header
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

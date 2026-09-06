@@ -11,6 +11,7 @@ from textual.events import Click
 from textual.widgets import Static
 
 from soothe_cli.display import theme
+from soothe_cli.display.card import _assemble_card_header
 from soothe_cli.display.preview_limits import (
     TOOL_APPROVAL_BODY_MAX_LINES,
     TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES,
@@ -19,7 +20,6 @@ from soothe_cli.display.preview_limits import (
 from soothe_cli.settings import get_glyphs
 from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
 from soothe_cli.tui.widgets.diff import DIFF_CODE_GAP, compose_diff_line_list
-from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

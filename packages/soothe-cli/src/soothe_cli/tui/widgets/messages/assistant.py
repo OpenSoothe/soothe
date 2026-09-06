@@ -10,11 +10,9 @@ from textual.selection import Selection
 from textual.strip import Strip
 from textual.widgets import Static
 
+from soothe_cli.display.card import _card_dot_prefix_content
 from soothe_cli.display.markdown_theme import ThemedMarkdownRenderer, resolve_markdown_theme_parts
-from soothe_cli.tui.widgets.messages._helpers import (
-    _RUNNING_SPINNER_INTERVAL_SECONDS,
-    _card_dot_prefix_content,
-)
+from soothe_cli.tui.widgets.messages._helpers import _RUNNING_SPINNER_INTERVAL_SECONDS
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
