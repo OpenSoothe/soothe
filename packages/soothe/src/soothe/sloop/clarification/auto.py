@@ -142,7 +142,7 @@ class AutoClarificationPolicy:
                         "routing to human relay",
                         result.rule_id,
                     )
-                    return await self._delegate_to_fallback(request)
+                    return await self._delegate_to_fallback(request, rule_id=result.rule_id)
                 # Autopilot — degrade to an instructive reject.
                 logger.info(
                     "[clarification] tool_approval safety escalate rule=%s; "
@@ -277,19 +277,36 @@ class AutoClarificationPolicy:
             audit={"reason": "veritas failed; autopilot retry"},
         )
 
-    async def _delegate_to_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
+    async def _delegate_to_fallback(
+        self, request: ClarificationRequest, *, rule_id: str | None = None
+    ) -> ClarificationAnswer:
         """Route to the interactive relay with auto→manual re-announce.
 
         Uses `answer_as_manual_fallback` when available so the TUI
         re-announces with `mode=manual` before pausing (the earlier
         `await_clarification` emit used `mode=auto`). Falls back to
-        `answer()` for bare policies without the upgrade method.
+        `answer()` for bare policies without the upgrade method. When
+        `rule_id` is set (safety escalation), the human's answer carries it
+        in `audit["escalated_rule_id"]` so ``node_execute`` can record a
+        rule-level allowlist override and suppress re-escalation.
         """
         fallback = self._interactive_fallback
         upgrade = getattr(fallback, "answer_as_manual_fallback", None)
         if callable(upgrade):
-            return await upgrade(request)
-        return await fallback.answer(request)
+            answer = await upgrade(request)
+        else:
+            answer = await fallback.answer(request)
+        if rule_id:
+            audit = dict(answer.audit or {})
+            audit.setdefault("escalated_rule_id", rule_id)
+            return ClarificationAnswer(
+                answers=answer.answers,
+                source=answer.source,
+                confidence=answer.confidence,
+                defer=answer.defer,
+                audit=audit,
+            )
+        return answer
 
     def _classify(self, result: VeritasAnswerSchema) -> DeferKind | None:
         """Resolve a veritas result to a :data:`DeferKind`, or `None` to accept."""

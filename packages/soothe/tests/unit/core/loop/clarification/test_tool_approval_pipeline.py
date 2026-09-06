@@ -582,3 +582,34 @@ class TestAllowlistMatching:
         assert result is not None
         assert result.decision == "escalate"
         assert result.stage == "safety_check"
+
+
+class TestRuleLevelOverride:
+    """After a human approves a safety-escalated action, the same rule does
+    not re-escalate for a different command in the same loop."""
+
+    def test_approved_rule_overrides_safety_escalation(self) -> None:
+        """A `{"rule": ...}` allowlist record suppresses re-escalation."""
+        result_first = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/a")],
+        )
+        assert result_first is not None
+        assert result_first.decision == "escalate"
+        rule_id = result_first.rule_id
+
+        # Human approved → node_execute records {"rule": rule_id}.
+        result_second = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/different_path")],
+            allowlist=[{"rule": rule_id}],
+        )
+        # Same rule, different command → no re-escalation (human already decided).
+        assert result_second is None or result_second.decision == "approve"
+
+    def test_different_rule_still_escalates(self) -> None:
+        """A rule override for one rule does not suppress a different rule."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/x")],
+            allowlist=[{"rule": "command.dangerous.some_other_rule"}],
+        )
+        assert result is not None
+        assert result.decision == "escalate"

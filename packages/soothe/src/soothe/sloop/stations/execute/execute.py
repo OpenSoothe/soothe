@@ -458,6 +458,22 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                                     "tool=%s for tool_approval approval",
                                     rec["tool"],
                                 )
+                    # Record a rule-level override when the human approved a
+                    # safety-escalated action so the same rule does not
+                    # re-escalate for a different command in this loop.
+                    escalated_rule = (
+                        ans.audit.get("escalated_rule_id") if isinstance(ans.audit, dict) else None
+                    )
+                    if escalated_rule:
+                        rule_rec = {"rule": escalated_rule}
+                        if rule_rec not in current_allowlist:
+                            current_allowlist.append(rule_rec)
+                            allowlist_dirty = True
+                            logger.info(
+                                "[execute] recorded loop allowlist rule override "
+                                "rule=%s for tool_approval approval",
+                                escalated_rule,
+                            )
                 if origin_node != ORIGIN_TOOL_APPROVAL:
                     _append_ask_user_loop_messages(
                         state,

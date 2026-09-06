@@ -49,6 +49,7 @@ class InteractiveClarificationPolicy:
         self._emit = emit
         self._tool_approval_pipeline = tool_approval_pipeline
         self._manual_allow_rules = manual_allow_rules
+        self._escalated_rule_id: str | None = None
 
     def bind_emit(self, emit: EmitFn) -> None:
         """Attach the runtime emit callback."""
@@ -61,10 +62,12 @@ class InteractiveClarificationPolicy:
         `force_manual_origins` with `mode=manual`). Re-emitting here would
         duplicate events for every interactive pause.
         """
+        self._escalated_rule_id = None
         static = self._evaluate_tool_approval_pipeline(request)
         if static is not None:
             return static
-        return await self._answer(request, announce=False)
+        answer = await self._answer(request, announce=False)
+        return self._merge_escalated_rule_id(answer)
 
     async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
         """Re-announce as `mode=manual` then pause (auto→manual upgrade).
@@ -72,7 +75,29 @@ class InteractiveClarificationPolicy:
         Used when veritas structured output fails and a human is attached.
         The earlier `await_clarification` emit used `mode=auto`.
         """
-        return await self._answer(request, announce=True)
+        answer = await self._answer(request, announce=True)
+        return self._merge_escalated_rule_id(answer)
+
+    def _merge_escalated_rule_id(self, answer: ClarificationAnswer) -> ClarificationAnswer:
+        """Stamp the escalated safety rule_id onto a human answer's audit.
+
+        When the pipeline pre-filter escalated a `tool_approval` action to the
+        human, the human's approval should record the rule_id so the same
+        safety rule does not re-escalate for a different command in this loop.
+        """
+        rule_id = self._escalated_rule_id
+        self._escalated_rule_id = None
+        if not rule_id:
+            return answer
+        audit = dict(answer.audit or {})
+        audit.setdefault("escalated_rule_id", rule_id)
+        return ClarificationAnswer(
+            answers=answer.answers,
+            source=answer.source,
+            confidence=answer.confidence,
+            defer=answer.defer,
+            audit=audit,
+        )
 
     async def _answer(
         self, request: ClarificationRequest, *, announce: bool
@@ -131,12 +156,14 @@ class InteractiveClarificationPolicy:
         if result is None:
             return None
         # Banned safety action → fall through to the human interrupt so a
-        # human decides. Do not auto-resolve.
+        # human decides. Do not auto-resolve. Stash the rule_id so the
+        # human's answer carries it for a rule-level allowlist override.
         if result.decision == "escalate":
             logger.info(
                 "[clarification] tool_approval safety escalate rule=%s; routing to human (manual)",
                 result.rule_id,
             )
+            self._escalated_rule_id = result.rule_id
             return None
         logger.info(
             "[clarification] tool_approval %s by stage=%s reason=%s (manual pre-filter)",

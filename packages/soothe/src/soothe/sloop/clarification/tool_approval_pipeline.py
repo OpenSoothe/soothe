@@ -157,6 +157,17 @@ class ToolApprovalPipeline:
                 safety_result = self._check_safety(name, args, workspace_root)
                 if safety_result is not None:
                     reason, rule_id = safety_result
+                    # Human already approved an escalated action under the
+                    # same safety rule this loop → don't re-escalate; the
+                    # human already decided this rule is acceptable.
+                    if allowlist and self._rule_approved(rule_id, allowlist):
+                        allowlisted = True
+                        logger.info(
+                            "[%s] safety rule=%s overridden by prior human approval",
+                            "tool_approval",
+                            rule_id,
+                        )
+                        continue
                     # Banned safety rule — escalate to a human.
                     result = ApprovalResult(
                         "escalate",
@@ -213,6 +224,24 @@ class ToolApprovalPipeline:
             if not isinstance(rec, Mapping):
                 continue
             if str(rec.get("tool") or "") == tool_name and str(rec.get("signature") or "") == sig:
+                return True
+        return False
+
+    @staticmethod
+    def _rule_approved(
+        rule_id: str | None,
+        allowlist: list[Mapping[str, Any]],
+    ) -> bool:
+        """True when the human already approved an escalated action under this rule.
+
+        Records carry ``{"rule": rule_id}`` (set by ``node_execute`` when the
+        human approves a safety-escalated action) so the same rule does not
+        re-escalate for a different command in the same loop.
+        """
+        if not rule_id:
+            return False
+        for rec in allowlist:
+            if isinstance(rec, Mapping) and str(rec.get("rule") or "") == rule_id:
                 return True
         return False
 
