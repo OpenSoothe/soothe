@@ -37,7 +37,14 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_after_preprocess(state: dict[str, Any]) -> str:
-    """Branch after enter_loop: chitchat END, wired delegate, or DISPATCH."""
+    """Branch after enter_loop: chitchat END, wired delegate, DISPATCH, or resume."""
+    # Unified relay resume: when the graph was re-invoked with
+    # `resume_relay_id` set, route directly to `AWAIT_USER` to process
+    # the answer instead of starting a normal iteration.
+    if state.get("resume_relay_id"):
+        logger.debug("[routing] route_after_preprocess → await_user (unified resume)")
+        return AWAIT_USER
+
     label = state.get("intake_label")
 
     if state.get("intent_route") == "fast_path":

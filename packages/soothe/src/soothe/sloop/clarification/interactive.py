@@ -6,15 +6,11 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langgraph.types import interrupt
-
 from soothe.sloop.clarification.origins import (
-    ORIGIN_PLAN_MODE_REVIEW,
     ORIGIN_TOOL_APPROVAL,
 )
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
-    ClarificationDeferredError,
     ClarificationRequest,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import (
@@ -87,27 +83,14 @@ class InteractiveClarificationPolicy:
                 },
             )
 
-        payload = interrupt(
-            {
-                "type": "clarification",
-                "interrupt_id": request.origin_interrupt_id,
-                "questions": list(request.questions),
-            }
-        )
-
-        answers = self._extract_answers(
-            payload, expected=len(request.questions), origin=request.origin_node
-        )
-        if answers is None:
-            raise ClarificationDeferredError(
-                "operator dismissed clarification (no answer)",
-                request,
-                kind="explicit",
-            )
-
+        # Unified relay: don't call LangGraph interrupt(). The relay's park()
+        # sees this defer and parks the goal — the graph exits cleanly and
+        # is re-invoked when the human answers.
         return ClarificationAnswer(
-            answers=tuple(answers),
+            answers=(),
             source="human",
+            defer=True,
+            audit={"defer_kind": "manual", "reason": "awaiting human answer"},
         )
 
     def _evaluate_tool_approval_pipeline(
@@ -150,71 +133,6 @@ class InteractiveClarificationPolicy:
             confidence=1.0,
             audit={"stage": result.stage, "reason": result.reason},
         )
-
-    @staticmethod
-    def _extract_answers(
-        payload: Any, *, expected: int, origin: str | None = None
-    ) -> list[str] | None:
-        stripped = InteractiveClarificationPolicy._normalize_payload(payload)
-        if stripped is None:
-            return None
-
-        # Action-selector origins (plan-mode review, tool approval) send
-        # [action, optional-comment]; only the action field (index 0) is
-        # required — the trailing comment is legitimately blank (approve) or
-        # carries edit/refine args. Treat a non-empty action as answered and
-        # pad / truncate to the expected length instead of dismissing the
-        # whole answer (the TUI always submits both slots).
-        if (
-            origin in (ORIGIN_PLAN_MODE_REVIEW, ORIGIN_TOOL_APPROVAL)
-            and expected in (1, 2)
-            and stripped
-            and stripped[0]
-        ):
-            # Preserve the comment (index 1) even when expected=1 — the host
-            # decoder (parse_plan_review_answers / _answer_to_decision) reads
-            # it from answer.answers[1].
-            if len(stripped) == 1:
-                stripped.append("")
-            # Don't truncate — return both [action, comment].
-            return stripped
-
-        if any(not a for a in stripped):
-            return None
-
-        if len(stripped) == expected:
-            return stripped
-        if len(stripped) == 1 and expected > 1:
-            # broadcast single answer when caller didn't split per-question
-            return stripped * expected
-        return None
-
-    @staticmethod
-    def _normalize_payload(payload: Any) -> list[str] | None:
-        """Extract a raw answer list from an interrupt payload.
-
-        Returns stripped strings, or `None` when the payload is empty or
-        has an unrecognizable shape.
-        """
-        if payload is None:
-            return None
-        if isinstance(payload, str):
-            raw = [payload]
-        elif isinstance(payload, dict):
-            val = payload.get("answers", payload.get("answer"))
-            if val is None:
-                return None
-            if isinstance(val, str):
-                raw = [val]
-            elif isinstance(val, list):
-                raw = [str(a) for a in val]
-            else:
-                return None
-        elif isinstance(payload, list):
-            raw = [str(a) for a in payload]
-        else:
-            return None
-        return [a.strip() for a in raw]
 
 
 __all__ = ["EmitFn", "InteractiveClarificationPolicy"]

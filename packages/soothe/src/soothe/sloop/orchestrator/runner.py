@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import logging
 import traceback
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.sloop.orchestrator.checkpoint import (
-    snapshot_has_resumable_interrupt,
-    snapshot_has_unanswered_pending,
     strange_loop_configurable,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -19,6 +17,9 @@ from soothe.utils.observability.langfuse import (
     loop_graph_langfuse_run_display_name,
     merge_langfuse_runnable_config,
 )
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +49,7 @@ def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
 
 
 def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
-    """Build RunnableConfig for `CompiledGraph.ainvoke` with Langfuse + loop metadata.
-
-    Configurable `thread_id` is `{loop_id}__strange_loop` so CoreAgent /
-    intake-only graphs (`thread_id=loop_id`) cannot orphan `await_user`
-    interrupts. Langfuse session correlation uses `loop_state.thread_id`.
-
-    Args:
-        ctx: Runtime context for the current goal run.
-
-    Returns:
-        RunnableConfig dict safe to pass to `ainvoke`.
-    """
+    """Build RunnableConfig for `CompiledGraph.ainvoke`."""
     loop_id = ctx.state_manager.loop_id
     extra: dict[str, Any] = {}
     if ctx.loop_state.workspace:
@@ -93,117 +83,60 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
     return out
 
 
-def _clarification_resume_command(
-    *,
-    snapshot: Any,
-    resume_answers: list[str],
-    loop_id: str,
-) -> Any | None:
-    """Build `Command(resume=…)` or orphaned-interrupt `goto` recovery.
-
-    Returns:
-        A LangGraph `Command`, or `None` when the orphaned origin cannot be
-        mapped to a safe resume station (caller falls back to normal invoke).
-    """
-    from langgraph.types import Command
-
-    from soothe.sloop.clarification.origins import resume_node_for_clarification_origin
-    from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-
-    if snapshot_has_resumable_interrupt(snapshot):
-        logger.info(
-            "[runner] Resuming pending clarification for loop=%s with %d answer(s)",
-            loop_id,
-            len(resume_answers),
-        )
-        return Command(resume={"answers": resume_answers})
-
-    values = getattr(snapshot, "values", {}) or {}
-    origin = values.get("last_clarification_origin")
-    if origin is None:
-        pending = values.get("pending_clarification")
-        if isinstance(pending, dict):
-            origin = pending.get("origin_node")
-    goto = resume_node_for_clarification_origin(str(origin) if origin is not None else None)
-    if goto is None:
-        logger.error(
-            "[runner] pending clarification without live interrupt and no safe "
-            "resume station (loop=%s origin=%s); falling back to normal invocation",
-            loop_id,
-            origin,
-        )
-        return None
-    answer_state = answer_to_state(
-        ClarificationAnswer(answers=tuple(resume_answers), source="human")
-    )
-    logger.warning(
-        "[runner] pending clarification without live interrupt (loop=%s origin=%s); "
-        "applying answer via goto=%s",
-        loop_id,
-        origin,
-        goto,
-    )
-    return Command(
-        update={"pending_clarification_answer": answer_state},
-        goto=goto,
-    )
-
-
 async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
     """Run the compiled graph once until END.
 
-    Progress is emitted through `ctx.emit`, which `StrangeLoop.run_with_progress` wires
-    to an asyncio queue consumer.
-
-    Args:
-        ctx: Fully initialized runtime context including `emit`.
+    When a clarification answer is provided, uses the unified relay to
+    submit the answer and build the resume directive. The graph is
+    re-invoked with `graph_input` (not `Command(resume=...)` at the
+    StrangeLoop level — the graph was not interrupted, it exited cleanly).
     """
-    from langgraph.types import Command
-
     loop_id = ctx.state_manager.loop_id
 
     compiled = build_strange_loop_graph(ctx)
     config = build_loop_graph_invoke_config(ctx)
 
-    # RFC-622: if the caller flagged this turn as a clarification answer AND
-    # the persisted graph state shows a pending clarification with no answer,
-    # resume the suspended ``interrupt(...)`` instead of starting a new
-    # iteration. Falls back to a normal invocation when no clarification is
-    # actually pending (defensive against a stale flag).
-    graph_input: dict[str, Any] | Command = {"last_outcome": None}
+    graph_input: dict[str, Any] = {"last_outcome": None}
     answer_text = (ctx.clarification_resume_text or "").strip()
     answer_list = ctx.clarification_resume_answers
     if answer_text or answer_list:
         try:
-            snapshot = await compiled.aget_state(config)
-            if snapshot_has_unanswered_pending(snapshot):
-                # Prefer the per-question list when provided so the policy
-                # returns answers paired 1:1 with questions instead of
-                # broadcasting a single concatenated string.
-                resume_answers = [str(a) for a in answer_list] if answer_list else [answer_text]
-                resume_cmd = _clarification_resume_command(
-                    snapshot=snapshot,
-                    resume_answers=resume_answers,
-                    loop_id=loop_id,
-                )
-                if resume_cmd is not None:
-                    graph_input = resume_cmd
+            resume_answers = [str(a) for a in answer_list] if answer_list else [answer_text]
+            if ctx.relay is not None:
+                rows = await ctx.relay.store.list_by_loop(loop_id, status="parked")
+                if rows:
+                    relay_id = rows[0].relay_id
+                    await ctx.relay.submit_answer(
+                        relay_id=relay_id,
+                        answers=resume_answers,
+                        source="human",
+                        ce=ctx.ce,
+                    )
+                    directive = await ctx.relay.build_resume_directive(
+                        relay_id=relay_id,
+                        ce=ctx.ce,
+                    )
+                    graph_input = directive.graph_input
+                    logger.info(
+                        "[runner] relay resume relay_id=%s station=%s",
+                        relay_id[:12],
+                        directive.resume_station,
+                    )
                 else:
                     logger.warning(
-                        "[runner] clarification resume aborted (unsafe origin); "
-                        "falling back to normal invocation (loop=%s)",
+                        "[runner] relay resume: no parked rows (loop=%s); "
+                        "falling back to normal invocation",
                         loop_id,
                     )
             else:
                 logger.warning(
-                    "[runner] clarification_answer flag set but no pending clarification "
-                    "in state (loop=%s); falling back to normal invocation",
+                    "[runner] clarification_answer but no relay (loop=%s); "
+                    "falling back to normal invocation",
                     loop_id,
                 )
         except Exception:
             logger.exception(
-                "[runner] failed to read graph state for clarification resume (loop=%s); "
-                "falling back to normal invocation",
+                "[runner] clarification resume failed (loop=%s); falling back to normal invocation",
                 loop_id,
             )
 
@@ -211,7 +144,7 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
         "[runner] Graph invoke start loop_id=%s thread_id=%s resume=%s",
         loop_id,
         ctx.loop_state.thread_id,
-        isinstance(graph_input, Command),
+        "resume_relay_id" in graph_input,
     )
     from soothe.sloop.utils.token_usage import loop_token_accumulation_scope
 

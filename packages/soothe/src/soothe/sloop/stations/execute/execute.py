@@ -410,6 +410,19 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 # ask_user-only ledger side effect is applied below.
                 req = request_from_state(pending_request_state)
                 resume_answer_payload = build_clarification_resume_payload(req, ans)
+                # Unified relay: override with the relay's resume spec.
+                if ctx.relay is not None:
+                    relay_id = state_dict.get("resume_relay_id")
+                    if relay_id:
+                        try:
+                            spec = await ctx.relay.get_core_agent_resume(relay_id=str(relay_id))
+                            if spec is not None:
+                                resume_answer_payload = spec.resume_payload
+                        except Exception:
+                            logger.warning(
+                                "[execute] unified relay get_core_agent_resume failed",
+                                exc_info=True,
+                            )
                 # IG-774: record a human tool_approval approval so the agent's
                 # retry of the same action auto-approves instead of re-escalating.
                 if (
@@ -858,6 +871,8 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         goal_trace=ctx.goal_trace,
         fast_model=strange_loop._fast_llm,
         interaction_mode=getattr(ctx, "interaction_mode", None),
+        relay=ctx.relay,
+        ce_goal_id=ctx.ce_goal_id,
     )
     async for item in run_executor.execute(
         decision=decision,

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.sloop.clarification.protocol import ClarificationPolicy
+    from soothe.sloop.relay import InterruptRelay
     from soothe.sloop.strange_loop import StrangeLoop
     from soothe.utils.observability.langfuse import GoalLoopTrace
 
@@ -79,6 +80,8 @@ class LoopRuntimeContext:
     tail_persistence_task: asyncio.Task[None] | None = None
     # RFC-904: queued DecompositionProposal objects awaiting RECONCILE.
     decompose_proposals: list[Any] = field(default_factory=list)
+    # Unified relay.
+    relay: InterruptRelay | None = None
 
     @property
     def core_agent(self) -> CoreAgentProtocol:

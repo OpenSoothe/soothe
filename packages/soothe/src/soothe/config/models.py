@@ -1463,6 +1463,15 @@ class ClarificationConfig(BaseModel):
     interrupts without an LLM. Veritas remains the final guard for ambiguous
     cases."""
 
+    max_pending_per_goal: int = Field(default=3, ge=1)
+    """Per-goal FIFO cap for the unified relay. New captures auto-defer with
+    `defer_kind="queue_full"` when the cap is exceeded."""
+
+    max_consecutive_retries: int = Field(default=5, ge=1)
+    """Circuit breaker cap for consecutive `source="retry"` answers in the
+    unified relay. Exceeding trips the breaker and fails the goal with
+    `defer_kind="retry_limit"`."""
+
 
 class VeritasConfig(BaseModel):
     """Configuration for the veritas auto-answerer subagent."""

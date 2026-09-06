@@ -75,6 +75,10 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: str | None  # ClarificationOrigin at runtime
+    # Unified relay: the clarification row's durable key. When set in
+    # `graph_input`, the graph entry routes to `AWAIT_USER` to process the
+    # answer. The execute node reads it to fetch the CoreAgent resume spec.
+    resume_relay_id: str | None
     # Loop-scoped tool-approval allowlist. A human approval appends the
     # action signature; later matches auto-approve at the ``allowlist`` stage
     # so the approved call runs and retries are not re-prompted. Survives

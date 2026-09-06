@@ -285,6 +285,8 @@ class Executor:
         goal_trace: Any | None = None,
         fast_model: Any | None = None,
         interaction_mode: str | None = None,
+        relay: Any | None = None,
+        ce_goal_id: str | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -329,6 +331,8 @@ class Executor:
         self._goal_trace = goal_trace
         self._fast_model = fast_model
         self._interaction_mode = interaction_mode
+        self._relay = relay
+        self._ce_goal_id = ce_goal_id
         # RFC-904 / IG-751: proposals queued by decompose_task during step THREADS.
         self.decompose_proposals: list[Any] = []
 
@@ -830,6 +834,7 @@ class Executor:
             if clarification_enabled and (
                 is_ask_user_interrupt(value) or is_tool_approval_interrupt(value)
             ):
+                iid = getattr(interrupt_obj, "id", None) or str(id(interrupt_obj))
                 # Build the resume ticket before enqueuing so the queue
                 # entry carries the thread_id + step identity the resume
                 # path needs to re-enter the CoreAgent on the same thread.
@@ -852,6 +857,33 @@ class Executor:
                     resume_ticket=ticket,
                     step_id=step_id,
                 )
+                # Shadow-mode: capture into the unified relay alongside the
+                # legacy queue. Never affects graph behavior — logged only.
+                if self._relay is not None:
+                    try:
+                        handle = await self._relay.capture(
+                            interrupt_value=value,
+                            interrupt_id=iid,
+                            thread_id=cfg_tid or None,
+                            step_id=step_id,
+                            step_description=step_description,
+                            loop_id=self._loop_id or "",
+                            goal_id=self._ce_goal_id or "",
+                            loop_state=loop_state_view,
+                            origin_node=origin_node,
+                            policy_mode=self._config.agent.clarification.default_mode
+                            if self._config
+                            else "auto",
+                        )
+                        if handle is not None:
+                            self._relay.pending_handle = handle
+                            logger.info(
+                                "[executor] relay capture ok relay_id=%s origin=%s",
+                                handle.relay_id[:12],
+                                handle.origin,
+                            )
+                    except Exception:
+                        logger.debug("[executor] relay capture failed", exc_info=True)
                 if capture.head is not None:
                     captured_clarification = True
                 else:

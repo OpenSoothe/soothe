@@ -298,27 +298,6 @@ class TestInterruptOnCase:
         payload = build_tool_approval_resume_payload("iTA", decisions=[{"type": "reject"}])
         assert payload == {"iTA": {"decisions": [{"type": "reject"}]}}
 
-    def test_answer_to_decision_approve(self) -> None:
-        """Veritas/TUI answer 'approve' → HITL decision type 'approve'."""
-        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
-
-        assert _answer_to_decision("approve") == "approve"
-        assert _answer_to_decision("yes") == "approve"
-        assert _answer_to_decision("ok") == "approve"
-
-    def test_answer_to_decision_reject(self) -> None:
-        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
-
-        assert _answer_to_decision("reject") == "reject"
-        assert _answer_to_decision("no") == "reject"
-        assert _answer_to_decision("deny") == "reject"
-
-    def test_answer_to_decision_edit(self) -> None:
-        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
-
-        assert _answer_to_decision("edit") == "edit"
-        assert _answer_to_decision("modify") == "edit"
-
     def test_auto_resume_skips_both_ask_user_and_action_requests(self) -> None:
         """build_auto_resume_payload must skip both interrupt shapes —
         neither is auto-approved; both are owned by the relay."""

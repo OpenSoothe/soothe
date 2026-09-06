@@ -46,6 +46,7 @@ class _StubCtx:
     ce: Any = None
     ce_goal_id: str | None = None
     goal_record: Any = None
+    relay: Any = None
 
     @property
     def clarification_policy(self) -> Any:

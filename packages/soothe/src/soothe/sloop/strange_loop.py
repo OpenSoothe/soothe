@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
+    from soothe.sloop.relay import InterruptRelay
 
 
 def _hydrate_previous_plan_from_ce(state: LoopState, ce_goal: Any) -> None:
@@ -629,6 +630,27 @@ class StrangeLoop:
 
             bind_clarification_emit(clarification_policy, emit)
 
+            # Unified relay: always constructed. The relay drives the
+            # clarification lifecycle (capture, park, submit, resume).
+            relay_instance: InterruptRelay | None = None
+            try:
+                from soothe.sloop.relay import RelayConfig, create_relay
+
+                relay_instance = create_relay(
+                    self._config,
+                    state_manager.loop_id,
+                    relay_config=RelayConfig(
+                        max_pending_per_goal=self._config.agent.clarification.max_pending_per_goal,
+                        max_consecutive_retries=self._config.agent.clarification.max_consecutive_retries,
+                    ),
+                )
+            except Exception:
+                logger.warning(
+                    "[StrangeLoop] unified relay construction failed (loop=%s)",
+                    state_manager.loop_id,
+                    exc_info=True,
+                )
+
             plan_manager: Any
 
             # RFC-624 Phase 4: ContextEngine is always active
@@ -846,6 +868,7 @@ class StrangeLoop:
                 ce=ce_instance,
                 ce_goal_id=ce_goal.id,
                 goal_trace=active_goal_trace,
+                relay=relay_instance,
             )
             runtime_ctx = ctx
             self._live_runtime_ctx = ctx

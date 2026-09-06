@@ -123,6 +123,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             DISPATCH: DISPATCH,
             DELEGATE: DELEGATE,
+            AWAIT_USER: AWAIT_USER,
             END: END,
         },
     )

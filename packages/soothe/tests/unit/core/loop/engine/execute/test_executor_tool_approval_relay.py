@@ -21,7 +21,6 @@ from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import Executor
 from soothe.sloop.engine.execute.graph_interrupt import (
     build_auto_resume_payload,
-    build_tool_approval_resume_payload,
     is_tool_approval_interrupt,
 )
 
@@ -126,15 +125,6 @@ def test_build_auto_resume_skips_tool_approval_interrupts() -> None:
     # i1 (action_requests) is skipped; i2 is auto-approved
     assert "i1" not in payload
     assert "i2" in payload
-
-
-def test_build_tool_approval_resume_payload_shape() -> None:
-    """The resume payload must match the middleware's expected decisions shape."""
-    resume = build_tool_approval_resume_payload(
-        "iTA",
-        decisions=[{"type": "approve"}],
-    )
-    assert resume == {"iTA": {"decisions": [{"type": "approve"}]}}
 
 
 # ---------------------------------------------------------------------------
