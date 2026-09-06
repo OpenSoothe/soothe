@@ -398,14 +398,15 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     # gate keeps a non-approving turn from wiping the persisted channel.
     current_allowlist: list[dict[str, Any]] = list(state_dict.get("tool_approval_allowlist") or [])
     allowlist_dirty = False
-    pending_answer_state = state_dict.get("pending_clarification_answer")
-    pending_request_state = state_dict.get("pending_clarification")
-    # Prefer the relay as the answer source when wired; fall back to the
-    # legacy pending_clarification* channels otherwise.
+    pending_answer_state: dict[str, Any] | None = None
+    pending_request_state: dict[str, Any] | None = None
+    consumed_ticket: ResumeTicket | None = None
+    # The relay owns the answer slot; consume it (pops the head + reads the
+    # answer projected by await_user).
     if relay is not None and isinstance(relay_state_in, dict):
         consumed = relay.consume_answer(relay_state_in)
         if consumed is not None:
-            req, ans, _ticket = consumed
+            req, ans, consumed_ticket = consumed
             pending_request_state = request_to_state(req)
             pending_answer_state = answer_to_state(ans)
     if pending_answer_state and pending_request_state:
@@ -460,14 +461,8 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 if origin_node != ORIGIN_TOOL_APPROVAL:
                     _append_ask_user_loop_messages(
                         state,
-                        step_id=(
-                            (
-                                _coerce_resume_ticket(state_dict.get("resume_ticket")).step_id
-                                if state_dict.get("resume_ticket")
-                                else None
-                            )
-                            or "ask_user_resume"
-                        ),
+                        step_id=(consumed_ticket.step_id if consumed_ticket else None)
+                        or "ask_user_resume",
                         description="Ask user clarifying question",
                         questions=tuple(
                             str(q) for q in (pending_request_state.get("questions") or ())
@@ -480,25 +475,8 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
-    # Pop the head of the clarification queue now that the answer is being
-    # consumed. The next entry (if any) becomes the new head and will be
-    # routed to await_clarification after this step resumes.
-    queue_after_pop: list[dict[str, Any]] | None = None
-    tickets_after_pop: dict[str, dict[str, Any]] | None = None
-    if pending_answer_state:
-        queue_list = state_dict.get("clarification_queue") or []
-        tickets_map = state_dict.get("clarification_resume_tickets") or {}
-        if isinstance(queue_list, list) and queue_list:
-            queue_after_pop = queue_list[1:] or None
-        if isinstance(tickets_map, dict):
-            head_iid = (
-                str(pending_request_state.get("origin_interrupt_id", ""))
-                if isinstance(pending_request_state, dict)
-                else ""
-            )
-            if head_iid:
-                tickets_map = {k: v for k, v in tickets_map.items() if k != head_iid}
-            tickets_after_pop = tickets_map or None
+    # The relay inbox owns the FIFO; consume_answer already dequeued the head.
+    # No legacy queue-channel clearing needed.
 
     if decision is None or plan_result is None:
         # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
@@ -515,12 +493,12 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # CE root step and fall through to the normal Executor path — it
             # will use the resume thread_id and deliver the answer via
             # ``Command(resume=...)``.
-            # Read resume_ticket from graph state (survives checkpoint).
-            # LangGraph passes the raw checkpoint dict, so the stored
-            # ``ResumeTicket`` (a dataclass) comes back as a plain dict —
-            # coerce it before attribute access.
-            resume_ticket = _coerce_resume_ticket(state_dict.get("resume_ticket")) or getattr(
-                state, "resume_ticket", None
+            # The resume ticket is carried on the relay inbox head (captured
+            # by consume_answer) or the legacy `resume_ticket` graph channel.
+            resume_ticket = (
+                consumed_ticket
+                or _coerce_resume_ticket(state_dict.get("resume_ticket"))
+                or getattr(state, "resume_ticket", None)
             )
             resume_tid = resume_ticket.thread_id if resume_ticket else None
             if resume_tid:
@@ -720,10 +698,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 "synthesized step_completed for %s, routing through record_iteration",
                 planner_ask_answered_step_id,
             )
-            return {
-                "pending_clarification": None,
-                "pending_clarification_answer": None,
-            }
+            return {"relay_state": {}} if relay is not None else {}
         else:
             logger.error("[execute] missing decision or plan_result on scratch")
             await ctx.emit(
@@ -839,13 +814,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # Emit step_started so live UIs surface the pending question;
             # _record_and_emit_step_completed will fire when the answer lands.
             await _emit_step_started_for_steps([ask_step])
-            return {
-                "pending_clarification": request_to_state(ask_request),
-                "last_clarification_origin": ORIGIN_EXECUTE,
-                "pending_clarification_answer": None,
-            }
+            if relay is not None:
+                from soothe.sloop.relay.ticket import ResumeTicket
 
-    clarification_capture = RelayInbox()
+                relay.inbox.enqueue(ask_request, resume_ticket=ResumeTicket(), step_id=ask_step.id)
+                return relay.project_to_channels(scratch=ctx.scratch, mark_parked_head=True)
+            return {}
+
+    clarification_capture = relay.inbox if relay is not None else RelayInbox()
     clarification_detector: ClarificationDetector | None = None
     clarification_view: LoopStateView | None = None
     if ctx.clarification_policy is not None:
@@ -1026,27 +1002,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         assert head_entry is not None  # narrowed by head check above
         head_request = head_entry.request
         head_ticket = head_entry.resume_ticket
-        queue_state = [request_to_state(e.request) for e in clarification_capture._entries]
-        tickets_state: dict[str, dict[str, Any]] = {}
-        for e in clarification_capture._entries:
-            rt = e.resume_ticket
-            tickets_state[e.request.origin_interrupt_id] = {
-                "thread_id": rt.thread_id,
-                "step_id": rt.step_id,
-                "step_description": rt.step_description,
-                "prior_duration_ms": rt.prior_duration_ms,
-            }
-        result: dict[str, Any] = {
-            "pending_clarification": request_to_state(head_request),
-            "last_clarification_origin": ORIGIN_EXECUTE,
-            # Clear any prior answer so re-entry only consumes it once.
-            "pending_clarification_answer": None,
-            "clarification_queue": queue_state,
-            "clarification_resume_tickets": tickets_state,
-        }
         if head_ticket:
             state.resume_ticket = head_ticket
-            result["resume_ticket"] = head_ticket
+        if relay is not None:
+            result: dict[str, Any] = relay.project_to_channels(
+                scratch=ctx.scratch, mark_parked_head=True
+            )
+        else:
+            result = {}
         if allowlist_dirty:
             result["tool_approval_allowlist"] = current_allowlist
         logger.info(
@@ -1058,38 +1021,20 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         return result
 
     if resume_answer_payload is not None or planner_ask_answered_step_id is not None:
-        # Successfully resumed from a prior clarification (CoreAgent interrupt
-        # or planner-emitted ask_user). Clear the consumed head's request and
-        # answer channels. If the queue still has entries, surface the next
-        # head so route_after_execute routes back to await_clarification for it.
-        result: dict[str, Any] = {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-        }
-        if queue_after_pop:
-            # Next entry becomes the head — route to await_clarification.
-            next_head = queue_after_pop[0]
-            next_iid = str(next_head.get("origin_interrupt_id", ""))
-            next_ticket = (tickets_after_pop or {}).get(next_iid)
-            result["pending_clarification"] = next_head
-            result["clarification_queue"] = queue_after_pop
-            result["clarification_resume_tickets"] = tickets_after_pop
-            if next_ticket:
-                rt = _coerce_resume_ticket(next_ticket)
-                if rt:
-                    state.resume_ticket = rt
-                    result["resume_ticket"] = rt
-            logger.info(
-                "[execute] resume complete; %d clarification(s) remain in queue "
-                "(next head interrupt_id=%s)",
-                len(queue_after_pop),
-                next_iid[:16],
-            )
-        else:
-            result["clarification_queue"] = None
-            result["clarification_resume_tickets"] = None
+        # Successfully resumed from a prior clarification. The relay already
+        # dequeued the head via consume_answer; project the dequeued inbox.
+        # If the inbox still holds entries, route_after_execute routes back
+        # to await_clarification for the next one.
+        result: dict[str, Any] = {}
+        if relay is not None:
+            result.update(relay.clear_answer(scratch=ctx.scratch))
         if allowlist_dirty:
             result["tool_approval_allowlist"] = current_allowlist
+        if clarification_capture:
+            logger.info(
+                "[execute] resume complete; %d clarification(s) remain in inbox",
+                len(clarification_capture),
+            )
         return result
 
     return {}

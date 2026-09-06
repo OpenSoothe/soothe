@@ -27,9 +27,8 @@ async def node_await_clarification(
 ) -> dict[str, Any]:
     """Resolve a pending clarification by dispatching to the policy."""
     logger.info(
-        "[await_clarification] node entered with pending=%s, answer=%s",
-        bool(state.get("pending_clarification")) or _relay_has_pending(state),
-        state.get("pending_clarification_answer"),
+        "[await_clarification] node entered with relay_pending=%s",
+        _relay_has_pending(state),
     )
     # Hydrate the relay from the relay_state channel so a fresh ainvoke
     # reconstructs the inbox + scratch from the checkpoint.
@@ -45,14 +44,13 @@ async def node_await_clarification(
     try:
         request = request_from_state(pending)
     except ValueError:
-        logger.exception("[await_clarification] malformed pending_clarification")
+        logger.exception("[await_clarification] malformed pending request")
         await ctx.emit(
             "fatal_error",
             {"error": "Malformed pending clarification state", "step_id": ""},
         )
         return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
+            "relay_state": {},
             "last_outcome": "fatal",
         }
 
@@ -249,7 +247,6 @@ async def _hard_defer(
         except Exception:
             logger.warning("[await_clarification] CE save on park failed", exc_info=True)
     result: dict[str, Any] = {
-        "pending_clarification_answer": None,
         "last_outcome": "deferred",
     }
     if relay is not None:

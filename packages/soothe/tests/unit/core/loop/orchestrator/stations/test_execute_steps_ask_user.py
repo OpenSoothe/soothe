@@ -17,7 +17,8 @@ from soothe.sloop.clarification.protocol import (
     request_from_state,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.relay.ticket import ResumeTicket
+from soothe.sloop.relay.relay import LoopRelay
+from soothe.sloop.relay.ticket import ResumeTicket, ticket_to_state
 from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 from soothe.sloop.stations.execute.execute import (
     PLANNER_ASK_INTERRUPT_PREFIX,
@@ -69,6 +70,8 @@ def _make_ctx(
     strange_loop.config.agent.loop.concurrency.max_parallel_steps = 4
     strange_loop.core_agent.graph.checkpointer = None
 
+    from soothe.sloop.relay.relay import LoopRelay
+
     return LoopRuntimeContext(
         strange_loop=strange_loop,
         state_manager=MagicMock(loop_id="loop-1"),
@@ -83,6 +86,7 @@ def _make_ctx(
         clarification_policy=clarification_policy,
         ce=ce,
         ce_goal_id=goal.id if goal else None,
+        relay=LoopRelay(loop_id="loop-1", emit=emit),
     )
 
 
@@ -120,11 +124,11 @@ async def test_branch2_short_circuits_when_planner_emits_ask_user(
     result = await node_execute(ctx, {})
 
     executor_called.assert_not_called()
-    assert "pending_clarification" in result
-    assert result["last_clarification_origin"] == "execute"
-    assert result["pending_clarification_answer"] is None
+    assert "relay_state" in result
+    assert result["relay_state"]["active_origin"] == "execute"
+    assert result["relay_state"]["answer"] is None
 
-    pending = request_from_state(result["pending_clarification"])
+    pending = request_from_state(result["relay_state"]["inbox"][0]["request"])
     assert pending.questions == ("Which output format?",)
     assert pending.origin_node == "execute"
     assert pending.origin_interrupt_id == f"{PLANNER_ASK_INTERRUPT_PREFIX}ASK-01"
@@ -167,7 +171,8 @@ async def test_branch2_noop_when_no_clarification_policy(
 
     result = await node_execute(ctx, {})
 
-    assert "pending_clarification" not in result
+    # No clarification surfaced (executor no-op path); no relay_state inbox.
+    assert not result.get("relay_state", {}).get("inbox")
 
 
 @pytest.mark.asyncio
@@ -244,8 +249,16 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     result = await node_execute(
         ctx,
         {
-            "pending_clarification": pending_clar,
-            "pending_clarification_answer": pending_ans,
+            "relay_state": {
+                "inbox": [
+                    {
+                        "request": pending_clar,
+                        "resume_ticket": ticket_to_state(ResumeTicket(thread_id="t1")),
+                    }
+                ],
+                "answer": pending_ans,
+                "active_origin": "execute",
+            },
         },
     )
 
@@ -292,10 +305,10 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     assert executor_called is True
 
     # Must not re-route to await_clarification for the step we just answered.
-    assert not result.get("pending_clarification")
+    assert not result.get("relay_state", {}).get("inbox")
 
     # Answer state is cleared so the next iteration doesn't re-consume it.
-    assert result["pending_clarification_answer"] is None
+    assert result["relay_state"]["answer"] is None
 
 
 @pytest.mark.asyncio
@@ -385,13 +398,21 @@ async def test_branch1_ce_bound_does_not_re_emit_planner_ask(
     result = await node_execute(
         ctx,
         {
-            "pending_clarification": pending_clar,
-            "pending_clarification_answer": answer_to_state(answer),
+            "relay_state": {
+                "inbox": [
+                    {
+                        "request": pending_clar,
+                        "resume_ticket": ticket_to_state(ResumeTicket(thread_id="t1")),
+                    }
+                ],
+                "answer": answer_to_state(answer),
+                "active_origin": "execute",
+            },
         },
     )
 
-    assert not result.get("pending_clarification")
-    assert result["pending_clarification_answer"] is None
+    assert not result.get("relay_state", {}).get("inbox")
+    assert result["relay_state"]["answer"] is None
     assert executor_called is True
     plan_manager.record_step_outcomes.assert_called_once()
     assert "ASK-01" in loop_state.dependency_completion_ids()
@@ -431,7 +452,7 @@ async def test_branch2_picks_first_ask_user_in_mixed_wave(
     result = await node_execute(ctx, {})
 
     executor_called.assert_not_called()
-    pending = request_from_state(result["pending_clarification"])
+    pending = request_from_state(result["relay_state"]["inbox"][0]["request"])
     assert pending.origin_interrupt_id == f"{PLANNER_ASK_INTERRUPT_PREFIX}ASK-02"
 
 
@@ -510,6 +531,7 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
         clarification_policy=None,
         ce=ce,
         ce_goal_id=goal.id,
+        relay=LoopRelay(loop_id="loop-1", emit=emit),
     )
 
     pending_clar = {
@@ -535,13 +557,21 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     result = await node_execute(
         ctx,
         {
-            "pending_clarification": pending_clar,
-            "pending_clarification_answer": pending_ans,
+            "relay_state": {
+                "inbox": [
+                    {
+                        "request": pending_clar,
+                        "resume_ticket": ticket_to_state(ResumeTicket(thread_id="t1")),
+                    }
+                ],
+                "answer": pending_ans,
+                "active_origin": "execute",
+            },
         },
     )
 
     # Synth path was taken (ask_user answer consumed, pending cleared).
-    assert result.get("pending_clarification") is None
+    assert not result.get("relay_state", {}).get("inbox")
     # record_iteration owns the outcome now; execute does not set last_outcome.
     assert "last_outcome" not in result
     # State got the new Q&A pair appended (2 prior + 2 new = 4).
@@ -613,6 +643,7 @@ async def test_synth_answer_flows_through_record_iteration_without_fatal(
         clarification_policy=None,
         ce=ce,
         ce_goal_id=goal.id,
+        relay=LoopRelay(loop_id="loop-1", emit=emit),
     )
 
     pending_clar = {
@@ -642,11 +673,19 @@ async def test_synth_answer_flows_through_record_iteration_without_fatal(
     result_exec = await node_execute(
         ctx,
         {
-            "pending_clarification": pending_clar,
-            "pending_clarification_answer": pending_ans,
+            "relay_state": {
+                "inbox": [
+                    {
+                        "request": pending_clar,
+                        "resume_ticket": ticket_to_state(ResumeTicket(thread_id="t1")),
+                    }
+                ],
+                "answer": pending_ans,
+                "active_origin": "execute",
+            },
         },
     )
-    assert result_exec.get("pending_clarification") is None
+    assert not result_exec.get("relay_state", {}).get("inbox")
 
     # The CE goal started with no step nodes (stale parked checkpoint);
     # the synth path must have recreated the step so record_iteration can
@@ -723,6 +762,7 @@ async def test_ask_user_answer_resume_uses_command_resume(
         clarification_policy=None,
         ce=ce,
         ce_goal_id=goal.id,
+        relay=LoopRelay(loop_id="loop-1", emit=emit),
     )
 
     pending_clar = {
@@ -764,13 +804,22 @@ async def test_ask_user_answer_resume_uses_command_resume(
     result = await node_execute(
         ctx,
         {
-            "pending_clarification": pending_clar,
-            "pending_clarification_answer": pending_ans,
-            "resume_ticket": ResumeTicket(
-                thread_id="thread-1__step_aaa",
-                step_id="PPX-01",
-                step_description="Propose a question using ask_user",
-            ),
+            "relay_state": {
+                "inbox": [
+                    {
+                        "request": pending_clar,
+                        "resume_ticket": ticket_to_state(
+                            ResumeTicket(
+                                thread_id="thread-1__step_aaa",
+                                step_id="PPX-01",
+                                step_description="Propose a question using ask_user",
+                            )
+                        ),
+                    }
+                ],
+                "answer": pending_ans,
+                "active_origin": "execute",
+            },
         },
     )
 
@@ -782,8 +831,8 @@ async def test_ask_user_answer_resume_uses_command_resume(
     assert ctx.scratch.decision is not None
     assert ctx.scratch.decision.steps[0].id == "PPX-01"
     # Channels cleared; no synth step_completed emission.
-    assert result.get("pending_clarification") is None
-    assert result.get("pending_clarification_answer") is None
+    assert not result.get("relay_state", {}).get("inbox")
+    assert result.get("relay_state", {}).get("answer") is None
     assert "step_completed" not in [e for e, _ in emitted]
     # Q&A pair still reaches the ledger for the next plan iteration.
     msgs = ce.ledger.get_messages()
