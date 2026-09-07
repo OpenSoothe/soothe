@@ -126,3 +126,59 @@ class TestWhenRunCommand:
             {"command": "cd /tmp && sudo rm -rf /"},
         )
         assert when_run_command(req) is True
+
+
+class TestAllowlistSuppression:
+    """The ``when`` predicates consult the loop allowlist so an
+    already-approved command/path does not re-interrupt — the tool executes
+    silently on the next LLM hop."""
+
+    @staticmethod
+    def _req_with_allowlist(
+        tool_name: str, args: dict, allowlist: list[dict], *, workspace: str = "/home/user/project"
+    ) -> SimpleNamespace:
+        tool_call = {"name": tool_name, "args": args, "id": "call-1"}
+        config = {"configurable": {"workspace": workspace, "tool_approval_allowlist": allowlist}}
+        runtime = SimpleNamespace(config=config)
+        return SimpleNamespace(tool_call=tool_call, runtime=runtime)
+
+    def test_approved_exact_command_signature_no_interrupt(self) -> None:
+        cmd = "mkdir -p /tmp/x && rm -rf /tmp/x"
+        allowlist = [{"tool": "run_command", "signature": cmd}]
+        req = self._req_with_allowlist("run_command", {"command": cmd}, allowlist)
+        assert when_run_command(req) is False
+
+    def test_unapproved_command_still_interrupts(self) -> None:
+        cmd = "rm -rf /tmp/x"
+        # Different command signature, no rule override → still interrupts.
+        allowlist = [{"tool": "run_command", "signature": "echo safe"}]
+        req = self._req_with_allowlist("run_command", {"command": cmd}, allowlist)
+        assert when_run_command(req) is True
+
+    def test_approved_rule_overrides_different_command(self) -> None:
+        """A prior rule-level approval (rm -rf /) suppresses re-interrupt for a
+        different command matching the same rule."""
+        allowlist = [{"rule": "command.dangerous.rm_root"}]
+        req = self._req_with_allowlist(
+            "run_command", {"command": "rm -rf /tmp/different_path"}, allowlist
+        )
+        assert when_run_command(req) is False
+
+    def test_different_rule_still_interrupts(self) -> None:
+        """A rule override for rm -rf does not suppress sudo."""
+        allowlist = [{"rule": "command.dangerous.rm_rf"}]
+        req = self._req_with_allowlist(
+            "run_command", {"command": "sudo apt-get install evil"}, allowlist
+        )
+        assert when_run_command(req) is True
+
+    def test_approved_path_signature_no_interrupt(self) -> None:
+        allowlist = [{"tool": "edit_file", "signature": "/etc/passwd"}]
+        req = self._req_with_allowlist("edit_file", {"file_path": "/etc/passwd"}, allowlist)
+        assert when_edit_file(req) is False
+
+    def test_no_allowlist_key_still_interrupts(self) -> None:
+        """When the allowlist isn't passed (no config key), dangerous commands
+        still interrupt (fail-safe)."""
+        req = _req("run_command", {"command": "rm -rf /tmp/x"})
+        assert when_run_command(req) is True

@@ -2305,6 +2305,17 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            # Loop-scoped tool-approval allowlist — read by the
+            # ``interrupt_on`` ``when`` predicates (interrupt_rules.py) so an
+            # already-approved command (exact signature OR safety rule) does
+            # not re-interrupt; the tool executes silently on the next hop.
+            if (
+                self._clarification_loop_state_view is not None
+                and self._clarification_loop_state_view.tool_approval_allowlist
+            ):
+                configurable["tool_approval_allowlist"] = list(
+                    self._clarification_loop_state_view.tool_approval_allowlist
+                )
             # soothe_config is read by the nano filesystem middleware
             # (soothe_nano/middleware/filesystem.py) for virtual-mode and
             # max-file-size configuration on the step thread.
