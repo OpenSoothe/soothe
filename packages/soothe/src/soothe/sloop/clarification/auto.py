@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Collection
-from typing import TYPE_CHECKING
 
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
@@ -13,14 +12,12 @@ from soothe.sloop.clarification.protocol import (
     ClarificationPolicy,
     ClarificationRequest,
     DeferKind,
+    merge_answer_audit,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import (
     ToolApprovalPipeline,
 )
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +80,10 @@ class AutoClarificationPolicy:
     @property
     def force_manual_origins(self) -> frozenset[str]:
         return self._force_manual_origins
+
+    @property
+    def interactive_fallback(self) -> ClarificationPolicy | None:
+        return self._interactive_fallback
 
     def requires_manual(self, origin_node: str) -> bool:
         """True when this origin must not be auto-answered by veritas."""
@@ -289,15 +290,7 @@ class AutoClarificationPolicy:
         else:
             answer = await fallback.answer(request)
         if rule_id:
-            audit = dict(answer.audit or {})
-            audit.setdefault("escalated_rule_id", rule_id)
-            return ClarificationAnswer(
-                answers=answer.answers,
-                source=answer.source,
-                confidence=answer.confidence,
-                defer=answer.defer,
-                audit=audit,
-            )
+            return merge_answer_audit(answer, escalated_rule_id=rule_id)
         return answer
 
     def _classify(self, result: VeritasAnswerSchema) -> DeferKind | None:

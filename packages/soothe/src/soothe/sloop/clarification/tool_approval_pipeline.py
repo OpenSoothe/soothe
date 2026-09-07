@@ -42,6 +42,22 @@ def approval_record(tool_name: str, args: Mapping[str, Any]) -> dict[str, str] |
     return {"tool": tool_name, "signature": sig}
 
 
+def rule_approved(
+    rule_id: str | None,
+    allowlist: list[Mapping[str, Any]],
+) -> bool:
+    """True when the human already approved this rule's family this loop."""
+    if not rule_id:
+        return False
+    from soothe_nano.security.operation_guard import rule_family
+
+    approved = rule_family(rule_id)
+    for rec in allowlist:
+        if isinstance(rec, Mapping) and str(rec.get("rule") or "") in approved:
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class ApprovalResult:
     """Decision returned by the pipeline for a batch of action requests."""
@@ -136,7 +152,7 @@ class ToolApprovalPipeline:
                 safety_result = self._check_safety(name, args, workspace_root)
                 if safety_result is not None:
                     reason, rule_id = safety_result
-                    if allowlist and self._rule_approved(rule_id, allowlist):
+                    if allowlist and rule_approved(rule_id, allowlist):
                         allowlisted = True
                         logger.info(
                             "[%s] safety rule=%s overridden by prior human approval",
@@ -196,22 +212,6 @@ class ToolApprovalPipeline:
             if not isinstance(rec, Mapping):
                 continue
             if str(rec.get("tool") or "") == tool_name and str(rec.get("signature") or "") == sig:
-                return True
-        return False
-
-    @staticmethod
-    def _rule_approved(
-        rule_id: str | None,
-        allowlist: list[Mapping[str, Any]],
-    ) -> bool:
-        """True when the human already approved this rule's family this loop."""
-        if not rule_id:
-            return False
-        from soothe_nano.security.operation_guard import rule_family
-
-        approved = rule_family(rule_id)
-        for rec in allowlist:
-            if isinstance(rec, Mapping) and str(rec.get("rule") or "") in approved:
                 return True
         return False
 
@@ -275,5 +275,6 @@ __all__ = [
     "ApprovalResult",
     "ToolApprovalPipeline",
     "approval_record",
+    "rule_approved",
     "signature_for",
 ]

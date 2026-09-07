@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from soothe.sloop.clarification.origins import (
+    CLARIFICATION_ORIGINS,
     ORIGIN_EXECUTE,
     ORIGIN_PLAN_MODE_REVIEW,
     ORIGIN_RAIL_PAUSE,
@@ -10,6 +11,7 @@ from soothe.sloop.clarification.origins import (
 )
 from soothe.sloop.orchestrator.stations import EXECUTE, PLAN_REVIEW
 from soothe.sloop.relay.router import (
+    CLARIFICATION_ORIGIN_RESUME_NODE,
     pause_mode_for_origin,
     resume_node_for_clarification_origin,
 )
@@ -47,3 +49,7 @@ class TestPauseMode:
 
     def test_rail_pause_is_hard_defer(self) -> None:
         assert pause_mode_for_origin(ORIGIN_RAIL_PAUSE) == "hard_defer"
+
+
+def test_resume_node_dict_keys_match_origins() -> None:
+    assert set(CLARIFICATION_ORIGIN_RESUME_NODE) == CLARIFICATION_ORIGINS - {ORIGIN_RAIL_PAUSE}

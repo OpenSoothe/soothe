@@ -32,7 +32,7 @@ def _request(iid: str, origin: str = ORIGIN_TOOL_APPROVAL) -> ClarificationReque
     )
 
 
-class TestClarificationQueueFIFO:
+class TestRelayInboxFIFO:
     """The queue preserves every entry in FIFO order — no drops."""
 
     def test_empty_queue_head_is_none(self) -> None:
@@ -111,7 +111,7 @@ class TestClarificationQueueFIFO:
             pass
 
 
-class TestQueuedClarificationDataclass:
+class TestRelayInboxEntry:
     def test_entry_carries_request_ticket_step(self) -> None:
         req = _request("iii-1", origin=ORIGIN_EXECUTE)
         ticket = ResumeTicket(thread_id="t", step_id="s")

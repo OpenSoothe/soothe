@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Literal
 
+from soothe.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.sloop.clarification.interactive import EmitFn, InteractiveClarificationPolicy
 from soothe.sloop.clarification.protocol import (
     ClarificationPolicy,
@@ -169,14 +170,11 @@ def bind_clarification_emit(
     """
     if policy is None:
         return
-    from soothe.sloop.clarification.auto import AutoClarificationPolicy
-    from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
-
     if isinstance(policy, InteractiveClarificationPolicy):
         policy.bind_emit(emit)
         return
     if isinstance(policy, AutoClarificationPolicy):
-        fallback = policy._interactive_fallback  # noqa: SLF001
+        fallback = policy.interactive_fallback
         if isinstance(fallback, InteractiveClarificationPolicy):
             fallback.bind_emit(emit)
 

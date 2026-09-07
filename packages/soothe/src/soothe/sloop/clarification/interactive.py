@@ -16,6 +16,7 @@ from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
     ClarificationRequest,
+    merge_answer_audit,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import (
     ToolApprovalPipeline,
@@ -76,15 +77,7 @@ class InteractiveClarificationPolicy:
         self._escalated_rule_id = None
         if not rule_id:
             return answer
-        audit = dict(answer.audit or {})
-        audit.setdefault("escalated_rule_id", rule_id)
-        return ClarificationAnswer(
-            answers=answer.answers,
-            source=answer.source,
-            confidence=answer.confidence,
-            defer=answer.defer,
-            audit=audit,
-        )
+        return merge_answer_audit(answer, escalated_rule_id=rule_id)
 
     async def _answer(
         self, request: ClarificationRequest, *, announce: bool

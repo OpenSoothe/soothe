@@ -1,5 +1,7 @@
 """Global constants for Soothe configuration."""
 
+import re
+
 # Re-export facade — canonical source: soothe_nano.config.constants
 from soothe_nano.config.constants import (  # noqa: F401
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
@@ -71,3 +73,39 @@ GOAL_PREVIEW_MAX_CHARS: int = 120
 GOAL_COMPLETION_REPORT_MAX_CHARS: int = 100_000
 GOAL_COMPLETION_REPORT_MAX_MESSAGES: int = 500
 GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS: int = 100_000
+
+# ============================================================================
+# Security
+# ============================================================================
+
+# ── HITL run_command interrupt ──────────────────────────────────────────────
+
+# Overlaps with the nano security evaluator's banned patterns and the deny
+# rules in ToolApprovalConfig — checked here so the interrupt fires *before*
+# execution.
+DANGEROUS_COMMAND_RE: re.Pattern[str] = re.compile(
+    r"|".join(
+        [
+            r"\bsudo\b",
+            r"\bsu\b\s",
+            r"\bdoas\b",
+            r"\brm\s+-rf?\b",
+            r"\bmkfs\b",
+            r"\bdd\s+if=",
+            r"\bdd\s+of=/dev/",
+            r"\bshred\b",
+            r"\bchmod\s+-?R\b",
+            r"\bchown\s+-?R\b",
+            r"\bchgrp\s+-?R\b",
+            r"\bchmod\s+\d{3,4}\b.*\s+/",  # chmod against root paths
+            r"\b(apt|apt-get|brew|pip)\b.*\b(install|uninstall|remove)\b",
+            r"\bnpm\s+install\s+-g\b",
+            r"\b(fdisk|diskutil)\b",
+            r"\b(shutdown|reboot|halt)\b",
+            r"\bgit\s+push\s+(-f|--force)\b",
+            r"\b(curl|wget)\b.*\|\s*(sh|bash)",
+            r">\s*/(etc|bin|sbin|usr|System|Library)(/|$)",
+        ]
+    ),
+    re.IGNORECASE,
+)

@@ -10,51 +10,21 @@ so an already-approved command or safety-rule family does not re-interrupt.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe_nano.security.operation_guard import (
     dangerous_command_rule_id as _dangerous_command_rule_id,
 )
-from soothe_nano.security.operation_guard import (
-    rule_family as _rule_family,
+
+from soothe.config.constants import DANGEROUS_COMMAND_RE
+from soothe.sloop.clarification.tool_approval_pipeline import (
+    rule_approved,
+    signature_for,
 )
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
-
-# ── Command patterns that are always dangerous ─────────────────────────
-
-# Overlaps with the nano security evaluator's banned patterns and the deny
-# rules in ToolApprovalConfig — checked here so the interrupt fires *before*
-# execution.
-_DANGEROUS_COMMAND_RE = re.compile(
-    r"|".join(
-        [
-            r"\bsudo\b",
-            r"\bsu\b\s",
-            r"\bdoas\b",
-            r"\brm\s+-rf?\b",
-            r"\bmkfs\b",
-            r"\bdd\s+if=",
-            r"\bdd\s+of=/dev/",
-            r"\bshred\b",
-            r"\bchmod\s+-?R\b",
-            r"\bchown\s+-?R\b",
-            r"\bchgrp\s+-?R\b",
-            r"\bchmod\s+\d{3,4}\b.*\s+/",  # chmod against root paths
-            r"\b(apt|apt-get|brew|pip)\b.*\b(install|uninstall|remove)\b",
-            r"\bnpm\s+install\s+-g\b",
-            r"\b(fdisk|diskutil)\b",
-            r"\b(shutdown|reboot|halt)\b",
-            r"\bgit\s+push\s+(-f|--force)\b",
-            r"\b(curl|wget)\b.*\|\s*(sh|bash)",
-            r">\s*/(etc|bin|sbin|usr|System|Library)(/|$)",
-        ]
-    ),
-    re.IGNORECASE,
-)
 
 # System directories that are never inside a user workspace.
 _SYSTEM_PATH_PREFIXES = (
@@ -126,13 +96,8 @@ def _signature_approved(
     """True when the exact command/path signature is in the loop allowlist."""
     if not allowlist:
         return False
-    if tool_name in _COMMAND_TOOLS:
-        sig = str(args.get("command") or "").strip()
-    elif tool_name in _PATH_TOOLS:
-        sig = str(args.get("file_path") or args.get("path") or "").strip()
-    else:
-        return False
-    if not sig:
+    sig = signature_for(tool_name, args)
+    if sig is None:
         return False
     return any(
         isinstance(rec, dict)
@@ -149,19 +114,7 @@ def _rule_approved(
     """True when a prior human approval overrode this command's safety rule family."""
     if not allowlist or not command:
         return False
-    approved_rules = {
-        str(rec.get("rule") or "") for rec in allowlist if isinstance(rec, dict) and rec.get("rule")
-    }
-    if not approved_rules:
-        return False
-    rule_id = _dangerous_command_rule_id(command)
-    if not rule_id:
-        return False
-    return bool(_rule_family(rule_id) & approved_rules)
-
-
-_COMMAND_TOOLS = frozenset({"run_command"})
-_PATH_TOOLS = frozenset({"edit_file", "write_file", "delete"})
+    return rule_approved(_dangerous_command_rule_id(command), allowlist)
 
 
 def _is_path_outside_workspace(path_str: str, workspace: str) -> bool:
@@ -221,7 +174,7 @@ def _should_interrupt_run_command(req: ToolCallRequest) -> bool:
     command = str(args.get("command") or "")
     if not command.strip():
         return False
-    if _DANGEROUS_COMMAND_RE.search(command):
+    if DANGEROUS_COMMAND_RE.search(command):
         allowlist = _allowlist_from_config(req.runtime.config)
         # Exact-signature approval → execute silently (no re-interrupt).
         if _signature_approved("run_command", args, allowlist):

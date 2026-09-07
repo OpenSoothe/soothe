@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
+from soothe.config.models import DEFAULT_FORCE_MANUAL_ORIGINS
 from soothe.sloop.clarification.origins import (
-    DEFAULT_FORCE_MANUAL_ORIGINS,
     ORIGIN_EXECUTE,
     ORIGIN_TOOL_APPROVAL,
 )
