@@ -836,3 +836,100 @@ async def test_ask_user_answer_resume_uses_command_resume(
     # Q&A pair still reaches the ledger for the next plan iteration.
     msgs = ce.ledger.get_messages()
     assert any("What next?" in m.content for m in msgs)
+
+
+@pytest.mark.asyncio
+async def test_clarification_resume_syncs_ticket_when_decision_hydrated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the relay hydration restores decision/plan_result, the rebuild
+    branch is skipped — the consumed resume ticket and decision must still be
+    synced onto the live LoopState, or `_select_thread_for_step` never reuses
+    the interrupted thread and ``Command(resume=...)`` lands on a thread with
+    no pending interrupt (empty step run marked failed)."""
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[
+            StepAction(
+                id="SEI-01",
+                description="Create folder, markdown file, and delete folder",
+            ),
+        ],
+        execution_mode="parallel",
+    )
+    emitted: list[tuple[str, Any]] = []
+    loop_state = _make_loop_state()
+    loop_state.current_decision = None
+    loop_state.resume_ticket = None
+    ctx = _make_ctx(decision, emitted, loop_state=loop_state)
+
+    pending_clar = {
+        "questions": ["Approve run_command?"],
+        "origin_node": "tool_approval",
+        "origin_interrupt_id": "ta-interrupt-1",
+        "loop_state": {
+            "goal_id": "",
+            "goal_description": "",
+            "user_request": "",
+            "iteration": 0,
+            "intent_classification": None,
+            "plan_summary": None,
+            "recent_step_outputs": [],
+            "workspace_summary": None,
+            "active_skills": [],
+            "active_mcp_servers": [],
+        },
+        "metadata": {
+            "action_requests": [
+                {"name": "run_command", "args": {"command": "rm -rf temp-x"}},
+            ]
+        },
+    }
+    answer = ClarificationAnswer(answers=("approve", ""), source="human", confidence=1.0)
+
+    executor_ctor_calls: list[Any] = []
+
+    async def _empty_stream(*_a: Any, **_k: Any):
+        if False:
+            yield None
+
+    def _fake_executor(*_a: Any, **kwargs: Any) -> Any:
+        executor_ctor_calls.append(kwargs)
+        inst = MagicMock()
+        inst.execute = _empty_stream
+        return inst
+
+    import soothe.sloop.stations.execute.execute as mod
+
+    monkeypatch.setattr(mod, "Executor", _fake_executor)
+
+    await node_execute(
+        ctx,
+        {
+            "relay_state": {
+                "inbox": [
+                    {
+                        "request": pending_clar,
+                        "resume_ticket": ticket_to_state(
+                            ResumeTicket(
+                                thread_id="thread-1__step_aaa",
+                                step_id="SEI-01",
+                                step_description="Create folder, markdown file, and delete folder",
+                            )
+                        ),
+                    }
+                ],
+                "answer": answer_to_state(answer),
+                "active_origin": "tool_approval",
+            },
+        },
+    )
+
+    # Ticket + decision synced onto the live LoopState for thread reuse.
+    assert loop_state.resume_ticket is not None
+    assert loop_state.resume_ticket.thread_id == "thread-1__step_aaa"
+    assert loop_state.current_decision is decision
+    # Executor still receives the Command(resume) payload.
+    assert len(executor_ctor_calls) == 1
+    payload = executor_ctor_calls[0]["clarification_resume_answer_payload"]
+    assert payload is not None

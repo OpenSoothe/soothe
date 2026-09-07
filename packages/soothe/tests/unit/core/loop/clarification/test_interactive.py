@@ -210,6 +210,24 @@ async def test_answer_as_manual_fallback_emits_mode_manual(
     assert payload["questions"] == ["q0"]
 
 
+async def test_answer_as_manual_fallback_announce_false_skips_emit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resume replay: consume the pending answer without re-announcing."""
+    _stub_interrupt(monkeypatch, {"answers": ["Approve", ""]})
+    emitted: list[tuple[str, dict]] = []
+
+    async def _emit(name: str, payload: dict) -> None:
+        emitted.append((name, payload))
+
+    policy = InteractiveClarificationPolicy(emit=_emit)
+    ans = await policy.answer_as_manual_fallback(
+        _tool_approval_request("cd repo && rm -rf temp-x"), announce=False
+    )
+    assert ans.answers == ("Approve", "")
+    assert emitted == []
+
+
 async def test_bind_emit_attaches_runtime_callback() -> None:
     policy = InteractiveClarificationPolicy()
 

@@ -59,14 +59,15 @@ class InteractiveClarificationPolicy:
         answer = await self._answer(request, announce=False)
         return self._merge_escalated_rule_id(answer)
 
-    async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
+    async def answer_as_manual_fallback(
+        self, request: ClarificationRequest, *, announce: bool = True
+    ) -> ClarificationAnswer:
         """Re-announce as ``mode=manual`` then pause (auto→manual upgrade).
 
-        ``await_clarification`` emitted with ``mode=auto`` (auto policy); this
-        re-emits with ``mode=manual`` so the TUI shows the approval card.
-        On resume the re-emit is harmless — the TUI replaces the card.
+        The TUI only mounts the interactive card for ``mode=manual`` emits;
+        resume replays pass ``announce=False`` since the card already exists.
         """
-        answer = await self._answer(request, announce=True)
+        answer = await self._answer(request, announce=announce)
         return self._merge_escalated_rule_id(answer)
 
     def _merge_escalated_rule_id(self, answer: ClarificationAnswer) -> ClarificationAnswer:

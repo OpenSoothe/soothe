@@ -106,6 +106,11 @@ class AutoClarificationPolicy:
         ``escalate`` (banned safety rule) routes to the human relay when one
         is attached; under autopilot it degrades to an instructive reject.
         """
+        # Resume replay: the answer is in flight; re-evaluating would
+        # re-escalate before node_execute records the allowlist override.
+        if request.metadata.get("resume_turn") and self._interactive_fallback is not None:
+            return await self._delegate_to_fallback(request, announce=False)
+
         action_requests = request.metadata.get("action_requests", [])
         result = self._tool_approval_pipeline.evaluate(
             action_requests,
@@ -264,22 +269,23 @@ class AutoClarificationPolicy:
         )
 
     async def _delegate_to_fallback(
-        self, request: ClarificationRequest, *, rule_id: str | None = None
+        self,
+        request: ClarificationRequest,
+        *,
+        rule_id: str | None = None,
+        announce: bool = True,
     ) -> ClarificationAnswer:
         """Route to the interactive relay with auto→manual re-announce.
 
-        Uses `answer_as_manual_fallback` when available so the TUI
-        re-announces with `mode=manual` before pausing (the earlier
-        `await_clarification` emit used `mode=auto`). Falls back to
-        `answer()` for bare policies without the upgrade method. When
-        `rule_id` is set (safety escalation), the human's answer carries it
-        in `audit["escalated_rule_id"]` so ``node_execute`` can record a
-        rule-level allowlist override and suppress re-escalation.
+        Prefers `answer_as_manual_fallback` (mode=manual emit) over bare
+        `answer()`. `rule_id` stamps `audit["escalated_rule_id"]` so
+        node_execute can record a rule-level allowlist override.
+        `announce=False` for resume replays, where the card already exists.
         """
         fallback = self._interactive_fallback
         upgrade = getattr(fallback, "answer_as_manual_fallback", None)
         if callable(upgrade):
-            answer = await upgrade(request)
+            answer = await upgrade(request, announce=announce)
         else:
             answer = await fallback.answer(request)
         if rule_id:

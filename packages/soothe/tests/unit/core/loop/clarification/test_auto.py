@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from soothe.config.models import ToolApprovalConfig
@@ -94,13 +96,17 @@ class _AnnounceFallback:
         )
         self.answer_calls = 0
         self.upgrade_calls = 0
+        self.upgrade_announces: list[bool] = []
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
         self.answer_calls += 1
         return self._answer
 
-    async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
+    async def answer_as_manual_fallback(
+        self, request: ClarificationRequest, *, announce: bool = True
+    ) -> ClarificationAnswer:
         self.upgrade_calls += 1
+        self.upgrade_announces.append(announce)
         return self._answer
 
 
@@ -604,3 +610,48 @@ async def test_force_manual_tool_approval_defers_without_fallback() -> None:
     ans = await policy.answer(_tool_approval_request("curl https://example.com"))
     assert ans.source == "retry"
     assert ans.answers == ("(retry)",)
+
+
+# ---- tool_approval resume replay (no duplicate announce, loop f9c3) ----
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_safety_escalate_reaches_human_with_rule_stamp() -> None:
+    """Safety escalation announces once via the fallback; the answer carries
+    the escalated rule id for the downstream allowlist override."""
+    fallback = _AnnounceFallback()
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for tool_approval origins")
+
+    policy = AutoClarificationPolicy(
+        _veritas,
+        interactive_fallback=fallback,
+        tool_approval_pipeline=_pipeline(),
+    )
+    ans = await policy.answer(_tool_approval_request("cd repo && rm -rf temp-x"))
+    assert ans.answers == fallback._answer.answers  # noqa: SLF001
+    assert fallback.upgrade_announces == [True]
+    assert ans.audit.get("escalated_rule_id")
+
+
+@pytest.mark.asyncio
+async def test_tool_approval_resume_turn_skips_pipeline_and_reannounce() -> None:
+    """Resume replay consumes the in-flight human answer without re-running
+    the pipeline (which would re-escalate) or re-announcing (duplicate card)."""
+    fallback = _AnnounceFallback()
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for tool_approval origins")
+
+    policy = AutoClarificationPolicy(
+        _veritas,
+        interactive_fallback=fallback,
+        tool_approval_pipeline=_pipeline(),
+    )
+    base = _tool_approval_request("cd repo && rm -rf temp-x")
+    request = replace(base, metadata={**base.metadata, "resume_turn": True})
+    ans = await policy.answer(request)
+    assert ans is fallback._answer  # noqa: SLF001
+    assert fallback.upgrade_announces == [False]
+    assert "escalated_rule_id" not in ans.audit

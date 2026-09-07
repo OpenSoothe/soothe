@@ -468,6 +468,17 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
+    # Clarification resume: sync the consumed ticket and hydrated decision onto
+    # the live LoopState unconditionally — `_select_thread_for_step` reads both
+    # from `state`, and the rebuild branch below only runs when the hydrated
+    # decision was lost. Skipping the sync sent `Command(resume=...)` to a fresh
+    # thread with no pending interrupt (empty step run marked failed).
+    if resume_answer_payload is not None:
+        if consumed_ticket is not None:
+            state.resume_ticket = consumed_ticket
+        if decision is not None and state.current_decision is None:
+            state.current_decision = decision
+
     # The relay inbox owns the FIFO; consume_answer already dequeued the head.
 
     if decision is None or plan_result is None:
@@ -484,7 +495,6 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             if resume_tid:
                 resume_sid = resume_ticket.step_id if resume_ticket else None
                 resume_desc = resume_ticket.step_description if resume_ticket else None
-                state.resume_ticket = resume_ticket
                 root_step: StepAction | None = None
                 if resume_sid:
                     goal_text = state.goal or "ask_user resume"

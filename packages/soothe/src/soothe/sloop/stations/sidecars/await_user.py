@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 
 from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
@@ -98,6 +99,10 @@ async def node_await_clarification(
         (getattr(ctx, "clarification_resume_answers", None) or [])
         or (getattr(ctx, "clarification_resume_text", None) or "").strip()
     )
+    if resume_turn:
+        # Tell the policy a human answer is already in flight so it consumes
+        # the relay head instead of re-evaluating (and re-announcing) it.
+        request = replace(request, metadata={**request.metadata, "resume_turn": True})
     if not resume_turn:
         await ctx.emit(_EVT_CLARIFICATION_REQUESTED, requested_payload)
         # The interactive policy pauses on a LangGraph ``interrupt`` below —
