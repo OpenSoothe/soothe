@@ -78,12 +78,18 @@ def _select_thread_for_step(
     step_thread_ids = getattr(loop_state, "step_thread_ids", {}) if loop_state else {}
 
     # Condition B: interrupt resume — must reuse the original thread.
+    # Only the interrupted step itself resumes the ticket thread; sibling
+    # steps in the same wave follow the normal rules.
+    resume_ticket = getattr(loop_state, "resume_ticket", None) if loop_state else None
+    resume_tid = resume_ticket.thread_id if resume_ticket else None
+    if (
+        is_clarification_resume
+        and resume_tid
+        and step.id == getattr(resume_ticket, "step_id", None)
+    ):
+        logger.info("[thread] resume: reusing interrupted thread %s", resume_tid[:24])
+        return resume_tid
     if is_clarification_resume:
-        resume_ticket = getattr(loop_state, "resume_ticket", None) if loop_state else None
-        resume_tid = resume_ticket.thread_id if resume_ticket else None
-        if resume_tid:
-            logger.info("[thread] resume: reusing interrupted thread %s", resume_tid[:24])
-            return resume_tid
         # Fallback: try the step's prior thread_id (step was re-activated, same ID).
         prior = step_thread_ids.get(step.id)
         if prior:

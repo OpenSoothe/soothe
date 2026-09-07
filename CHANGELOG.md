@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Preserve loops parked for clarification across worker restarts. The orphan-loop repair in `normalize_checkpoint_data` demoted a loop paused on a manual tool approval / ask_user interrupt to `idle`/`cancelled`, orphaning the live LangGraph interrupt and wedging the loop — every `continue`/`retry` then fatalled with "Goal completion reached without plan result". The active goal index entry is now marked `awaiting_clarification` when the graph parks (`mark_goal_awaiting_clarification` on `StrangeLoopStateManager`, wired into both the manual `interrupt` path in `await_clarification` and the auto-defer `park_for_clarification` path); the repair recognizes this status as intentionally paused and preserves the running state so the resume flow recovers the iteration cursor and resumes the interrupt via `Command(resume=...)`. `force_terminal_status` can still transition a parked goal on a later fatal.
+- Suppress duplicate tool-call rendering in the TUI when a clarification resume re-emits the pre-interrupt root-graph AIMessage. The executor now records checkpoint message ids before streaming and suppresses wire events for root-graph messages already on the checkpoint, so the tool call renders once instead of twice.
+- Collapse the HITL interrupt predicate's rule-approval dedup to a rule-family match so an approved command suppresses re-interrupts for the whole safety-rule family, not just the exact rule id.
 
 ## [v1.0.5] - 2026-09-03
 

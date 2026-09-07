@@ -18,7 +18,7 @@ from soothe.sloop.clarification.runtime_factory import (
 
 def _make_config(default_mode: str = "auto") -> Any:
     """Construct a minimal config stub with the fields the factory reads."""
-    from soothe.sloop.clarification.origins import DEFAULT_FORCE_MANUAL_ORIGINS
+    from soothe.config.models import DEFAULT_FORCE_MANUAL_ORIGINS
 
     cfg = MagicMock()
     cfg.agent.clarification.default_mode = default_mode
@@ -140,7 +140,7 @@ class TestBuildClarificationPolicyForRunner:
         config = _make_config()
         policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=False)
         assert isinstance(policy, AutoClarificationPolicy)
-        assert policy._interactive_fallback is None  # noqa: SLF001
+        assert policy.interactive_fallback is None
 
     def test_auto_with_human_attached_wires_fallback(self) -> None:
         """RFC-623: interactive runs gain a TUI fallback for veritas failures."""
@@ -148,7 +148,7 @@ class TestBuildClarificationPolicyForRunner:
         policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
         assert isinstance(policy, AutoClarificationPolicy)
         assert isinstance(
-            policy._interactive_fallback,  # noqa: SLF001
+            policy.interactive_fallback,
             InteractiveClarificationPolicy,
         )
 
@@ -238,7 +238,7 @@ class TestBindClarificationEmit:
         config = _make_config()
         policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
         assert isinstance(policy, AutoClarificationPolicy)
-        fallback = policy._interactive_fallback  # noqa: SLF001
+        fallback = policy.interactive_fallback
         assert isinstance(fallback, InteractiveClarificationPolicy)
         assert fallback._emit is None  # noqa: SLF001
 

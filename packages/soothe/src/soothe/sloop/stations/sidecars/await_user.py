@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 
 from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
 from soothe.sloop.clarification.protocol import (
     ClarificationDeferredError,
-    answer_to_state,
     request_from_state,
     request_to_state,
 )
@@ -28,40 +28,30 @@ async def node_await_clarification(
 ) -> dict[str, Any]:
     """Resolve a pending clarification by dispatching to the policy."""
     logger.info(
-        "[await_clarification] node entered with pending=%s, answer=%s",
-        bool(state.get("pending_clarification")),
-        state.get("pending_clarification_answer"),
+        "[await_clarification] node entered with relay_pending=%s",
+        _relay_has_pending(state),
     )
-    pending = state.get("pending_clarification")
-    if not pending:
-        # Fallback: if pending_clarification is None but the queue has
-        # entries, promote the head. This guards against a state-transition
-        # edge case where the queue was set but the head mirror was not.
-        queue = state.get("clarification_queue")
-        if isinstance(queue, list) and queue:
-            pending = queue[0]
-            logger.info(
-                "[await_clarification] promoted queue head to pending_clarification "
-                "(interrupt_id=%s)",
-                str(pending.get("origin_interrupt_id", ""))[:16]
-                if isinstance(pending, dict)
-                else "?",
-            )
-    if not pending:
-        logger.warning("[await_clarification] entered without pending_clarification; no-op")
-        return {"pending_clarification": None}
+    # Hydrate the relay from the relay_state channel so a fresh ainvoke
+    # reconstructs the inbox + scratch from the checkpoint.
+    relay = getattr(ctx, "relay", None)
+    relay_state = state.get("relay_state")
+    if relay is not None and isinstance(relay_state, dict):
+        relay.hydrate_from_channels(relay_state, scratch=ctx.scratch)
+    pending = _head_pending_request(state, relay)
+    if pending is None:
+        logger.warning("[await_clarification] entered without pending clarification; no-op")
+        return {"relay_state": {}}
 
     try:
         request = request_from_state(pending)
     except ValueError:
-        logger.exception("[await_clarification] malformed pending_clarification")
+        logger.exception("[await_clarification] malformed pending request")
         await ctx.emit(
             "fatal_error",
             {"error": "Malformed pending clarification state", "step_id": ""},
         )
         return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
+            "relay_state": {},
             "last_outcome": "fatal",
         }
 
@@ -89,12 +79,13 @@ async def node_await_clarification(
         _attach_plan_review_payload(requested_payload, ctx, pending)
 
     # Surface the paused step id so the TUI can show "awaiting answer" on the
-    # existing step card instead of marking it complete. The resume_ticket is
-    # stored on LoopState by node_execute when a tool_approval / ask_user
-    # interrupt is captured.
-    resume_ticket = state.get("resume_ticket") or getattr(
-        getattr(ctx, "loop_state", None), "resume_ticket", None
-    )
+    # existing step card instead of marking it complete. The resume ticket is
+    # carried on the relay inbox head (projected by node_execute on capture).
+    resume_ticket = None
+    if relay is not None and relay.inbox.head_ticket is not None:
+        resume_ticket = relay.inbox.head_ticket
+    if resume_ticket is None:
+        resume_ticket = getattr(getattr(ctx, "loop_state", None), "resume_ticket", None)
     if resume_ticket is not None:
         rt_step_id = (
             resume_ticket.get("step_id")
@@ -108,6 +99,10 @@ async def node_await_clarification(
         (getattr(ctx, "clarification_resume_answers", None) or [])
         or (getattr(ctx, "clarification_resume_text", None) or "").strip()
     )
+    if resume_turn:
+        # Tell the policy a human answer is already in flight so it consumes
+        # the relay head instead of re-evaluating (and re-announcing) it.
+        request = replace(request, metadata={**request.metadata, "resume_turn": True})
     if not resume_turn:
         await ctx.emit(_EVT_CLARIFICATION_REQUESTED, requested_payload)
         # The interactive policy pauses on a LangGraph ``interrupt`` below —
@@ -218,9 +213,11 @@ async def node_await_clarification(
         if len(history) > 20:
             history = history[-20:]
 
-    # Keep pending alongside the answer so the origin node can pair
-    # origin_interrupt_id; that node clears both channels after consume.
-    result: dict[str, Any] = {"pending_clarification_answer": answer_to_state(answer)}
+    # Project the answer into relay_state so the relay owns the write path.
+    # The origin node (execute / plan_review) consumes via relay.consume_answer.
+    result: dict[str, Any] = {}
+    if relay is not None:
+        result.update(relay.record_answer(answer=answer, scratch=ctx.scratch))
     if loop_state is not None:
         result["clarification_history"] = history
     return result
@@ -234,6 +231,7 @@ async def _hard_defer(
     defer_kind: str,
     questions: tuple[str, ...],
 ) -> dict[str, Any]:
+    relay = getattr(ctx, "relay", None)
     await ctx.emit(
         _EVT_CLARIFICATION_DEFERRED,
         {
@@ -253,10 +251,38 @@ async def _hard_defer(
             await ctx.ce.save()
         except Exception:
             logger.warning("[await_clarification] CE save on park failed", exc_info=True)
-    return {
-        "pending_clarification_answer": None,
+    result: dict[str, Any] = {
         "last_outcome": "deferred",
     }
+    if relay is not None:
+        result.update(relay.project_to_channels(scratch=ctx.scratch, mark_parked_head=True))
+    return result
+
+
+def _relay_has_pending(state: dict[str, Any]) -> bool:
+    """True when the relay_state channel has an unanswered head entry."""
+    relay_state = state.get("relay_state")
+    if not isinstance(relay_state, dict):
+        return False
+    inbox = relay_state.get("inbox")
+    return isinstance(inbox, list) and bool(inbox)
+
+
+def _head_pending_request(
+    state: dict[str, Any],
+    relay: Any,
+) -> dict[str, Any] | None:
+    """Read the head clarification request from the `relay_state` channel."""
+    relay_state = state.get("relay_state")
+    if isinstance(relay_state, dict):
+        inbox = relay_state.get("inbox")
+        if isinstance(inbox, list) and inbox:
+            head = inbox[0]
+            if isinstance(head, dict):
+                request = head.get("request")
+                if isinstance(request, dict):
+                    return request
+    return None
 
 
 def _attach_plan_review_payload(

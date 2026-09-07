@@ -30,7 +30,6 @@ from soothe.config.constants import (
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
-from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import ClarificationOrigin, LoopStateView
@@ -53,9 +52,6 @@ from soothe.sloop.engine.execute.graph_interrupt import (
     _STREAM_HEARTBEAT_SENTINEL,
     DispatchTimeoutError,
     GraphStreamChunkReader,
-    build_auto_resume_payload,
-    is_ask_user_interrupt,
-    is_tool_approval_interrupt,
 )
 from soothe.sloop.engine.execute.metadata_generator import (
     PLANNER_OUTCOME_PREVIEW_CAP,
@@ -110,6 +106,13 @@ from soothe.sloop.engine.execute.tool_call_id import (
     _rewrite_tool_message_tool_call_id,
     _SubgraphNamespaceTaskBinder,
 )
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.outbox import (
+    build_auto_resume_payload,
+    is_ask_user_interrupt,
+    is_tool_approval_interrupt,
+)
+from soothe.sloop.relay.ticket import ResumeTicket
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -218,7 +221,7 @@ def _extract_interrupts_from_graph_interrupt(exc: GraphInterrupt) -> tuple[Inter
 def _capture_interrupts(
     interrupts: tuple[Interrupt, ...],
     detector: ClarificationDetector,
-    capture: ClarificationQueue,
+    capture: RelayInbox,
     loop_state_view: LoopStateView,
     origin_node: ClarificationOrigin,
     *,
@@ -276,7 +279,7 @@ class Executor:
         config: SootheConfig | None = None,
         loop_id: str | None = None,
         clarification_detector: ClarificationDetector | None = None,
-        clarification_capture: ClarificationQueue | None = None,
+        clarification_capture: RelayInbox | None = None,
         clarification_loop_state_view: LoopStateView | None = None,
         clarification_resume_answer_payload: dict[str, Any] | None = None,
         context_engine: Any | None = None,  # RFC-624 Phase 4
@@ -776,7 +779,7 @@ class Executor:
         graph_config: dict[str, Any],
         *,
         detector: ClarificationDetector | None,
-        capture: ClarificationQueue | None,
+        capture: RelayInbox | None,
         loop_state_view: LoopStateView | None,
         origin_node: ClarificationOrigin,
         step_id: str | None = None,
@@ -872,7 +875,7 @@ class Executor:
         graph_config: dict[str, Any],
         *,
         detector: ClarificationDetector | None = None,
-        capture: ClarificationQueue | None = None,
+        capture: RelayInbox | None = None,
         loop_state_view: LoopStateView | None = None,
         origin_node: ClarificationOrigin = ORIGIN_EXECUTE,
         resume_answer_payload: dict[str, Any] | None = None,
@@ -880,26 +883,15 @@ class Executor:
         step_description: str | None = None,  # captured for resume identity
         step_start_perf: float | None = None,  # perf_counter baseline for prior_duration_ms
     ) -> AsyncGenerator[Any, None]:
-        """Run `CoreAgent.astream` with interrupt handling.
+        """Run ``CoreAgent.astream`` with interrupt capture and resume.
 
-        Behavior:
-
-        - `ask_user` and `action_requests` (tool-approval) interrupts,
-          when `detector`/`capture` are provided, are written to
-          `capture` and the stream returns early so the StrangeLoop can route
-          to `await_clarification`. The originating step's id and
-          description (`step_id` / `step_description`) are recorded on
-          `capture` alongside the thread_id so the resume path can re-emit
-          `step_started` with the same step identity the TUI already shows.
-        - When `resume_answer_payload` is set, the first CoreAgent call
-          uses it as the initial `Command(resume=...)` (re-entry after the
-          policy answered a prior clarification).
-        - Heartbeat sentinels are yielded during long waits to keep
-          the stream alive and prevent client disconnects during slow tool
-          execution (browser_use, long searches).
-        - When `step_start_perf` is set, the elapsed wall-clock at interrupt
-          time is recorded on the enqueued entry's `resume_ticket.prior_duration_ms`
-          so the resume pass can accumulate it into the final `duration_ms`.
+        Captures ``ask_user`` / ``action_requests`` (tool-approval) interrupts
+        into ``capture`` and returns early so StrangeLoop can route to
+        ``await_clarification``.  When ``resume_answer_payload`` is set, the
+        first call uses it as ``Command(resume=...)`` to re-enter after a prior
+        clarification was answered.  Yields heartbeat sentinels during long
+        waits.  ``step_start_perf`` accumulates pre-interrupt elapsed time onto
+        ``resume_ticket.prior_duration_ms``.
         """
         interrupt_iterations = 0
         current_input: dict[str, Any] | Command = (
@@ -2302,6 +2294,17 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            # Loop-scoped tool-approval allowlist — read by the
+            # ``interrupt_on`` ``when`` predicates (interrupt_rules.py) so an
+            # already-approved command (exact signature OR safety rule) does
+            # not re-interrupt; the tool executes silently on the next hop.
+            if (
+                self._clarification_loop_state_view is not None
+                and self._clarification_loop_state_view.tool_approval_allowlist
+            ):
+                configurable["tool_approval_allowlist"] = list(
+                    self._clarification_loop_state_view.tool_approval_allowlist
+                )
             # soothe_config is read by the nano filesystem middleware
             # (soothe_nano/middleware/filesystem.py) for virtual-mode and
             # max-file-size configuration on the step thread.
@@ -2491,6 +2494,7 @@ class Executor:
                         budget=budget,
                         step_id=step.id,
                         step_description=step.description,
+                        pre_streamed_message_ids=checkpoint_message_ids,
                     ):
                         if chunk.event is not None:
                             _append_parallel_stream_event(events, chunk.event, live_event_queue)
@@ -3014,37 +3018,35 @@ class Executor:
         budget: _ActStreamBudget | None = None,
         step_id: str | None = None,
         step_description: str = "",
+        pre_streamed_message_ids: frozenset[str] | None = None,
     ) -> AsyncGenerator[_StreamCollectChunk, None]:
-        """Stream events immediately while accumulating output and counting tool calls.
+        """Stream events for real-time display while accumulating the final result.
 
-        This is the canonical streaming method that yields events as they arrive
-        for real-time display, while also collecting output content for the final
-        result.
-
-        Also extracts tool_call_id and generates outcome metadata.
-        Collects AIMessage objects for token usage extraction.
-        Collects `task` tool return text (delegate finals) for goal completion when
-        subgraph AIMessages are not folded into root-graph act aggregation.
-        Rewrites root-graph AI and `ToolMessage` `tool_call_id` values to unified
-        `{step_id}:s:{tool_fragment}` so streamed tool rows and tool results share stable ids.
-        Tracks ToolMessage.status="error" and Error: tool bodies for outcome metadata.
+        Rewrites tool_call_ids to unified ``{step_id}:s:{fragment}``, collects
+        AIMessage/ToolMessage objects for token/outcome extraction, and yields
+        wire events followed by one finalized summary.
 
         Args:
-            stream: Async iterator from agent.astream()
-            budget: Optional Act wave budget (subagent `task` cap).
-            step_id: When set, rewrite root-graph tool_call_ids to unified format
-                `{step_id}:s:{tool_fragment}` for consistent TUI rendering.
-            step_description: Execute-step brief copied onto `task` kwargs when the
-                model streams empty delegation args (parallel execute).
+            stream: Async iterator from ``agent.astream()``.
+            budget: Optional Act wave budget (subagent ``task`` cap).
+            step_id: When set, rewrite root-graph tool_call_ids to unified format.
+            step_description: Step brief copied onto ``task`` kwargs when the
+                model streams empty delegation args.
+            pre_streamed_message_ids: Message ids already on the CoreAgent
+                checkpoint before this call (resume path).  Root-graph
+                AIMessages whose id is in this set have their wire events
+                suppressed to avoid re-rendering the pre-interrupt tool call.
 
         Yields:
-            :class:`_StreamCollectChunk` — wire events during streaming, then one
-            finalized summary at the end.
+            :class:`_StreamCollectChunk` — wire events then one finalized summary.
         """
         from langchain_core.messages import AIMessage, AIMessageChunk
 
         from soothe.sloop.engine.execute.metadata_generator import (
             generate_outcome_metadata,
+        )
+        from soothe.sloop.utils.ledger_message_dedup import (
+            message_reference_id,
         )
         from soothe.sloop.utils.stream_normalize import (
             iter_messages_for_act_aggregation,
@@ -3229,9 +3231,11 @@ class Executor:
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 _ns_chunk, mode_chunk, data_chunk = chunk
                 stream_ns = _ns_chunk if _ns_chunk else ()
-                # Unify message tool_call_ids for client row/result matching.
                 emit_chunk = chunk
                 tool_update_events: list[dict[str, Any]] = []
+                # Suppress wire events for the pre-interrupt AIMessage re-emitted
+                # on resume (same id) so the tool call isn't rendered twice.
+                suppress_wire = False
                 if (
                     step_id
                     and mode_chunk == "messages"
@@ -3240,7 +3244,6 @@ class Executor:
                 ):
                     msg0 = data_chunk[0]
                     task_idx: int | None = None
-                    # execute:* namespaces (root or sole-child /N reuse) are step-level.
                     if _ns_chunk and not is_step_level_execute_namespace_key(_ns_chunk):
                         task_idx = subgraph_task_binder.task_idx_for_namespace(stream_ns)
                     if isinstance(msg0, (AIMessage, AIMessageChunk)):
@@ -3273,9 +3276,16 @@ class Executor:
                                 tool_args,
                             )
                         )
-                        # Collect namespaced AIMessages for ledger recording.
-                        # iter_messages_for_act_aggregation filters out subgraph messages,
-                        # but the final synthesis from task subagent should be captured.
+                        # Suppress wire events for the re-emitted pre-interrupt
+                        # root-graph AIMessage on a clarification resume.  Only
+                        # root-graph messages (no namespace) match the checkpoint
+                        # ids — subgraph messages belong to a different thread.
+                        if (
+                            pre_streamed_message_ids
+                            and not _ns_chunk
+                            and message_reference_id(filled_msg) in pre_streamed_message_ids
+                        ):
+                            suppress_wire = True
                         if _ns_chunk and isinstance(msg0, (AIMessage, AIMessageChunk)):
                             messages.append(rewritten_msg)
                             t = extract_text_from_message_content(rewritten_msg.content)
@@ -3292,9 +3302,10 @@ class Executor:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
                         if _ns_chunk and is_step_level_execute_namespace_key(_ns_chunk):
                             execute_ns_tool_stop = _aggregate_tool_message(modified_msg)
-                yield _StreamCollectChunk.wire_event(emit_chunk)
-                for tool_ev in tool_update_events:
-                    yield _StreamCollectChunk.wire_event((_ns_chunk, "custom", tool_ev))
+                if not suppress_wire:
+                    yield _StreamCollectChunk.wire_event(emit_chunk)
+                    for tool_ev in tool_update_events:
+                        yield _StreamCollectChunk.wire_event((_ns_chunk, "custom", tool_ev))
                 chunk = emit_chunk
 
             stop_act_stream = execute_ns_tool_stop

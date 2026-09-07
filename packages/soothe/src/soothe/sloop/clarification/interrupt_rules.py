@@ -1,59 +1,30 @@
-"""Conditional `interrupt_on` predicates for the HITL middleware.
+"""Conditional ``interrupt_on`` predicates for the HITL middleware.
 
-Each predicate returns `True` when the tool call is dangerous enough to
-warrant a human-facing interrupt, and `False` when it is safe to execute
-silently. This keeps safe in-workspace edits and routine commands off the
-clarification queue entirely — only genuinely dangerous operations
-(out-of-workspace writes, destructive commands) trigger the interrupt.
+Each predicate returns ``True`` when the tool call is dangerous enough to
+warrant a human interrupt, ``False`` when safe to execute silently.  Fail-safe:
+when the workspace or command can't be inspected, returns ``True``.
 
-The predicates are intentionally conservative: when the workspace root or
-command cannot be inspected, they return `True` (fail-safe — interrupt).
-The nano security evaluator (`WorkspaceToolOperationSecurity`) and the
-deny-rule pipeline still run as belt-and-suspenders regardless of these
-predicates.
+Also consults the loop-scoped ``tool_approval_allowlist`` (via ``configurable``)
+so an already-approved command or safety-rule family does not re-interrupt.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.security.operation_guard import (
+    dangerous_command_rule_id as _dangerous_command_rule_id,
+)
+
+from soothe.config.constants import DANGEROUS_COMMAND_RE
+from soothe.sloop.clarification.tool_approval_pipeline import (
+    rule_approved,
+    signature_for,
+)
+
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
-
-# ── Command patterns that are always dangerous ─────────────────────────
-
-# These overlap with the nano security evaluator's ``_BANNED_COMMAND_PATTERNS``
-# and the deny rules in ``ToolApprovalConfig``. The predicate checks them here
-# so the interrupt fires *before* execution — the safety layer is a
-# belt-and-suspenders that rejects if the interrupt is approved anyway.
-_DANGEROUS_COMMAND_RE = re.compile(
-    r"|".join(
-        [
-            r"\bsudo\b",
-            r"\bsu\b\s",
-            r"\bdoas\b",
-            r"\brm\s+-rf?\b",
-            r"\bmkfs\b",
-            r"\bdd\s+if=",
-            r"\bdd\s+of=/dev/",
-            r"\bshred\b",
-            r"\bchmod\s+-?R\b",
-            r"\bchown\s+-?R\b",
-            r"\bchgrp\s+-?R\b",
-            r"\bchmod\s+\d{3,4}\b.*\s+/",  # chmod against root paths
-            r"\b(apt|apt-get|brew|pip)\b.*\b(install|uninstall|remove)\b",
-            r"\bnpm\s+install\s+-g\b",
-            r"\b(fdisk|diskutil)\b",
-            r"\b(shutdown|reboot|halt)\b",
-            r"\bgit\s+push\s+(-f|--force)\b",
-            r"\b(curl|wget)\b.*\|\s*(sh|bash)",
-            r">\s*/(etc|bin|sbin|usr|System|Library)(/|$)",
-        ]
-    ),
-    re.IGNORECASE,
-)
 
 # System directories that are never inside a user workspace.
 _SYSTEM_PATH_PREFIXES = (
@@ -104,6 +75,48 @@ def _workspace_from_config(config: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _allowlist_from_config(config: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+    """Extract the loop-scoped tool-approval allowlist from configurable."""
+    if not config:
+        return None
+    configurable = config.get("configurable") or {}
+    if not isinstance(configurable, dict):
+        return None
+    allowlist = configurable.get("tool_approval_allowlist")
+    if isinstance(allowlist, list):
+        return allowlist
+    return None
+
+
+def _signature_approved(
+    tool_name: str,
+    args: dict[str, Any],
+    allowlist: list[dict[str, Any]] | None,
+) -> bool:
+    """True when the exact command/path signature is in the loop allowlist."""
+    if not allowlist:
+        return False
+    sig = signature_for(tool_name, args)
+    if sig is None:
+        return False
+    return any(
+        isinstance(rec, dict)
+        and str(rec.get("tool") or "") == tool_name
+        and str(rec.get("signature") or "") == sig
+        for rec in allowlist
+    )
+
+
+def _rule_approved(
+    command: str,
+    allowlist: list[dict[str, Any]] | None,
+) -> bool:
+    """True when a prior human approval overrode this command's safety rule family."""
+    if not allowlist or not command:
+        return False
+    return rule_approved(_dangerous_command_rule_id(command), allowlist)
+
+
 def _is_path_outside_workspace(path_str: str, workspace: str) -> bool:
     """True when `path_str` resolves outside the workspace root."""
     # Check for dangerous dotfiles by name against the raw path so symlinks
@@ -130,12 +143,8 @@ def _should_interrupt_path_tool(
     *,
     arg_keys: tuple[str, ...] = ("file_path", "path", "directory"),
 ) -> bool:
-    """Predicate for `edit_file` / `write_file` / `delete`.
-
-    Returns `True` (interrupt) when the target path is outside the
-    workspace or targets a dangerous dotfile/config. In-workspace
-    writes are safe and do not interrupt.
-    """
+    """Interrupt when the target path is outside the workspace or targets a
+    dangerous dotfile/config.  Already-approved exact paths don't re-interrupt."""
     args = req.tool_call.get("args") or {}
     if not isinstance(args, dict):
         return True
@@ -146,48 +155,51 @@ def _should_interrupt_path_tool(
         val = args.get(key)
         if isinstance(val, str) and val.strip():
             if _is_path_outside_workspace(val, workspace):
+                # Outside workspace → would interrupt, unless the human
+                # already approved this exact path signature this loop.
+                allowlist = _allowlist_from_config(req.runtime.config)
+                tool_name = str(req.tool_call.get("name") or "")
+                if _signature_approved(tool_name, args, allowlist):
+                    return False
                 return True
     return False
 
 
 def _should_interrupt_run_command(req: ToolCallRequest) -> bool:
-    """Predicate for `run_command`.
-
-    Returns `True` (interrupt) when the command matches a dangerous
-    pattern (privilege escalation, destructive ops, system package
-    installs, force-push, etc.) or writes to a system path. Safe routine
-    commands do not interrupt.
-    """
+    """Interrupt when the command matches a dangerous pattern.  Already-approved
+    commands (exact signature or prior rule-family override) don't re-interrupt."""
     args = req.tool_call.get("args") or {}
     if not isinstance(args, dict):
         return True
     command = str(args.get("command") or "")
     if not command.strip():
         return False
-    if _DANGEROUS_COMMAND_RE.search(command):
+    if DANGEROUS_COMMAND_RE.search(command):
+        allowlist = _allowlist_from_config(req.runtime.config)
+        # Exact-signature approval → execute silently (no re-interrupt).
+        if _signature_approved("run_command", args, allowlist):
+            return False
+        # Rule-level override → the human already approved this safety rule
+        # for a different command in this loop; don't re-interrupt.
+        if _rule_approved(command, allowlist):
+            return False
         return True
-    # Check for redirects to system paths (already covered by regex, but
-    # also catch explicit file_path args on run_command wrappers).
     return False
 
 
 def when_edit_file(req: ToolCallRequest) -> bool:
-    """Interrupt only on out-of-workspace or dangerous-path edits."""
     return _should_interrupt_path_tool(req)
 
 
 def when_write_file(req: ToolCallRequest) -> bool:
-    """Interrupt only on out-of-workspace or dangerous-path writes."""
     return _should_interrupt_path_tool(req)
 
 
 def when_delete(req: ToolCallRequest) -> bool:
-    """Interrupt only on out-of-workspace or dangerous-path deletes."""
     return _should_interrupt_path_tool(req, arg_keys=("path", "file_path", "directory"))
 
 
 def when_run_command(req: ToolCallRequest) -> bool:
-    """Interrupt only on dangerous command patterns."""
     return _should_interrupt_run_command(req)
 
 

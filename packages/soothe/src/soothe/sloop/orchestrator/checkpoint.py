@@ -128,27 +128,6 @@ def intake_only_invoke_config(
     return {"configurable": conf}
 
 
-def snapshot_has_resumable_interrupt(snapshot: Any) -> bool:
-    """True when `aget_state` still has a LangGraph interrupt to `Command(resume)`."""
-    interrupts = getattr(snapshot, "interrupts", None) or ()
-    if interrupts:
-        return True
-    tasks = getattr(snapshot, "tasks", None) or ()
-    for task in tasks:
-        task_interrupts = getattr(task, "interrupts", None) or ()
-        if task_interrupts:
-            return True
-    return False
-
-
-def snapshot_has_unanswered_pending(snapshot: Any) -> bool:
-    """True when graph values still have a pending clarification with no answer."""
-    values = getattr(snapshot, "values", {}) or {}
-    return bool(values.get("pending_clarification")) and not values.get(
-        "pending_clarification_answer"
-    )
-
-
 def core_agent_checkpointer(strange_loop: StrangeLoop) -> Any | None:
     """Return the LangGraph checkpointer wired on CoreAgent, if any.
 

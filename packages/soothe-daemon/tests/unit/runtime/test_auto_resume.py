@@ -342,22 +342,17 @@ def _make_daemon_with_checkpointer(checkpointer: object | None) -> SimpleNamespa
 
 @pytest.mark.asyncio
 async def test_peek_clarification_pending_returns_true_for_pending() -> None:
-    """A graph state with pending_clarification and no answer → True."""
-    ckpt = _FakeCheckpointTuple(
-        {"pending_clarification": {"q": "a"}, "pending_clarification_answer": None}
-    )
+    """relay_state with inbox and no answer → True."""
+    ckpt = _FakeCheckpointTuple({"relay_state": {"inbox": [{"request": {}}], "answer": None}})
     daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(ckpt))
     assert await peek_clarification_pending(daemon, "loop-1") is True
 
 
 @pytest.mark.asyncio
 async def test_peek_clarification_pending_returns_false_when_answered() -> None:
-    """A graph state with pending_clarification AND an answer → False (resolved)."""
+    """relay_state with inbox AND the answer → False (resolved)."""
     ckpt = _FakeCheckpointTuple(
-        {
-            "pending_clarification": {"q": "a"},
-            "pending_clarification_answer": {"answers": ["Approve"]},
-        }
+        {"relay_state": {"inbox": [{"request": {}}], "answer": {"answers": ["Approve"]}}}
     )
     daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(ckpt))
     assert await peek_clarification_pending(daemon, "loop-1") is False
@@ -365,8 +360,8 @@ async def test_peek_clarification_pending_returns_false_when_answered() -> None:
 
 @pytest.mark.asyncio
 async def test_peek_clarification_pending_returns_false_when_no_pending() -> None:
-    """A graph state without pending_clarification → False."""
-    ckpt = _FakeCheckpointTuple({"last_outcome": "continue"})
+    """relay_state without inbox → False."""
+    ckpt = _FakeCheckpointTuple({"relay_state": {}, "last_outcome": "continue"})
     daemon = _make_daemon_with_checkpointer(_FakeCheckpointer(ckpt))
     assert await peek_clarification_pending(daemon, "loop-1") is False
 

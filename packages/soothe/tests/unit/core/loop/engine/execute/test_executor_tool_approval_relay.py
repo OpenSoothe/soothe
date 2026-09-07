@@ -14,12 +14,12 @@ from typing import Any
 import pytest
 from langgraph.types import Interrupt
 
-from soothe.sloop.clarification.capture import ClarificationQueue
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import Executor
-from soothe.sloop.engine.execute.graph_interrupt import (
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.outbox import (
     build_auto_resume_payload,
     build_tool_approval_resume_payload,
     is_tool_approval_interrupt,
@@ -158,10 +158,9 @@ def test_detector_captures_tool_approval_interrupt() -> None:
     assert "edit_file" in q["header"]
     assert "/a.py" in q["header"]
     assert "approve" in q["header"].lower()
-    assert len(q["options"]) == 3
+    assert len(q["options"]) == 2
     labels = [opt["label"] for opt in q["options"]]
     assert "Approve" in labels
-    assert "Edit" in labels
     assert "Reject" in labels
 
 
@@ -230,7 +229,7 @@ async def test_tool_approval_captured_when_relay_active() -> None:
     """action_requests is captured into the relay (always-on; never auto-resumed)."""
     core = _StubCoreAgent()
     core.queue([], state_interrupts=(_tool_approval_interrupt(),))
-    capture = ClarificationQueue()
+    capture = RelayInbox()
     executor = _make_executor(
         core,
         clarification_detector=ClarificationDetector(),

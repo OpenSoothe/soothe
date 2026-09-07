@@ -1,4 +1,4 @@
-"""Tests for the await_clarification graph node (RFC-622)."""
+"""Tests for the await_clarification graph node."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from soothe.sloop.clarification.protocol import (
     LoopStateView,
     request_to_state,
 )
+from soothe.sloop.relay.relay import LoopRelay
+from soothe.sloop.relay.ticket import ResumeTicket, ticket_to_state
 from soothe.sloop.stations.sidecars.await_user import (
     node_await_clarification,
 )
@@ -47,6 +49,9 @@ class _StubCtx:
     ce_goal_id: str | None = None
     goal_record: Any = None
 
+    def __post_init__(self) -> None:
+        self.relay: LoopRelay = LoopRelay(loop_id="test-loop-123", emit=self.emit)
+
     @property
     def clarification_policy(self) -> Any:
         return self.policy
@@ -62,25 +67,54 @@ class _StubCtx:
         return self.resolve_parked
 
 
-def _pending_state() -> dict[str, Any]:
-    req = ClarificationRequest(
-        questions=("What aspect to refine?",),
-        origin_node="execute",
-        origin_interrupt_id="i1",
-        loop_state=LoopStateView(
-            goal_id="g",
-            goal_description="",
-            user_request="",
-            iteration=0,
-            intent_classification=None,
-            plan_summary=None,
-            recent_step_outputs=(),
-            workspace_summary=None,
-            active_skills=(),
-            active_mcp_servers=(),
-        ),
+def _loop_view() -> LoopStateView:
+    return LoopStateView(
+        goal_id="g",
+        goal_description="",
+        user_request="",
+        iteration=0,
+        intent_classification=None,
+        plan_summary=None,
+        recent_step_outputs=(),
+        workspace_summary=None,
+        active_skills=(),
+        active_mcp_servers=(),
     )
-    return {"pending_clarification": request_to_state(req)}
+
+
+def _pending_state(
+    *,
+    origin: str = "execute",
+    interrupt_id: str = "i1",
+    questions: tuple = ("What aspect to refine?",),
+    step_id: str | None = None,
+    thread_id: str | None = "t1",
+    plan_path: str | None = None,
+    plan_markdown: str | None = None,
+) -> dict[str, Any]:
+    """Build a relay_state-shaped state with one inbox entry."""
+    req = ClarificationRequest(
+        questions=questions,
+        origin_node=origin,  # type: ignore[arg-type]
+        origin_interrupt_id=interrupt_id,
+        loop_state=_loop_view(),
+    )
+    entry: dict[str, Any] = {
+        "request": request_to_state(req),
+        "resume_ticket": ticket_to_state(ResumeTicket(thread_id=thread_id, step_id=step_id)),
+        "step_id": step_id,
+    }
+    if plan_path:
+        entry["request"]["plan_path"] = plan_path
+    if plan_markdown:
+        entry["request"]["plan_markdown"] = plan_markdown
+    return {
+        "relay_state": {
+            "inbox": [entry],
+            "active_origin": origin,
+            "answer": None,
+        }
+    }
 
 
 class _InteractivePolicyStub:
@@ -114,9 +148,8 @@ async def test_success_writes_answer_and_clears_pending() -> None:
     # ``pending_clarification`` survives the answer write so the
     # originating node can pair the request (carrying ``origin_interrupt_id``)
     # with the answer on re-entry. The originating node clears both channels.
-    assert "pending_clarification" not in result
-    assert result["pending_clarification_answer"]["answers"] == ["auth flows"]
-    assert result["pending_clarification_answer"]["source"] == "human"
+    assert result["relay_state"]["answer"]["answers"] == ["auth flows"]
+    assert result["relay_state"]["answer"]["source"] == "human"
     names = [n for n, _ in ctx.emitted]
     # Short names — the runner dispatch wraps them into the
     # ``soothe.loop.clarification.*`` wire events before yielding.
@@ -168,8 +201,7 @@ async def test_deferred_parks_and_keeps_pending() -> None:
 
     assert result["last_outcome"] == "deferred"
     # Keep graph pending (do not clear); only clear the answer channel.
-    assert "pending_clarification" not in result
-    assert result["pending_clarification_answer"] is None
+    assert result["relay_state"].get("answer") is None
     assert len(ctx.parks) == 1
     assert ctx.parks[0][1] == "low confidence"
     deferred_payloads = [p for n, p in ctx.emitted if n == "clarification_deferred"]
@@ -183,7 +215,7 @@ async def test_answer_defer_true_parks() -> None:
     ctx = _StubCtx(policy=policy)
     result = await node_await_clarification(ctx, _pending_state())
     assert result["last_outcome"] == "deferred"
-    assert result["pending_clarification_answer"] is None
+    assert result["relay_state"].get("answer") is None
     assert len(ctx.parks) == 1
     assert any(n == "clarification_deferred" for n, _ in ctx.emitted)
 
@@ -229,7 +261,7 @@ async def test_interactive_pause_persists_ce_before_interrupt() -> None:
     result = await node_await_clarification(ctx, _pending_state())
 
     assert ce.saves == 1
-    assert result["pending_clarification_answer"] is not None
+    assert result["relay_state"]["answer"] is not None
 
 
 async def test_resume_turn_skips_pre_pause_ce_save() -> None:
@@ -256,7 +288,7 @@ async def test_resume_turn_skips_pre_pause_ce_save() -> None:
     result = await node_await_clarification(ctx, _pending_state())
 
     assert ce.saves == 0
-    assert result["pending_clarification_answer"] is not None
+    assert result["relay_state"]["answer"] is not None
 
 
 @pytest.mark.parametrize(
@@ -295,7 +327,7 @@ async def test_no_pending_clarification_is_noop() -> None:
         policy=_InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
     )
     result = await node_await_clarification(ctx, {})
-    assert result == {"pending_clarification": None}
+    assert result == {"relay_state": {}}
     assert ctx.emitted == []
 
 
@@ -305,8 +337,7 @@ async def test_missing_policy_defers() -> None:
     assert result["last_outcome"] == "deferred"
     assert len(ctx.parks) == 1
     assert ctx.parks[0][1] == "no clarification policy configured"
-    assert result["pending_clarification_answer"] is None
-    assert "pending_clarification" not in result
+    assert result["relay_state"].get("answer") is None
 
 
 async def test_malformed_pending_returns_fatal() -> None:
@@ -314,7 +345,15 @@ async def test_malformed_pending_returns_fatal() -> None:
         policy=_InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
     )
     result = await node_await_clarification(
-        ctx, {"pending_clarification": {"origin_node": "garbage"}}
+        ctx,
+        {
+            "relay_state": {
+                "inbox": [
+                    {"request": {"origin_node": "garbage", "questions": []}, "resume_ticket": {}}
+                ],
+                "answer": None,
+            }
+        },
     )
     assert result["last_outcome"] == "fatal"
 
@@ -341,25 +380,9 @@ async def test_plan_mode_review_emit_includes_plan_payload() -> None:
     from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
     from soothe.sloop.plans.plan_mode_review import _PLAN_MODE_REVIEW_QUESTIONS
 
-    req = ClarificationRequest(
-        questions=_PLAN_MODE_REVIEW_QUESTIONS,
-        origin_node=ORIGIN_PLAN_MODE_REVIEW,
-        origin_interrupt_id="plan-mode-review:abc",
-        loop_state=LoopStateView(
-            goal_id="g",
-            goal_description="",
-            user_request="",
-            iteration=0,
-            intent_classification=None,
-            plan_summary=None,
-            recent_step_outputs=(),
-            workspace_summary=None,
-            active_skills=(),
-            active_mcp_servers=(),
-        ),
+    ctx = _StubCtx(
+        policy=_InteractivePolicyStub(ClarificationAnswer(answers=("Approve", ""), source="human"))
     )
-    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Approve", ""), source="human"))
-    ctx = _StubCtx(policy=policy)
     ctx.scratch = type(  # type: ignore[attr-defined]
         "Scratch",
         (),
@@ -368,7 +391,14 @@ async def test_plan_mode_review_emit_includes_plan_payload() -> None:
             "plan_draft_markdown": "# Plan\n\nBody.\n",
         },
     )()
-    await node_await_clarification(ctx, {"pending_clarification": request_to_state(req)})
+    await node_await_clarification(
+        ctx,
+        _pending_state(
+            origin=ORIGIN_PLAN_MODE_REVIEW,
+            interrupt_id="plan-mode-review:abc",
+            questions=_PLAN_MODE_REVIEW_QUESTIONS,
+        ),
+    )
     requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
     assert requested[0]["plan_path"] == "/ws/.soothe/plans/demo.md"
@@ -384,34 +414,20 @@ def _plan_review_pending(
     from soothe.sloop.clarification.origins import ORIGIN_PLAN_MODE_REVIEW
     from soothe.sloop.plans.plan_mode_review import _PLAN_MODE_REVIEW_QUESTIONS
 
-    req = ClarificationRequest(
+    return _pending_state(
+        origin=ORIGIN_PLAN_MODE_REVIEW,
+        interrupt_id="plan-mode-review:abc",
         questions=_PLAN_MODE_REVIEW_QUESTIONS,
-        origin_node=ORIGIN_PLAN_MODE_REVIEW,
-        origin_interrupt_id="plan-mode-review:abc",
-        loop_state=LoopStateView(
-            goal_id="g",
-            goal_description="",
-            user_request="",
-            iteration=0,
-            intent_classification=None,
-            plan_summary=None,
-            recent_step_outputs=(),
-            workspace_summary=None,
-            active_skills=(),
-            active_mcp_servers=(),
-        ),
+        plan_path=plan_path,
+        plan_markdown=plan_markdown,
     )
-    pending = request_to_state(req)
-    pending["plan_path"] = plan_path
-    pending["plan_markdown"] = plan_markdown
-    return pending
 
 
 async def test_resume_turn_skips_clarification_requested_reemit() -> None:
     """A plan-review resume must not remount an empty widget."""
     policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Reject", ""), source="human"))
     ctx = _StubCtx(policy=policy, clarification_resume_answers=["Reject", ""])
-    await node_await_clarification(ctx, {"pending_clarification": _plan_review_pending()})
+    await node_await_clarification(ctx, _plan_review_pending())
     assert not any(n == "clarification_requested" for n, _ in ctx.emitted)
     assert any(n == "clarification_answered" for n, _ in ctx.emitted)
     # Sticky resume inputs must be consumed so a later park can re-announce.
@@ -440,12 +456,7 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
 
     await node_await_clarification(
         ctx,
-        {
-            "pending_clarification": _plan_review_pending(
-                plan_path="/ws/.soothe/plans/v1.md",
-                plan_markdown="# Plan v1\n",
-            )
-        },
+        _plan_review_pending(plan_path="/ws/.soothe/plans/v1.md", plan_markdown="# Plan v1\n"),
     )
     assert not any(n == "clarification_requested" for n, _ in ctx.emitted)
     assert ctx.clarification_resume_answers is None
@@ -465,12 +476,9 @@ async def test_second_park_after_resume_reemits_clarification_requested() -> Non
     )()
     await node_await_clarification(
         ctx,
-        {
-            "pending_clarification": _plan_review_pending(
-                plan_path="/ws/.soothe/plans/v2.md",
-                plan_markdown="# Plan v2\n\nUnified model.\n",
-            )
-        },
+        _plan_review_pending(
+            plan_path="/ws/.soothe/plans/v2.md", plan_markdown="# Plan v2\n\nUnified model.\n"
+        ),
     )
     requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
@@ -483,8 +491,7 @@ async def test_clarification_requested_forwards_step_id_from_resume_ticket() -> 
     """The paused step id is forwarded so the TUI can show 'awaiting answer'."""
     policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
     ctx = _StubCtx(policy=policy)
-    state = _pending_state()
-    state["resume_ticket"] = {"step_id": "step-01", "thread_id": "t1", "step_description": "d"}
+    state = _pending_state(step_id="step-01", thread_id="t1")
     await node_await_clarification(ctx, state)
     requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
@@ -495,7 +502,7 @@ async def test_clarification_requested_step_id_empty_without_resume_ticket() -> 
     """No resume_ticket → step_id is empty (non-step origins)."""
     policy = _InteractivePolicyStub(ClarificationAnswer(answers=("x",), source="human"))
     ctx = _StubCtx(policy=policy)
-    await node_await_clarification(ctx, _pending_state())
+    await node_await_clarification(ctx, _pending_state(step_id=None, thread_id=None))
     requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
     assert requested[0].get("step_id", "") == ""
@@ -533,7 +540,7 @@ async def test_first_turn_mark_failure_does_not_break_park() -> None:
     )
 
     result = await node_await_clarification(ctx, _pending_state())  # must not raise
-    assert result["pending_clarification_answer"] is not None
+    assert result["relay_state"]["answer"] is not None
 
 
 async def test_resume_turn_does_not_remark_goal_parked() -> None:
@@ -557,5 +564,5 @@ async def test_first_turn_without_goal_record_skips_mark_safely() -> None:
     ctx = _StubCtx(policy=policy)  # goal_record defaults to None
 
     result = await node_await_clarification(ctx, _pending_state())
-    assert result["pending_clarification_answer"] is not None
+    assert result["relay_state"]["answer"] is not None
     assert ctx.state_manager.mark_calls == []

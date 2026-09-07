@@ -210,3 +210,17 @@ def answer_from_state(d: Mapping[str, Any]) -> ClarificationAnswer:
         defer=bool(d.get("defer", False)),
         audit=dict(d.get("audit", {}) or {}),
     )
+
+
+def merge_answer_audit(answer: ClarificationAnswer, **extra: Any) -> ClarificationAnswer:
+    """Return a copy of `answer` with `extra` setdefault'ed into its audit."""
+    audit = dict(answer.audit or {})
+    for key, value in extra.items():
+        audit.setdefault(key, value)
+    return ClarificationAnswer(
+        answers=answer.answers,
+        source=answer.source,
+        confidence=answer.confidence,
+        defer=answer.defer,
+        audit=audit,
+    )

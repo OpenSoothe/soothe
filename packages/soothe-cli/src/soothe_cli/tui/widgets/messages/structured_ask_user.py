@@ -2,8 +2,8 @@
 
 Unifies the generic ``ask_user`` (execute origin) and the HITL plan-review /
 tool-approval origins into one widget. HITL origins differ only in that their
-options are system-prefilled (Approve / Reject / Refine or Edit), the ``Other``
-free-text row is suppressed, and the Refine/Edit option shows a comment input.
+options are system-prefilled (Approve / Reject / Refine), the ``Other``
+free-text row is suppressed, and the Refine option shows a comment input.
 """
 
 from __future__ import annotations
@@ -732,18 +732,24 @@ class StructuredAskUserWidget(Vertical):
                         markup=False,
                     )
         with Vertical(classes="saq-question-body"):
+            header_text = self._question_header(self._current_q)
+            question_text = self._question_question(self._current_q)
             yield Static(
-                self._question_header(self._current_q),
+                header_text,
                 classes="saq-question-title",
                 id="saq-qtitle",
                 markup=False,
             )
-            yield Static(
-                self._question_question(self._current_q),
-                classes="saq-description",
-                id="saq-desc",
-                markup=False,
-            )
+            # Suppress the description body when it duplicates the header
+            # (tool-approval QuestionSpecs set header == question) so the
+            # prompt text is not rendered twice.
+            if question_text and question_text != header_text:
+                yield Static(
+                    question_text,
+                    classes="saq-description",
+                    id="saq-desc",
+                    markup=False,
+                )
             with Vertical(classes="saq-option-list"):
                 options = self._question_options(self._current_q)
                 # Guard: if options are missing/malformed, fall back to a
@@ -803,13 +809,16 @@ class StructuredAskUserWidget(Vertical):
                             markup=False,
                         )
                     # Long description directly below the label (muted).
+                    # Skip the row entirely when empty — a blank Static still
+                    # occupies a line, producing gaps between options.
                     desc = opt.get("description", "") if isinstance(opt, dict) else ""
-                    yield Static(
-                        f"     {desc}",
-                        id=f"saq-optdesc-{j}",
-                        classes="saq-option-desc",
-                        markup=False,
-                    )
+                    if desc.strip():
+                        yield Static(
+                            f"     {desc}",
+                            id=f"saq-optdesc-{j}",
+                            classes="saq-option-desc",
+                            markup=False,
+                        )
                 # "Other" custom row (implicit — auto-added, always last).
                 # Suppressed for HITL origins (allow_custom=False).
                 if self._allow_custom:
@@ -1128,8 +1137,11 @@ class StructuredAskUserWidget(Vertical):
                     opt_desc = (
                         options[j].get("description", "") if isinstance(options[j], dict) else ""
                     )
-                    desc_w.update(f"     {opt_desc}")
-                    desc_w.remove_class("is-hidden")
+                    if opt_desc.strip():
+                        desc_w.update(f"     {opt_desc}")
+                        desc_w.remove_class("is-hidden")
+                    else:
+                        desc_w.add_class("is-hidden")
             else:
                 opt_w.update("")
                 opt_w.add_class("is-hidden")

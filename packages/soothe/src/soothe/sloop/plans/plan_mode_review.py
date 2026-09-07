@@ -146,8 +146,11 @@ def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
     Persist `plan_path` / `plan_markdown` / `plan_review_comments` on the
     pending channel so a clarification-resume turn (fresh scratch) can still
     hydrate the plan body and any pending refinement comments after a worker
-    crash/restart.
+    crash/restart. Also projects into `relay_state` when a relay is wired so
+    the relay owns the write path.
     """
+    from soothe.sloop.relay.ticket import ResumeTicket
+
     req = ClarificationRequest(
         questions=_PLAN_MODE_REVIEW_QUESTIONS,
         origin_node=ORIGIN_PLAN_MODE_REVIEW,
@@ -164,39 +167,28 @@ def build_plan_mode_review_pending(ctx: LoopRuntimeContext) -> dict[str, Any]:
         pending["plan_markdown"] = markdown
     if comments:
         pending["plan_review_comments"] = comments
-    return {
-        "pending_clarification": pending,
-        "last_clarification_origin": ORIGIN_PLAN_MODE_REVIEW,
-        "pending_clarification_answer": None,
-    }
+    relay = getattr(ctx, "relay", None)
+    if relay is None:
+        logger.warning("[PlanModeReview] no relay on context; cannot project plan review")
+        return {}
+    relay.inbox.enqueue(req, resume_ticket=ResumeTicket(), step_id=None)
+    # project_to_channels serializes the inbox head + the current scratch
+    # (plan_draft_path/markdown/comments) into relay_state.
+    return relay.project_to_channels(scratch=ctx.scratch, mark_parked_head=True)
 
 
 def hydrate_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any]) -> None:
-    """Restore plan draft and refinement comments onto scratch after a clarification-resume turn."""
-    pending = state.get("pending_clarification")
-    if not isinstance(pending, dict):
-        return
-    path = str(pending.get("plan_path") or "").strip()
-    markdown = str(pending.get("plan_markdown") or "").strip()
-    comments = str(pending.get("plan_review_comments") or "").strip()
-    if path and not (getattr(ctx.scratch, "plan_draft_path", None) or "").strip():
-        ctx.scratch.plan_draft_path = path
-    if markdown and not (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip():
-        ctx.scratch.plan_draft_markdown = markdown
-    if not (getattr(ctx.scratch, "plan_draft_markdown", None) or "").strip() and path:
-        try:
-            from pathlib import Path
+    """Restore plan draft and refinement comments onto scratch after a clarification-resume turn.
 
-            text = Path(path).read_text(encoding="utf-8")
-        except OSError:
-            logger.debug("[PlanModeReview] could not reload plan artifact %s", path, exc_info=True)
-        else:
-            ctx.scratch.plan_draft_markdown = text
-            ctx.scratch.plan_draft_path = path
-    # Restore refinement comments so _refine_plan can re-run after a worker
-    # crash/restart if the refinement synthesis was interrupted mid-flight.
-    if comments and not (getattr(ctx.scratch, "plan_review_comments", None) or "").strip():
-        ctx.scratch.plan_review_comments = comments
+    The relay owns scratch projection; this delegates to
+    `relay.hydrate_from_channels` which reads the `relay_state` scratch
+    sub-dict and falls back to reading the plan artifact from disk when the
+    markdown body is missing.
+    """
+    relay = getattr(ctx, "relay", None)
+    relay_state = state.get("relay_state")
+    if relay is not None and isinstance(relay_state, dict):
+        relay.hydrate_from_channels(relay_state, scratch=ctx.scratch)
 
 
 def _record_plan_completion_ledger(
@@ -301,14 +293,14 @@ def handle_plan_mode_review_answer(
     from soothe.sloop.clarification.protocol import answer_from_state
 
     hydrate_scratch_from_pending(ctx, state)
-    raw_answer = state.get("pending_clarification_answer")
+    relay_state = state.get("relay_state") or {}
+    raw_answer = relay_state.get("answer") if isinstance(relay_state, dict) else None
     try:
         answer = answer_from_state(raw_answer or {})
     except ValueError:
         logger.exception("[PlanModeReview] malformed plan-mode review answer")
         return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
+            "relay_state": {**relay_state, "answer": None},
             "last_outcome": "fatal",
         }
 
@@ -365,9 +357,7 @@ def handle_plan_mode_review_answer(
         _record_plan_action_ledger(ctx, "Plan approved by operator.")
         logger.info("[PlanModeReview] Plan approved; follow-on exec goal enqueues on finalize")
         return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_clarification_origin": None,
+            "relay_state": {**relay_state, "answer": None, "inbox": []},
             "intent_route": None,
             "plan_approved_follow_on": True,
         }
@@ -382,9 +372,7 @@ def handle_plan_mode_review_answer(
         ctx.scratch.plan_rejected = True
         logger.info("[PlanModeReview] Plan rejected; terminating current goal without report")
         return {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-            "last_clarification_origin": None,
+            "relay_state": {**relay_state, "answer": None, "inbox": []},
             "intent_route": None,
             "plan_rejected_terminal": True,
         }
@@ -465,7 +453,8 @@ async def node_plan_review(ctx: LoopRuntimeContext, state: dict[str, Any]) -> di
     comments + prior plan) so the user sees a *revised* plan, not the same draft.
     """
     # If this is a clarification-resume turn, handle the answer first.
-    if state.get("pending_clarification_answer"):
+    _relay_state = state.get("relay_state") or {}
+    if isinstance(_relay_state, dict) and _relay_state.get("answer"):
         out = handle_plan_mode_review_answer(ctx, state)
         # Refine with comments: re-synthesize the plan with the user's
         # feedback before re-emitting the review. ``handle_plan_mode_review_answer``

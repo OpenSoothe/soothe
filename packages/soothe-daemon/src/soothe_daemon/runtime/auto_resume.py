@@ -160,10 +160,9 @@ async def peek_strange_loop_checkpoint(daemon: Any, loop_id: str) -> Any | None:
 async def peek_clarification_pending(daemon: Any, loop_id: str) -> bool | None:
     """Best-effort probe: does this loop's graph state have a pending clarification?
 
-    Loads the last LangGraph checkpoint tuple for the loop's thread and checks
-    the channel values for `pending_clarification` (without a matching
-    `pending_clarification_answer`). Returns `None` when the checkpointer
-    or checkpoint tuple is unavailable.
+    Reads the ``relay_state`` channel from the last LangGraph checkpoint:
+    inbox non-empty and answer slot ``None``.  Returns ``None`` when the
+    checkpointer or checkpoint tuple is unavailable.
     """
     runner = getattr(daemon, "_runner", None)
     if runner is None:
@@ -171,14 +170,10 @@ async def peek_clarification_pending(daemon: Any, loop_id: str) -> bool | None:
     checkpointer = getattr(runner, "_checkpointer", None)
     if checkpointer is None:
         return None
-    # Determine thread_id: the loop's thread_id is the same as loop_id
-    # (1:1 mapping in StrangeLoop — see checkpoint.py StrangeLoopCheckpoint).
     config = {"configurable": {"thread_id": str(loop_id)}}
     try:
-        # ``aget_tuple`` is async on AsyncSqliteSaver / AsyncPostgresSaver.
         get_tuple = getattr(checkpointer, "aget_tuple", None)
         if get_tuple is None:
-            # Sync checkpointer — wrap the sync call.
             get_tuple = getattr(checkpointer, "get_tuple", None)
             if get_tuple is None:
                 return None
@@ -196,7 +191,6 @@ async def peek_clarification_pending(daemon: Any, loop_id: str) -> bool | None:
         return None
     if tup is None:
         return None
-    # Channel values are a dict; pending_clarification is a graph state key.
     values = getattr(tup, "checkpoint", None)
     if values is None:
         return None
@@ -207,9 +201,11 @@ async def peek_clarification_pending(daemon: Any, loop_id: str) -> bool | None:
     )
     if not isinstance(channel_values, dict):
         return None
-    pending = channel_values.get("pending_clarification")
-    answered = channel_values.get("pending_clarification_answer")
-    return bool(pending) and not answered
+    relay_state = channel_values.get("relay_state")
+    if not isinstance(relay_state, dict):
+        return False
+    inbox = relay_state.get("inbox")
+    return bool(inbox) and relay_state.get("answer") is None
 
 
 def _loop_has_active_runner(daemon: Any, loop_id: str) -> bool:

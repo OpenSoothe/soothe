@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Final, Literal, TypedDict
 
-from soothe.sloop.clarification.capture import (
-    ResumeTicket,  # noqa: F401 — resolved by get_type_hints() at runtime
-)
-
 # --- Preprocess ---
 INTAKE: Final = "intake"
 ENTER_LOOP: Final = "enter_loop"
@@ -72,30 +68,21 @@ class LoopGraphState(TypedDict, total=False):
     reconcile_route: _ReconcileRoute | None
     root_eval_route: _RootEvalRoute | None
     intake_label: str | None  # IntakeLabel at runtime
-    pending_clarification: dict[str, Any] | None
-    pending_clarification_answer: dict[str, Any] | None
-    last_clarification_origin: str | None  # ClarificationOrigin at runtime
+    # IG-775: single typed projection target for the LoopRelay bridge.
+    # Holds the serialized inbox (FIFO of captured clarifications + resume
+    # tickets), the active origin, the pending answer slot, the serializable
+    # subset of ``LoopPhaseScratch`` (plan_result/decision/plan_draft_*/etc.),
+    # and an append-only audit log. Replaces the six former ad-hoc channels
+    # (pending_clarification, pending_clarification_answer,
+    # last_clarification_origin, clarification_queue,
+    # clarification_resume_tickets, resume_ticket) so the relay is the single
+    # reentrancy boundary (Rule 15).
+    relay_state: dict[str, Any] | None
     # Loop-scoped tool-approval allowlist. A human approval appends the
     # action signature; later matches auto-approve at the ``allowlist`` stage
     # so the approved call runs and retries are not re-prompted. Survives
     # AWAIT_USER and worker restarts via the checkpointer.
     tool_approval_allowlist: list[dict[str, Any]] | None
-    # FIFO queue of captured clarifications. Every interrupt from every step
-    # enters this list; the head is resolved one at a time. After the head is
-    # answered, it is popped and the next entry becomes the head.
-    # ``pending_clarification`` mirrors the head.
-    clarification_queue: list[dict[str, Any]] | None
-    # Resume tickets keyed by ``origin_interrupt_id`` so the resume path
-    # finds the CoreAgent thread_id for the step that issued the head entry.
-    clarification_resume_tickets: dict[str, dict[str, Any]] | None
-    # Interrupt-resume identity (thread + step) for an ask_user /
-    # tool_approval interrupt. Carried on a single channel (consolidates the
-    # former three separate scalar fields). Read
-    # by the resume path to re-enter the CoreAgent on the same thread
-    # (Command(resume=...)) and re-emit step_started with the original step
-    # identity+title the TUI already has a card for. Survives the AWAIT_USER
-    # round-trip via graph checkpoint.
-    resume_ticket: ResumeTicket | None
     after_record_route: Literal["finalize", "goal_completion", ""] | None
     interaction_mode: str | None  # "agent" | "ask" | "plan" | "bypass" — set by enter_loop
     # Plan-mode approve (Bug #3 fix): set True by ``handle_plan_mode_review_answer``

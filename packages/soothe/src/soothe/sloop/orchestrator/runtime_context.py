@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.sloop.clarification.protocol import ClarificationPolicy
+    from soothe.sloop.relay.relay import LoopRelay
     from soothe.sloop.strange_loop import StrangeLoop
     from soothe.utils.observability.langfuse import GoalLoopTrace
 
@@ -70,6 +71,11 @@ class LoopRuntimeContext:
     interaction_mode: str | None = None
     scratch: LoopPhaseScratch = field(default_factory=LoopPhaseScratch)
     clarification_policy: ClarificationPolicy | None = None
+    # IG-775: LoopRelay bridge between StrangeLoop and CoreAgent graphs. Owns
+    # the interrupt → park → resume lifecycle. Constructed per goal run in
+    # ``strange_loop.py`` and hydrated from the ``relay_state`` graph channel
+    # at each node entry (``relay.hydrate_from_channels``).
+    relay: LoopRelay | None = None
     # Next invoke resumes await_user via Command(resume=...); cleared after consume.
     clarification_resume_text: str | None = None
     clarification_resume_answers: list[str] | None = None

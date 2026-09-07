@@ -203,3 +203,106 @@ async def test_interrupt_resume_uses_config_dispatch_idle(
         await anext(stream)
 
     assert captured["idle_timeout"] == 120
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_suppresses_wire_for_pre_streamed_ai_message() -> None:
+    """On clarification resume the pre-interrupt AIMessage is re-streamed by
+    the HITL middleware.  Its wire events must be suppressed so the tool call
+    is not rendered twice in the TUI."""
+
+    from langchain_core.messages import AIMessage
+
+    ai_msg = AIMessage(
+        content="",
+        id="ai-pre-interrupt",
+        tool_calls=[
+            {
+                "name": "run_command",
+                "args": {"command": "rm -rf build/"},
+                "id": "tc-1",
+                "type": "tool_call",
+            }
+        ],
+    )
+    # ``messages`` stream-mode chunk: (namespace, mode, (message, metadata))
+    msg_chunk: StreamEvent = ((), "messages", (ai_msg, {}))
+
+    async def fake_stream() -> AsyncIterator[StreamEvent]:
+        yield msg_chunk
+
+    executor = Executor(MagicMock())
+    wire_events = [
+        row
+        async for row in executor._stream_and_collect(
+            fake_stream(),
+            step_id="S1",
+            pre_streamed_message_ids=frozenset({"ai-pre-interrupt"}),
+        )
+        if row.event is not None
+    ]
+
+    assert wire_events == []
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_emits_wire_when_not_pre_streamed() -> None:
+    """A fresh AIMessage (not in the checkpoint set) still emits wire events."""
+
+    from langchain_core.messages import AIMessage
+
+    ai_msg = AIMessage(
+        content="",
+        id="ai-fresh",
+        tool_calls=[
+            {"name": "run_command", "args": {"command": "ls"}, "id": "tc-2", "type": "tool_call"}
+        ],
+    )
+    msg_chunk: StreamEvent = ((), "messages", (ai_msg, {}))
+
+    async def fake_stream() -> AsyncIterator[StreamEvent]:
+        yield msg_chunk
+
+    executor = Executor(MagicMock())
+    wire_events = [
+        row
+        async for row in executor._stream_and_collect(
+            fake_stream(),
+            step_id="S1",
+            pre_streamed_message_ids=frozenset({"some-other-id"}),
+        )
+        if row.event is not None
+    ]
+
+    assert len(wire_events) > 0
+
+
+@pytest.mark.asyncio
+async def test_stream_and_collect_no_suppression_without_checkpoint_ids() -> None:
+    """When pre_streamed_message_ids is None (fresh step), no suppression."""
+
+    from langchain_core.messages import AIMessage
+
+    ai_msg = AIMessage(
+        content="",
+        id="ai-fresh",
+        tool_calls=[
+            {"name": "run_command", "args": {"command": "ls"}, "id": "tc-3", "type": "tool_call"}
+        ],
+    )
+    msg_chunk: StreamEvent = ((), "messages", (ai_msg, {}))
+
+    async def fake_stream() -> AsyncIterator[StreamEvent]:
+        yield msg_chunk
+
+    executor = Executor(MagicMock())
+    wire_events = [
+        row
+        async for row in executor._stream_and_collect(
+            fake_stream(),
+            step_id="S1",
+        )
+        if row.event is not None
+    ]
+
+    assert len(wire_events) > 0

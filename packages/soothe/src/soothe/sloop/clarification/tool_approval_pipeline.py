@@ -26,13 +26,7 @@ _PATH_TOOLS = frozenset({"edit_file", "write_file", "delete"})
 
 
 def signature_for(tool_name: str, args: Mapping[str, Any]) -> str | None:
-    """Stable per-action signature, or `None` if not allowlistable.
-
-    Field extraction only — `command` for shell tools, `file_path`/`path`
-    for path tools. No content normalization, so intent-variants are
-    distinct; the override runs the approved exact call, so variants are not
-    emitted in the first place.
-    """
+    """Stable per-action signature (``command`` or ``file_path``), or ``None``."""
     if tool_name in _COMMAND_TOOLS:
         return str(args.get("command") or "").strip() or None
     if tool_name in _PATH_TOOLS:
@@ -48,13 +42,25 @@ def approval_record(tool_name: str, args: Mapping[str, Any]) -> dict[str, str] |
     return {"tool": tool_name, "signature": sig}
 
 
+def rule_approved(
+    rule_id: str | None,
+    allowlist: list[Mapping[str, Any]],
+) -> bool:
+    """True when the human already approved this rule's family this loop."""
+    if not rule_id:
+        return False
+    from soothe_nano.security.operation_guard import rule_family
+
+    approved = rule_family(rule_id)
+    for rec in allowlist:
+        if isinstance(rec, Mapping) and str(rec.get("rule") or "") in approved:
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class ApprovalResult:
-    """Decision returned by the pipeline for a batch of action requests.
-
-    ``escalate`` means a banned safety rule blocked the action — a human
-    should decide whether to allow it or steer the model to an alternative.
-    """
+    """Decision returned by the pipeline for a batch of action requests."""
 
     decision: ApprovalDecision
     stage: PipelineStage
@@ -63,12 +69,10 @@ class ApprovalResult:
 
 
 class ToolApprovalPipeline:
-    """Deny-list-first tool-approval evaluator.
+    """Deny-list-first evaluator: deny → allowlist → safety → default-approve.
 
-    Stages run cheapest-first: deny rules → allowlist → safety checks →
-    default-approve. The first deciding stage wins. Deny rules are absolute
-    and never overridable; the allowlist only overrides safety-escalated
-    actions a human approved earlier in the same loop.
+    First deciding stage wins.  Deny rules are absolute; the allowlist
+    overrides safety-escalated actions a human approved earlier in the loop.
     """
 
     def __init__(
@@ -92,24 +96,16 @@ class ToolApprovalPipeline:
         bypass_security: bool | None = None,
         allowlist: list[Mapping[str, Any]] | None = None,
     ) -> ApprovalResult | None:
-        """Run deny → allowlist → safety stages. Returns `None` = defer.
-
-        Deny-list-first: an action not matched by a deny rule is checked
-        against the `allowlist` (prior human approval in this loop), then the
-        safety layer. The allowlist overrides safety escalation only, never a
-        deny rule — so compound commands like `git diff ... | tail -5` are
-        never falsely deferred.
+        """Run deny → allowlist → safety stages.  Returns ``None`` to defer.
 
         Args:
             action_requests: Batched HITL action requests.
-            workspace_root: Per-request workspace root (`<workspace>` token).
-            auto_approve: When `True`, actions passing deny/safety are
-                auto-approved. When `False` (manual), they defer to the human.
+            workspace_root: Per-request workspace root (``<workspace>`` token).
+            auto_approve: When True, passing actions are auto-approved.
+                When False (manual), they defer to the human.
             bypass_security: Skip all checks and approve.
-            allowlist: Loop-scoped `{"tool", "signature"}` records from prior
-                human approvals. A match approves at the `allowlist` stage and
-                skips safety, so the approved call runs and retries are not
-                re-prompted.
+            allowlist: Loop-scoped ``{"tool", "signature"}`` records from
+                prior human approvals.
         """
         try:
             if not action_requests:
@@ -135,7 +131,7 @@ class ToolApprovalPipeline:
                 if not isinstance(args, Mapping):
                     args = {}
 
-                # Stage 1: deny rules — absolute, never overridable.
+                # Stage 1: deny rules — absolute.
                 if self._matches_any_rule(name, args, self._deny_rules, workspace_root):
                     result = ApprovalResult(
                         "reject",
@@ -147,8 +143,7 @@ class ToolApprovalPipeline:
                     )
                     return result
 
-                # Stage 2: loop allowlist — human pre-approved this exact
-                # action; skip its safety check so the call actually runs.
+                # Stage 2: loop allowlist — prior human approval.
                 if allowlist and self._matches_allowlist(name, args, allowlist):
                     allowlisted = True
                     continue
@@ -157,7 +152,14 @@ class ToolApprovalPipeline:
                 safety_result = self._check_safety(name, args, workspace_root)
                 if safety_result is not None:
                     reason, rule_id = safety_result
-                    # Banned safety rule — escalate to a human.
+                    if allowlist and rule_approved(rule_id, allowlist):
+                        allowlisted = True
+                        logger.info(
+                            "[%s] safety rule=%s overridden by prior human approval",
+                            "tool_approval",
+                            rule_id,
+                        )
+                        continue
                     result = ApprovalResult(
                         "escalate",
                         "safety_check",
@@ -173,10 +175,7 @@ class ToolApprovalPipeline:
                     )
                     return result
 
-            # All actions passed deny + safety.
             if allowlisted:
-                # A human already approved at least one action this loop.
-                # the batch regardless of mode — the human already decided.
                 result = ApprovalResult(
                     "approve",
                     "allowlist",
@@ -222,10 +221,7 @@ class ToolApprovalPipeline:
         args: Mapping[str, Any],
         workspace_root: str | None,
     ) -> tuple[str, str | None] | None:
-        """Run safety checks via nano's OperationSecurity.
-
-        Returns ``(reason, rule_id)`` if denied, else ``None``.
-        """
+        """Run safety checks via nano's OperationSecurity.  Returns ``(reason, rule_id)`` if denied."""
         from soothe_nano.security.operation_guard import (
             WorkspaceToolOperationSecurity,
             build_operation_security_request,
@@ -253,11 +249,7 @@ class ToolApprovalPipeline:
         rules: list,
         workspace_root: str | None,
     ) -> bool:
-        """Check if a tool action matches any rule in the list.
-
-        Selects the matcher function once based on `tool_name` instead of
-        re-dispatching inside the loop.
-        """
+        """Check if a tool action matches any rule in the list."""
         if tool_name == "run_command":
             val = str(args.get("command") or "")
             for rule in rules:
@@ -283,5 +275,6 @@ __all__ = [
     "ApprovalResult",
     "ToolApprovalPipeline",
     "approval_record",
+    "rule_approved",
     "signature_for",
 ]

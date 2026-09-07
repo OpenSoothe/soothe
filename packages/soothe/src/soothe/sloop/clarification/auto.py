@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable, Collection
-from typing import TYPE_CHECKING
 
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
@@ -13,14 +12,12 @@ from soothe.sloop.clarification.protocol import (
     ClarificationPolicy,
     ClarificationRequest,
     DeferKind,
+    merge_answer_audit,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import (
     ToolApprovalPipeline,
 )
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -44,23 +41,9 @@ _RETRY_SENTINEL = "(retry)"
 class AutoClarificationPolicy:
     """Delegate clarifications to veritas; fall back on any failure.
 
-    Two fallback paths depending on whether a human is attached:
-
-    1. **TUI (interactive_fallback wired)**: When
-       `degrade_to_manual_on_failure` is True (default), *all* veritas
-       failure kinds route to the interactive relay (auto→manual upgrade)
-       instead of hard-defering. The user sees an ask widget and can answer
-       manually.
-
-    2. **Autopilot (no interactive_fallback)**: When
-       `autopilot_retry_on_fail` is True (default), veritas failures return
-       a synthetic `ClarificationAnswer(source="retry")` carrying a
-       `"(retry)"` sentinel. The execute node feeds this back to the
-       CoreAgent as the tool result, prompting the LLM to try a different
-       action instead of parking the goal indefinitely.
-
-    Origins listed in `force_manual_origins` skip veritas entirely and use
-    the interactive relay (or defer when no human is attached).
+    TUI fallback: routes to the interactive relay (auto→manual upgrade).
+    Autopilot fallback: returns a synthetic retry answer prompting the LLM
+    to try a different action.
     """
 
     def __init__(
@@ -98,6 +81,10 @@ class AutoClarificationPolicy:
     def force_manual_origins(self) -> frozenset[str]:
         return self._force_manual_origins
 
+    @property
+    def interactive_fallback(self) -> ClarificationPolicy | None:
+        return self._interactive_fallback
+
     def requires_manual(self, origin_node: str) -> bool:
         """True when this origin must not be auto-answered by veritas."""
         return origin_node in self._force_manual_origins
@@ -120,6 +107,11 @@ class AutoClarificationPolicy:
         ``escalate`` (banned safety rule) routes to the human relay when one
         is attached; under autopilot it degrades to an instructive reject.
         """
+        # Resume replay: the answer is in flight; re-evaluating would
+        # re-escalate before node_execute records the allowlist override.
+        if request.metadata.get("resume_turn") and self._interactive_fallback is not None:
+            return await self._delegate_to_fallback(request, announce=False)
+
         action_requests = request.metadata.get("action_requests", [])
         result = self._tool_approval_pipeline.evaluate(
             action_requests,
@@ -142,7 +134,7 @@ class AutoClarificationPolicy:
                         "routing to human relay",
                         result.rule_id,
                     )
-                    return await self._delegate_to_fallback(request)
+                    return await self._delegate_to_fallback(request, rule_id=result.rule_id)
                 # Autopilot — degrade to an instructive reject.
                 logger.info(
                     "[clarification] tool_approval safety escalate rule=%s; "
@@ -277,19 +269,29 @@ class AutoClarificationPolicy:
             audit={"reason": "veritas failed; autopilot retry"},
         )
 
-    async def _delegate_to_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
+    async def _delegate_to_fallback(
+        self,
+        request: ClarificationRequest,
+        *,
+        rule_id: str | None = None,
+        announce: bool = True,
+    ) -> ClarificationAnswer:
         """Route to the interactive relay with auto→manual re-announce.
 
-        Uses `answer_as_manual_fallback` when available so the TUI
-        re-announces with `mode=manual` before pausing (the earlier
-        `await_clarification` emit used `mode=auto`). Falls back to
-        `answer()` for bare policies without the upgrade method.
+        Prefers `answer_as_manual_fallback` (mode=manual emit) over bare
+        `answer()`. `rule_id` stamps `audit["escalated_rule_id"]` so
+        node_execute can record a rule-level allowlist override.
+        `announce=False` for resume replays, where the card already exists.
         """
         fallback = self._interactive_fallback
         upgrade = getattr(fallback, "answer_as_manual_fallback", None)
         if callable(upgrade):
-            return await upgrade(request)
-        return await fallback.answer(request)
+            answer = await upgrade(request, announce=announce)
+        else:
+            answer = await fallback.answer(request)
+        if rule_id:
+            return merge_answer_audit(answer, escalated_rule_id=rule_id)
+        return answer
 
     def _classify(self, result: VeritasAnswerSchema) -> DeferKind | None:
         """Resolve a veritas result to a :data:`DeferKind`, or `None` to accept."""

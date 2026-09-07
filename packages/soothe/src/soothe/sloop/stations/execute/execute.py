@@ -7,23 +7,25 @@ from datetime import UTC, datetime
 from typing import Any
 
 from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
-from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import (
     ClarificationRequest,
     LoopStateView,
     answer_from_state,
+    answer_to_state,
     request_from_state,
     request_to_state,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import approval_record
 from soothe.sloop.engine.execute.context_window_manager import ContextWindowManager
 from soothe.sloop.engine.execute.executor import Executor, StepWaveQueued, StepWaveStart
-from soothe.sloop.engine.execute.graph_interrupt import build_clarification_resume_payload
 from soothe.sloop.engine.execute.step_wave_types import StepCompletionReport
 from soothe.sloop.orchestrator.node_base import _maybe_await
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.outbox import build_clarification_resume_payload
+from soothe.sloop.relay.ticket import ResumeTicket
 from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -43,29 +45,6 @@ PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
 `kind="ask_user"` step rather than a real CoreAgent `ask_user` interrupt.
 On answer arrival, `node_execute` synthesizes a `StepExecutionRecord` for the matching
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
-
-
-def _coerce_resume_ticket(raw: Any) -> ResumeTicket | None:
-    """Normalize a `resume_ticket` value read from the graph-state dict.
-
-    LangGraph passes nodes the raw checkpoint dict, not a reconstructed
-    `LoopState`. A `ResumeTicket` (plain dataclass) stored on the graph
-    channel therefore comes back as a plain `dict` after the checkpoint
-    round-trip. Attribute access (`.thread_id` etc.) on the dict raises
-    `AttributeError`; this helper coerces it back to a `ResumeTicket`
-    so the resume path can use attribute access uniformly. `None` and
-    already-typed values pass through unchanged.
-    """
-    if raw is None or isinstance(raw, ResumeTicket):
-        return raw
-    if isinstance(raw, dict):
-        return ResumeTicket(
-            thread_id=raw.get("thread_id"),
-            step_id=raw.get("step_id"),
-            step_description=raw.get("step_description"),
-            prior_duration_ms=int(raw.get("prior_duration_ms") or 0),
-        )
-    return None
 
 
 def _build_loop_state_view(
@@ -363,6 +342,18 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     decision = ctx.scratch.decision
     plan_result = ctx.scratch.plan_result
 
+    # Hydrate the relay from the relay_state channel so a fresh ainvoke
+    # reconstructs the inbox + scratch (decision/plan_result/resume_ticket)
+    # from the checkpoint before the resume path reads them.
+    relay = getattr(ctx, "relay", None)
+    relay_state_in = state_dict.get("relay_state")
+    if relay is not None and isinstance(relay_state_in, dict):
+        relay.hydrate_from_channels(relay_state_in, scratch=ctx.scratch)
+        if ctx.scratch.decision is not None and decision is None:
+            decision = ctx.scratch.decision
+        if ctx.scratch.plan_result is not None and plan_result is None:
+            plan_result = ctx.scratch.plan_result
+
     ready_n = len(decision.steps) if decision is not None else 0
     logger.info(
         "[execute] start loop_id=%s iteration=%s ready_steps=%d",
@@ -384,8 +375,17 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     # gate keeps a non-approving turn from wiping the persisted channel.
     current_allowlist: list[dict[str, Any]] = list(state_dict.get("tool_approval_allowlist") or [])
     allowlist_dirty = False
-    pending_answer_state = state_dict.get("pending_clarification_answer")
-    pending_request_state = state_dict.get("pending_clarification")
+    pending_answer_state: dict[str, Any] | None = None
+    pending_request_state: dict[str, Any] | None = None
+    consumed_ticket: ResumeTicket | None = None
+    # The relay owns the answer slot; consume it (pops the head + reads the
+    # answer projected by await_user).
+    if relay is not None and isinstance(relay_state_in, dict):
+        consumed = relay.consume_answer(relay_state_in)
+        if consumed is not None:
+            req, ans, consumed_ticket = consumed
+            pending_request_state = request_to_state(req)
+            pending_answer_state = answer_to_state(ans)
     if pending_answer_state and pending_request_state:
         try:
             ans = answer_from_state(pending_answer_state)
@@ -435,17 +435,27 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                                     "tool=%s for tool_approval approval",
                                     rec["tool"],
                                 )
+                    # Record a rule-level override when the human approved a
+                    # safety-escalated action so the same rule does not
+                    # re-escalate for a different command in this loop.
+                    escalated_rule = (
+                        ans.audit.get("escalated_rule_id") if isinstance(ans.audit, dict) else None
+                    )
+                    if escalated_rule:
+                        rule_rec = {"rule": escalated_rule}
+                        if rule_rec not in current_allowlist:
+                            current_allowlist.append(rule_rec)
+                            allowlist_dirty = True
+                            logger.info(
+                                "[execute] recorded loop allowlist rule override "
+                                "rule=%s for tool_approval approval",
+                                escalated_rule,
+                            )
                 if origin_node != ORIGIN_TOOL_APPROVAL:
                     _append_ask_user_loop_messages(
                         state,
-                        step_id=(
-                            (
-                                _coerce_resume_ticket(state_dict.get("resume_ticket")).step_id
-                                if state_dict.get("resume_ticket")
-                                else None
-                            )
-                            or "ask_user_resume"
-                        ),
+                        step_id=(consumed_ticket.step_id if consumed_ticket else None)
+                        or "ask_user_resume",
                         description="Ask user clarifying question",
                         questions=tuple(
                             str(q) for q in (pending_request_state.get("questions") or ())
@@ -458,71 +468,33 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         except (ValueError, TypeError):
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
-    # Pop the head of the clarification queue now that the answer is being
-    # consumed. The next entry (if any) becomes the new head and will be
-    # routed to await_clarification after this step resumes.
-    queue_after_pop: list[dict[str, Any]] | None = None
-    tickets_after_pop: dict[str, dict[str, Any]] | None = None
-    if pending_answer_state:
-        queue_list = state_dict.get("clarification_queue") or []
-        tickets_map = state_dict.get("clarification_resume_tickets") or {}
-        if isinstance(queue_list, list) and queue_list:
-            queue_after_pop = queue_list[1:] or None
-        if isinstance(tickets_map, dict):
-            head_iid = (
-                str(pending_request_state.get("origin_interrupt_id", ""))
-                if isinstance(pending_request_state, dict)
-                else ""
-            )
-            if head_iid:
-                tickets_map = {k: v for k, v in tickets_map.items() if k != head_iid}
-            tickets_after_pop = tickets_map or None
+    # Clarification resume: sync the consumed ticket and hydrated decision onto
+    # the live LoopState unconditionally — `_select_thread_for_step` reads both
+    # from `state`, and the rebuild branch below only runs when the hydrated
+    # decision was lost. Skipping the sync sent `Command(resume=...)` to a fresh
+    # thread with no pending interrupt (empty step run marked failed).
+    if resume_answer_payload is not None:
+        if consumed_ticket is not None:
+            state.resume_ticket = consumed_ticket
+        if decision is not None and state.current_decision is None:
+            state.current_decision = decision
+
+    # The relay inbox owns the FIFO; consume_answer already dequeued the head.
 
     if decision is None or plan_result is None:
-        # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
-        # graph after a clarification interrupt, ``ctx.scratch`` is freshly
-        # initialized for the new ``ainvoke`` call so the prior decision is
-        # gone. Rebuild a minimal decision from the CE root step so the
-        # Executor can resume the CoreAgent on the original thread (stored
-        # in ``loop_state.resume_ticket``).
+        # Resume path: ``ctx.scratch`` is freshly initialized for the new
+        # ainvoke so the prior decision is gone.  Rebuild a minimal decision
+        # from the captured step identity so the Executor can resume the
+        # CoreAgent on the original thread via ``Command(resume=...)``.
         if resume_answer_payload is not None:
-            # CoreAgent ``ask_user`` / ``action_requests`` interrupt resume.
-            # The resume ticket is in ``loop_state.resume_ticket`` (stored by
-            # the executor when capturing GraphInterrupt). The checkpointer has
-            # the pending interrupt on that thread. Rebuild a decision from the
-            # CE root step and fall through to the normal Executor path — it
-            # will use the resume thread_id and deliver the answer via
-            # ``Command(resume=...)``.
-            # Read resume_ticket from graph state (survives checkpoint).
-            # LangGraph passes the raw checkpoint dict, so the stored
-            # ``ResumeTicket`` (a dataclass) comes back as a plain dict —
-            # coerce it before attribute access.
-            resume_ticket = _coerce_resume_ticket(state_dict.get("resume_ticket")) or getattr(
-                state, "resume_ticket", None
-            )
+            # The relay owns the resume ticket (carried via consume_answer).
+            # Sync it onto the live LoopState so ``_select_thread_for_step``
+            # can reuse the interrupted thread for ``Command(resume=...)``.
+            resume_ticket = consumed_ticket
             resume_tid = resume_ticket.thread_id if resume_ticket else None
             if resume_tid:
-                # Rebuild a decision for the step that was executing when the
-                # interrupt fired. Prefer the captured step identity
-                # (``resume_ticket.step_id`` / ``resume_ticket.step_description``,
-                # set by the executor alongside the thread_id) so the resumed
-                # ``step_started`` carries the same step id + title the TUI
-                # already has a card for — the card updates in place instead
-                # of a fresh root card appearing. Fall back to the CE root
-                # node lookup only for older checkpoints that predate the
-                # capture fields (or planner-emitted ask_user, which has no
-                # executor capture).
                 resume_sid = resume_ticket.step_id if resume_ticket else None
                 resume_desc = resume_ticket.step_description if resume_ticket else None
-                # The graph-state dict survives the checkpoint round-trip
-                # but ``LoopState`` is freshly constructed for this ainvoke,
-                # so ``state.resume_ticket`` is still its default. Sync it
-                # onto the live object now — ``_select_thread_for_step``
-                # reads ``loop_state.resume_ticket`` (the live object, not
-                # the dict) to reuse the interrupted thread so
-                # ``Command(resume=...)`` finds the suspended ask_user
-                # interrupt instead of landing on a fresh random thread.
-                state.resume_ticket = resume_ticket
                 root_step: StepAction | None = None
                 if resume_sid:
                     goal_text = state.goal or "ask_user resume"
@@ -541,12 +513,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                         resume_tid[:24],
                     )
                 else:
-                    # Legacy / planner-emitted ask_user: no captured step id.
-                    # Rebuild from the CE root step; if CE lost the step
-                    # (not persisted), synthesize a minimal StepAction from
-                    # the goal text. The Executor only needs a step to run
-                    # — the actual resume is via Command(resume=...) on the
-                    # stored resume_ticket.
+                    # Planner-emitted ask_user: no captured step id — rebuild from CE.
                     if ctx.ce is not None and ctx.ce_goal_id:
                         goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
                         if goal is not None:
@@ -566,8 +533,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
                                 root_step = _step_action_from_node(root_node)
                     if root_step is None:
-                        # CE lost the step — create a root step in the CE so
-                        # record_progress can complete it after execution.
+                        # CE lost the step — create a synthetic root.
                         goal_text = state.goal or "ask_user resume"
                         root_step = StepAction(
                             id="ask_user_resume",
@@ -698,10 +664,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 "synthesized step_completed for %s, routing through record_iteration",
                 planner_ask_answered_step_id,
             )
-            return {
-                "pending_clarification": None,
-                "pending_clarification_answer": None,
-            }
+            return {"relay_state": {}} if relay is not None else {}
         else:
             logger.error("[execute] missing decision or plan_result on scratch")
             await ctx.emit(
@@ -817,13 +780,14 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # Emit step_started so live UIs surface the pending question;
             # _record_and_emit_step_completed will fire when the answer lands.
             await _emit_step_started_for_steps([ask_step])
-            return {
-                "pending_clarification": request_to_state(ask_request),
-                "last_clarification_origin": ORIGIN_EXECUTE,
-                "pending_clarification_answer": None,
-            }
+            if relay is not None:
+                from soothe.sloop.relay.ticket import ResumeTicket
 
-    clarification_capture = ClarificationQueue()
+                relay.inbox.enqueue(ask_request, resume_ticket=ResumeTicket(), step_id=ask_step.id)
+                return relay.project_to_channels(scratch=ctx.scratch, mark_parked_head=True)
+            return {}
+
+    clarification_capture = relay.inbox if relay is not None else RelayInbox()
     clarification_detector: ClarificationDetector | None = None
     clarification_view: LoopStateView | None = None
     if ctx.clarification_policy is not None:
@@ -1003,28 +967,12 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         head_entry = clarification_capture.peek()
         assert head_entry is not None  # narrowed by head check above
         head_request = head_entry.request
-        head_ticket = head_entry.resume_ticket
-        queue_state = [request_to_state(e.request) for e in clarification_capture._entries]
-        tickets_state: dict[str, dict[str, Any]] = {}
-        for e in clarification_capture._entries:
-            rt = e.resume_ticket
-            tickets_state[e.request.origin_interrupt_id] = {
-                "thread_id": rt.thread_id,
-                "step_id": rt.step_id,
-                "step_description": rt.step_description,
-                "prior_duration_ms": rt.prior_duration_ms,
-            }
-        result: dict[str, Any] = {
-            "pending_clarification": request_to_state(head_request),
-            "last_clarification_origin": ORIGIN_EXECUTE,
-            # Clear any prior answer so re-entry only consumes it once.
-            "pending_clarification_answer": None,
-            "clarification_queue": queue_state,
-            "clarification_resume_tickets": tickets_state,
-        }
-        if head_ticket:
-            state.resume_ticket = head_ticket
-            result["resume_ticket"] = head_ticket
+        if relay is not None:
+            result: dict[str, Any] = relay.project_to_channels(
+                scratch=ctx.scratch, mark_parked_head=True
+            )
+        else:
+            result = {}
         if allowlist_dirty:
             result["tool_approval_allowlist"] = current_allowlist
         logger.info(
@@ -1036,38 +984,20 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         return result
 
     if resume_answer_payload is not None or planner_ask_answered_step_id is not None:
-        # Successfully resumed from a prior clarification (CoreAgent interrupt
-        # or planner-emitted ask_user). Clear the consumed head's request and
-        # answer channels. If the queue still has entries, surface the next
-        # head so route_after_execute routes back to await_clarification for it.
-        result: dict[str, Any] = {
-            "pending_clarification": None,
-            "pending_clarification_answer": None,
-        }
-        if queue_after_pop:
-            # Next entry becomes the head — route to await_clarification.
-            next_head = queue_after_pop[0]
-            next_iid = str(next_head.get("origin_interrupt_id", ""))
-            next_ticket = (tickets_after_pop or {}).get(next_iid)
-            result["pending_clarification"] = next_head
-            result["clarification_queue"] = queue_after_pop
-            result["clarification_resume_tickets"] = tickets_after_pop
-            if next_ticket:
-                rt = _coerce_resume_ticket(next_ticket)
-                if rt:
-                    state.resume_ticket = rt
-                    result["resume_ticket"] = rt
-            logger.info(
-                "[execute] resume complete; %d clarification(s) remain in queue "
-                "(next head interrupt_id=%s)",
-                len(queue_after_pop),
-                next_iid[:16],
-            )
-        else:
-            result["clarification_queue"] = None
-            result["clarification_resume_tickets"] = None
+        # Successfully resumed from a prior clarification. The relay already
+        # dequeued the head via consume_answer; project the dequeued inbox.
+        # If the inbox still holds entries, route_after_execute routes back
+        # to await_clarification for the next one.
+        result: dict[str, Any] = {}
+        if relay is not None:
+            result.update(relay.clear_answer(scratch=ctx.scratch))
         if allowlist_dirty:
             result["tool_approval_allowlist"] = current_allowlist
+        if clarification_capture:
+            logger.info(
+                "[execute] resume complete; %d clarification(s) remain in inbox",
+                len(clarification_capture),
+            )
         return result
 
     return {}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-from soothe.sloop.orchestrator.stations import EXECUTE, PLAN_REVIEW
+from soothe.sloop.orchestrator.stations import EXECUTE
 
 # --- Live StrangeLoop / host origins ----------------------------------------
 
@@ -40,55 +40,16 @@ CLARIFICATION_ORIGINS: frozenset[str] = frozenset(
     }
 )
 
-CLARIFICATION_ORIGIN_RESUME_NODE: dict[str, str] = {
-    ORIGIN_PLAN_MODE_REVIEW: PLAN_REVIEW,
-    ORIGIN_EXECUTE: EXECUTE,
-    ORIGIN_TOOL_APPROVAL: EXECUTE,  # resume the step that issued the tool call
-}
-
-DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = (ORIGIN_PLAN_MODE_REVIEW,)
-"""Origins that never use veritas auto-answer, even in auto mode.
-
-`plan_mode_review` — the plan approve/reject/refine gate is a human call.
-
-`tool_approval` is intentionally NOT in this list: in auto mode the
-`tool_approval` origin is resolved by the multi-stage pipeline —
-deterministic deny → safety → allow stages handle most tool actions without
-an LLM. Veritas's security-approver prompt (see
-`build_veritas_system_prompt_for_origin`) handles the ambiguous tail.
-Operators who want tool actions to require a human can re-add
-`tool_approval` to `ClarificationConfig.force_manual_origins` in config:
-deny/safety stages still auto-reject dangerous actions (safety property),
-but allow rules and veritas are skipped so every other tool action goes to
-the human relay."""
-
 PLAN_MODE_REVIEW_INTERRUPT_PREFIX: Final = "plan-mode-review:"
 """Interrupt prefix for plan-mode review clarifications."""
 
 
-def resume_node_for_clarification_origin(origin: str | None) -> str | None:
-    """Map a clarification origin to the StrangeLoop graph station that should resume.
-
-    Returns:
-        Canonical graph station name, or `None` when the origin is unknown
-        or host-only (`rail_pause` — not a StrangeLoop interrupt).
-    """
-    if not origin or origin not in CLARIFICATION_ORIGINS:
-        return None
-    if origin == ORIGIN_RAIL_PAUSE:
-        return None
-    return CLARIFICATION_ORIGIN_RESUME_NODE[origin]
-
-
 __all__ = [
     "CLARIFICATION_ORIGINS",
-    "CLARIFICATION_ORIGIN_RESUME_NODE",
     "ClarificationOrigin",
-    "DEFAULT_FORCE_MANUAL_ORIGINS",
     "ORIGIN_EXECUTE",
     "ORIGIN_PLAN_MODE_REVIEW",
     "ORIGIN_RAIL_PAUSE",
     "ORIGIN_TOOL_APPROVAL",
     "PLAN_MODE_REVIEW_INTERRUPT_PREFIX",
-    "resume_node_for_clarification_origin",
 ]

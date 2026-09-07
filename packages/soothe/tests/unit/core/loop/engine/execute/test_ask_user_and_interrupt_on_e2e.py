@@ -23,17 +23,18 @@ from unittest.mock import patch
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.sloop.clarification.capture import ClarificationQueue, ResumeTicket
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.origins import ORIGIN_EXECUTE, ORIGIN_TOOL_APPROVAL
 from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import Executor
-from soothe.sloop.engine.execute.graph_interrupt import (
+from soothe.sloop.relay.inbox import RelayInbox
+from soothe.sloop.relay.outbox import (
     build_auto_resume_payload,
     build_tool_approval_resume_payload,
     is_ask_user_interrupt,
     is_tool_approval_interrupt,
 )
+from soothe.sloop.relay.ticket import ResumeTicket
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -158,7 +159,7 @@ class TestAskUserInterruptCase:
         returns early (no auto-resume) — the clarification relay owns the pause."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["Approve design?"]),))
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -193,7 +194,7 @@ class TestAskUserInterruptCase:
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
-            clarification_capture=ClarificationQueue(),
+            clarification_capture=RelayInbox(),
             clarification_loop_state_view=_view(),
         )
         resume_payload = {"i1": {"answers": ["Option C"]}}
@@ -266,7 +267,7 @@ class TestInterruptOnCase:
         it (tool_approval origin) and returns early — no auto-resume."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_action_approval_interrupt("edit_file"),))
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -300,24 +301,24 @@ class TestInterruptOnCase:
 
     def test_answer_to_decision_approve(self) -> None:
         """Veritas/TUI answer 'approve' → HITL decision type 'approve'."""
-        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+        from soothe.sloop.relay.outbox import answer_to_decision
 
-        assert _answer_to_decision("approve") == "approve"
-        assert _answer_to_decision("yes") == "approve"
-        assert _answer_to_decision("ok") == "approve"
+        assert answer_to_decision("approve") == "approve"
+        assert answer_to_decision("yes") == "approve"
+        assert answer_to_decision("ok") == "approve"
 
     def test_answer_to_decision_reject(self) -> None:
-        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+        from soothe.sloop.relay.outbox import answer_to_decision
 
-        assert _answer_to_decision("reject") == "reject"
-        assert _answer_to_decision("no") == "reject"
-        assert _answer_to_decision("deny") == "reject"
+        assert answer_to_decision("reject") == "reject"
+        assert answer_to_decision("no") == "reject"
+        assert answer_to_decision("deny") == "reject"
 
     def test_answer_to_decision_edit(self) -> None:
-        from soothe.sloop.engine.execute.graph_interrupt import _answer_to_decision
+        from soothe.sloop.relay.outbox import answer_to_decision
 
-        assert _answer_to_decision("edit") == "edit"
-        assert _answer_to_decision("modify") == "edit"
+        assert answer_to_decision("edit") == "edit"
+        assert answer_to_decision("modify") == "edit"
 
     def test_auto_resume_skips_both_ask_user_and_action_requests(self) -> None:
         """build_auto_resume_payload must skip both interrupt shapes —
@@ -353,7 +354,7 @@ class TestAskUserRoundTripCase:
         core.queue([], state_interrupts=(_ask_user_interrupt(["Which DB?"], interrupt_id="i1"),))
         # Wave 2: resume with answer → no more interrupts → done
         core.queue([])
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -408,7 +409,7 @@ class TestInterruptOnRoundTripCase:
         )
         # Wave 2: resume with approve decision → done
         core.queue([])
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -451,7 +452,7 @@ class TestInterruptOnRoundTripCase:
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_action_approval_interrupt("delete", interrupt_id="i2"),))
         core.queue([])
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -612,7 +613,7 @@ class TestStepIdentityCaptureCase:
         """A GraphInterrupt during a step's stream captures step_id + description."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["Approve design?"]),))
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -645,7 +646,7 @@ class TestStepIdentityCaptureCase:
             [],
             state_interrupts=(_action_approval_interrupt("edit_file", interrupt_id="iTA"),),
         )
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -678,7 +679,7 @@ class TestStepIdentityCaptureCase:
         resume path falls back to the CE root."""
         core = _StubCoreAgent()
         core.queue([], state_interrupts=(_ask_user_interrupt(["q?"]),))
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor = _make_executor(
             core,
             clarification_detector=ClarificationDetector(),
@@ -714,8 +715,8 @@ class TestCapturedClarificationScoringCase:
 
     @staticmethod
     def _executor_with_capture(
-        capture: ClarificationQueue,
-    ) -> tuple[Executor, ClarificationQueue]:
+        capture: RelayInbox,
+    ) -> tuple[Executor, RelayInbox]:
         executor = _make_executor(
             _StubCoreAgent(),
             clarification_detector=ClarificationDetector(),
@@ -736,7 +737,7 @@ class TestCapturedClarificationScoringCase:
         from soothe.sloop.engine.execute.step_wave_types import _StreamCollectChunk
         from soothe.sloop.state.schemas import StepAction
 
-        capture = ClarificationQueue()
+        capture = RelayInbox()
         executor, capture = self._executor_with_capture(capture)
         executor.core_agent = MagicMock()
         executor.core_agent.can_read_graph_state = False

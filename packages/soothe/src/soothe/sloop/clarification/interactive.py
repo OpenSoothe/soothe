@@ -16,6 +16,7 @@ from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
     ClarificationRequest,
+    merge_answer_audit,
 )
 from soothe.sloop.clarification.tool_approval_pipeline import (
     ToolApprovalPipeline,
@@ -27,16 +28,11 @@ logger = logging.getLogger(__name__)
 
 
 class InteractiveClarificationPolicy:
-    """Relay clarifications to a human via the TUI; loop-level durable pause.
+    """Relay clarifications to a human via the TUI with a durable pause.
 
-    When a `ToolApprovalPipeline` is attached (manual clarification mode,
-    ), it pre-filters `tool_approval` requests: deny/safety
-    stages always auto-reject dangerous actions without asking the human,
-    and allow rules auto-approve when `manual_allow_rules` is set
-    (`tool_approval.manual_scope: ambiguous_only`). Only rule-unresolved
-    actions reach the human. The pre-filter does not run on the
-    auto→manual upgrade path — the auto policy already evaluated the
-    pipeline before deferring to this policy as fallback.
+    When a ``ToolApprovalPipeline`` is attached (manual mode), it pre-filters
+    ``tool_approval`` requests — deny/safety stages auto-reject, allow rules
+    auto-approve.  Only rule-unresolved actions reach the human.
     """
 
     def __init__(
@@ -49,30 +45,39 @@ class InteractiveClarificationPolicy:
         self._emit = emit
         self._tool_approval_pipeline = tool_approval_pipeline
         self._manual_allow_rules = manual_allow_rules
+        self._escalated_rule_id: str | None = None
 
     def bind_emit(self, emit: EmitFn) -> None:
         """Attach the runtime emit callback."""
         self._emit = emit
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Pause for a human answer without re-emitting `clarification_requested`.
-
-        `await_clarification` already emitted the request (including
-        `force_manual_origins` with `mode=manual`). Re-emitting here would
-        duplicate events for every interactive pause.
-        """
+        """Pause for a human answer.  ``await_clarification`` already emitted."""
+        self._escalated_rule_id = None
         static = self._evaluate_tool_approval_pipeline(request)
         if static is not None:
             return static
-        return await self._answer(request, announce=False)
+        answer = await self._answer(request, announce=False)
+        return self._merge_escalated_rule_id(answer)
 
-    async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Re-announce as `mode=manual` then pause (auto→manual upgrade).
+    async def answer_as_manual_fallback(
+        self, request: ClarificationRequest, *, announce: bool = True
+    ) -> ClarificationAnswer:
+        """Re-announce as ``mode=manual`` then pause (auto→manual upgrade).
 
-        Used when veritas structured output fails and a human is attached.
-        The earlier `await_clarification` emit used `mode=auto`.
+        The TUI only mounts the interactive card for ``mode=manual`` emits;
+        resume replays pass ``announce=False`` since the card already exists.
         """
-        return await self._answer(request, announce=True)
+        answer = await self._answer(request, announce=announce)
+        return self._merge_escalated_rule_id(answer)
+
+    def _merge_escalated_rule_id(self, answer: ClarificationAnswer) -> ClarificationAnswer:
+        """Stamp the escalated safety rule_id onto a human answer's audit."""
+        rule_id = self._escalated_rule_id
+        self._escalated_rule_id = None
+        if not rule_id:
+            return answer
+        return merge_answer_audit(answer, escalated_rule_id=rule_id)
 
     async def _answer(
         self, request: ClarificationRequest, *, announce: bool
@@ -113,12 +118,8 @@ class InteractiveClarificationPolicy:
     def _evaluate_tool_approval_pipeline(
         self, request: ClarificationRequest
     ) -> ClarificationAnswer | None:
-        """Run the tool-approval pipeline pre-filter for manual mode.
-
-        Returns a static answer when the pipeline resolves the batch, or
-        `None` to fall through to the human interrupt. ``escalate`` outcomes
-        return ``None`` so the human sees the approval card.
-        """
+        """Run the tool-approval pipeline pre-filter.  Returns a static answer
+        or ``None`` to fall through to the human interrupt."""
         if request.origin_node != ORIGIN_TOOL_APPROVAL or self._tool_approval_pipeline is None:
             return None
         action_requests = request.metadata.get("action_requests", [])
@@ -131,12 +132,14 @@ class InteractiveClarificationPolicy:
         if result is None:
             return None
         # Banned safety action → fall through to the human interrupt so a
-        # human decides. Do not auto-resolve.
+        # human decides. Do not auto-resolve. Stash the rule_id so the
+        # human's answer carries it for a rule-level allowlist override.
         if result.decision == "escalate":
             logger.info(
                 "[clarification] tool_approval safety escalate rule=%s; routing to human (manual)",
                 result.rule_id,
             )
+            self._escalated_rule_id = result.rule_id
             return None
         logger.info(
             "[clarification] tool_approval %s by stage=%s reason=%s (manual pre-filter)",
@@ -191,11 +194,7 @@ class InteractiveClarificationPolicy:
 
     @staticmethod
     def _normalize_payload(payload: Any) -> list[str] | None:
-        """Extract a raw answer list from an interrupt payload.
-
-        Returns stripped strings, or `None` when the payload is empty or
-        has an unrecognizable shape.
-        """
+        """Extract a raw answer list from an interrupt payload, or ``None``."""
         if payload is None:
             return None
         if isinstance(payload, str):

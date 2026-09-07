@@ -77,7 +77,6 @@ from soothe.config.constants import (
     GOAL_COMPLETION_REPORT_MAX_MESSAGES,
     GOAL_COMPLETION_REPORT_MAX_PER_MESSAGE_CHARS,
 )
-from soothe.sloop.clarification.origins import DEFAULT_FORCE_MANUAL_ORIGINS
 
 AgenticFinalResponseMode = Literal["auto", "always_synthesize"]
 
@@ -1399,6 +1398,10 @@ class ToolApprovalConfig(BaseModel):
     veritas_fallback: VeritasFallbackConfig = Field(default_factory=VeritasFallbackConfig)
 
 
+DEFAULT_FORCE_MANUAL_ORIGINS: tuple[str, ...] = ("plan_mode_review",)
+"""Origins that never use veritas auto-answer, even in auto mode."""
+
+
 class ClarificationConfig(BaseModel):
     """Configuration for the clarification relay.
 
@@ -1450,7 +1453,7 @@ class ClarificationConfig(BaseModel):
             "`default_mode` / wire `clarification_mode` is `auto`. "
             "With a human attached, the interactive TUI relay is used; otherwise "
             "the loop defers. Default is `plan_mode_review` only — `tool_approval` "
-            "is evaluated by the multi-stage pipeline (§9b) in auto mode so safe "
+            "is evaluated by the multi-stage pipeline in auto mode so safe "
             "tool calls auto-approve without an LLM. Re-add `tool_approval` to "
             "route every non-rejected tool action through a human — deny/safety "
             "stages still auto-reject dangerous actions."
