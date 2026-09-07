@@ -152,25 +152,11 @@ class ClarificationDetector:
         return ()
 
     # Maximum length of the informative arg value in the approval prompt.
-    # Long commands (e.g. multi-line shell pipelines) are truncated with an
-    # ellipsis so the TUI card stays readable.
     _MAX_ARG_PREVIEW = 120
 
     @staticmethod
     def _format_action_request(ar: Mapping[str, Any]) -> dict | None:
-        """Render one pending tool call as a structured approval QuestionSpec.
-
-        Returns a `QuestionSpec` dict with three options (Approve, Edit,
-        Reject) so the unified `StructuredAskUserWidget` can render it as
-        an option picker. The `header` carries the tool name + informative
-        arg so the card title reads `"Approve tool: <name> (<arg>)"`.
-
-        Surfaces the tool name plus its most informative argument (the file
-        path, command, etc.) so the user can see what is about to execute
-        without inspecting the full args blob. Long values (e.g. multi-line
-        shell commands) are truncated to `_MAX_ARG_PREVIEW` chars with an
-        ellipsis so the approval card stays readable.
-        """
+        """Render one pending tool call as a structured approval QuestionSpec."""
         name = str(ar.get("name") or "").strip()
         if not name:
             return None
@@ -180,30 +166,24 @@ class ClarificationDetector:
             for key in _INFORMATIVE_ARG_KEYS:
                 val = args.get(key)
                 if isinstance(val, str) and val.strip():
-                    detail = f" ({key}={truncate_text(val.strip(), limit=ClarificationDetector._MAX_ARG_PREVIEW, marker='…', strip=False)})"
+                    val_str = truncate_text(
+                        val.strip(),
+                        limit=ClarificationDetector._MAX_ARG_PREVIEW,
+                        marker="…",
+                        strip=False,
+                    )
+                    detail = f" ({key}={val_str})"
                     break
             if not detail and args:
-                # Fall back to the first arg value for non-path tools
                 first_val = next(iter(args.values()), None)
                 if isinstance(first_val, str) and first_val.strip():
                     detail = f" ({truncate_text(first_val.strip(), limit=ClarificationDetector._MAX_ARG_PREVIEW, marker='…', strip=False)})"
-        header = f"Approve {name}{detail}?"
-        question = f"Approve {name}{detail}?"
+        title = f"Approve {name}{detail}?"
         return {
-            "question": question,
-            "header": header,
+            "question": title,
+            "header": title,
             "options": [
-                {
-                    "label": "Approve",
-                    "description": "Allow this tool call to execute.",
-                },
-                {
-                    "label": "Edit",
-                    "description": "Modify the tool arguments before executing.",
-                },
-                {
-                    "label": "Reject",
-                    "description": "Block this tool call from executing.",
-                },
+                {"label": "Approve"},
+                {"label": "Reject"},
             ],
         }

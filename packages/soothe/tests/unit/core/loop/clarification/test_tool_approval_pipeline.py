@@ -589,7 +589,7 @@ class TestRuleLevelOverride:
     not re-escalate for a different command in the same loop."""
 
     def test_approved_rule_overrides_safety_escalation(self) -> None:
-        """A `{"rule": ...}` allowlist record suppresses re-escalation."""
+        """A ``{"rule": ...}`` allowlist record suppresses re-escalation for the same family."""
         result_first = _pipeline().evaluate(
             [_ar("run_command", command="rm -rf /tmp/a")],
         )
@@ -604,6 +604,14 @@ class TestRuleLevelOverride:
         )
         # Same rule, different command → no re-escalation (human already decided).
         assert result_second is None or result_second.decision == "approve"
+
+    def test_approved_rm_root_suppresses_rm_rf(self) -> None:
+        """Approving rm_root (rm -rf /) suppresses escalation for rm_rf (rm -rf <folder>)."""
+        result = _pipeline().evaluate(
+            [_ar("run_command", command="rm -rf /tmp/some_folder")],
+            allowlist=[{"rule": "command.dangerous.rm_root"}],
+        )
+        assert result is None or result.decision == "approve"
 
     def test_different_rule_still_escalates(self) -> None:
         """A rule override for one rule does not suppress a different rule."""

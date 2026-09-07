@@ -44,23 +44,9 @@ _RETRY_SENTINEL = "(retry)"
 class AutoClarificationPolicy:
     """Delegate clarifications to veritas; fall back on any failure.
 
-    Two fallback paths depending on whether a human is attached:
-
-    1. **TUI (interactive_fallback wired)**: When
-       `degrade_to_manual_on_failure` is True (default), *all* veritas
-       failure kinds route to the interactive relay (auto→manual upgrade)
-       instead of hard-defering. The user sees an ask widget and can answer
-       manually.
-
-    2. **Autopilot (no interactive_fallback)**: When
-       `autopilot_retry_on_fail` is True (default), veritas failures return
-       a synthetic `ClarificationAnswer(source="retry")` carrying a
-       `"(retry)"` sentinel. The execute node feeds this back to the
-       CoreAgent as the tool result, prompting the LLM to try a different
-       action instead of parking the goal indefinitely.
-
-    Origins listed in `force_manual_origins` skip veritas entirely and use
-    the interactive relay (or defer when no human is attached).
+    TUI fallback: routes to the interactive relay (auto→manual upgrade).
+    Autopilot fallback: returns a synthetic retry answer prompting the LLM
+    to try a different action.
     """
 
     def __init__(

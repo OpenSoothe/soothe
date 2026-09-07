@@ -7,19 +7,16 @@ keep the execution mixin focused on agent execution and message routing.
 from __future__ import annotations
 
 _PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject", "Refine"})
-_TOOL_APPROVAL_ACTIONS = frozenset({"Approve", "Reject", "Edit"})
+_TOOL_APPROVAL_ACTIONS = frozenset({"Approve", "Reject"})
 
 
 def clarification_wire_content(answers: list[str], *, origin_node: str = "") -> str:
     """Human-readable turn content for a clarification submit (not a new goal).
 
-    Option-selector actions use a stable `<prefix>: …` header so a dropped
-    `clarification_answer` flag cannot turn a bare action into Pass1 TASK.
-    Plan review → `Plan review:` (Refine carries refinement text in
-    `answers[1]`). Tool approval → `Tool approval:` (Edit carries revised
-    instructions in `answers[1]`). When `origin_node` is empty (legacy
-    callers) the action label alone selects the prefix, preserving the safety
-    net for any selector-origin submit.
+    Option-selector actions use a stable ``<prefix>: …`` header so a dropped
+    ``clarification_answer`` flag cannot turn a bare action into Pass1 TASK.
+    Plan review → ``Plan review:`` (Refine carries refinement text in
+    ``answers[1]``). Tool approval → ``Tool approval:``.
     """
     non_empty = [a for a in answers if str(a).strip()]
     if not non_empty:

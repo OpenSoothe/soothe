@@ -47,29 +47,6 @@ On answer arrival, `node_execute` synthesizes a `StepExecutionRecord` for the ma
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
 
 
-def _coerce_resume_ticket(raw: Any) -> ResumeTicket | None:
-    """Normalize a `resume_ticket` value read from the graph-state dict.
-
-    LangGraph passes nodes the raw checkpoint dict, not a reconstructed
-    `LoopState`. A `ResumeTicket` (plain dataclass) stored on the graph
-    channel therefore comes back as a plain `dict` after the checkpoint
-    round-trip. Attribute access (`.thread_id` etc.) on the dict raises
-    `AttributeError`; this helper coerces it back to a `ResumeTicket`
-    so the resume path can use attribute access uniformly. `None` and
-    already-typed values pass through unchanged.
-    """
-    if raw is None or isinstance(raw, ResumeTicket):
-        return raw
-    if isinstance(raw, dict):
-        return ResumeTicket(
-            thread_id=raw.get("thread_id"),
-            step_id=raw.get("step_id"),
-            step_description=raw.get("step_description"),
-            prior_duration_ms=int(raw.get("prior_duration_ms") or 0),
-        )
-    return None
-
-
 def _build_loop_state_view(
     ctx: LoopRuntimeContext,
     *,
@@ -492,52 +469,21 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             logger.exception("[execute] malformed pending_clarification_answer; ignoring")
 
     # The relay inbox owns the FIFO; consume_answer already dequeued the head.
-    # No legacy queue-channel clearing needed.
 
     if decision is None or plan_result is None:
-        # RFC-622 resume path: when ``Command(resume=...)`` re-enters the
-        # graph after a clarification interrupt, ``ctx.scratch`` is freshly
-        # initialized for the new ``ainvoke`` call so the prior decision is
-        # gone. Rebuild a minimal decision from the CE root step so the
-        # Executor can resume the CoreAgent on the original thread (stored
-        # in ``loop_state.resume_ticket``).
+        # Resume path: ``ctx.scratch`` is freshly initialized for the new
+        # ainvoke so the prior decision is gone.  Rebuild a minimal decision
+        # from the captured step identity so the Executor can resume the
+        # CoreAgent on the original thread via ``Command(resume=...)``.
         if resume_answer_payload is not None:
-            # CoreAgent ``ask_user`` / ``action_requests`` interrupt resume.
-            # The resume ticket is in ``loop_state.resume_ticket`` (stored by
-            # the executor when capturing GraphInterrupt). The checkpointer has
-            # the pending interrupt on that thread. Rebuild a decision from the
-            # CE root step and fall through to the normal Executor path — it
-            # will use the resume thread_id and deliver the answer via
-            # ``Command(resume=...)``.
-            # The resume ticket is carried on the relay inbox head (captured
-            # by consume_answer) or the legacy `resume_ticket` graph channel.
-            resume_ticket = (
-                consumed_ticket
-                or _coerce_resume_ticket(state_dict.get("resume_ticket"))
-                or getattr(state, "resume_ticket", None)
-            )
+            # The relay owns the resume ticket (carried via consume_answer).
+            # Sync it onto the live LoopState so ``_select_thread_for_step``
+            # can reuse the interrupted thread for ``Command(resume=...)``.
+            resume_ticket = consumed_ticket
             resume_tid = resume_ticket.thread_id if resume_ticket else None
             if resume_tid:
-                # Rebuild a decision for the step that was executing when the
-                # interrupt fired. Prefer the captured step identity
-                # (``resume_ticket.step_id`` / ``resume_ticket.step_description``,
-                # set by the executor alongside the thread_id) so the resumed
-                # ``step_started`` carries the same step id + title the TUI
-                # already has a card for — the card updates in place instead
-                # of a fresh root card appearing. Fall back to the CE root
-                # node lookup only for older checkpoints that predate the
-                # capture fields (or planner-emitted ask_user, which has no
-                # executor capture).
                 resume_sid = resume_ticket.step_id if resume_ticket else None
                 resume_desc = resume_ticket.step_description if resume_ticket else None
-                # The graph-state dict survives the checkpoint round-trip
-                # but ``LoopState`` is freshly constructed for this ainvoke,
-                # so ``state.resume_ticket`` is still its default. Sync it
-                # onto the live object now — ``_select_thread_for_step``
-                # reads ``loop_state.resume_ticket`` (the live object, not
-                # the dict) to reuse the interrupted thread so
-                # ``Command(resume=...)`` finds the suspended ask_user
-                # interrupt instead of landing on a fresh random thread.
                 state.resume_ticket = resume_ticket
                 root_step: StepAction | None = None
                 if resume_sid:
@@ -557,12 +503,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                         resume_tid[:24],
                     )
                 else:
-                    # Legacy / planner-emitted ask_user: no captured step id.
-                    # Rebuild from the CE root step; if CE lost the step
-                    # (not persisted), synthesize a minimal StepAction from
-                    # the goal text. The Executor only needs a step to run
-                    # — the actual resume is via Command(resume=...) on the
-                    # stored resume_ticket.
+                    # Planner-emitted ask_user: no captured step id — rebuild from CE.
                     if ctx.ce is not None and ctx.ce_goal_id:
                         goal = await _maybe_await(ctx.ce.get_goal(ctx.ce_goal_id))
                         if goal is not None:
@@ -582,8 +523,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
 
                                 root_step = _step_action_from_node(root_node)
                     if root_step is None:
-                        # CE lost the step — create a root step in the CE so
-                        # record_progress can complete it after execution.
+                        # CE lost the step — create a synthetic root.
                         goal_text = state.goal or "ask_user resume"
                         root_step = StepAction(
                             id="ask_user_resume",
@@ -1017,9 +957,6 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         head_entry = clarification_capture.peek()
         assert head_entry is not None  # narrowed by head check above
         head_request = head_entry.request
-        head_ticket = head_entry.resume_ticket
-        if head_ticket:
-            state.resume_ticket = head_ticket
         if relay is not None:
             result: dict[str, Any] = relay.project_to_channels(
                 scratch=ctx.scratch, mark_parked_head=True

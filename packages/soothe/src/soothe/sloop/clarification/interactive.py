@@ -27,16 +27,11 @@ logger = logging.getLogger(__name__)
 
 
 class InteractiveClarificationPolicy:
-    """Relay clarifications to a human via the TUI; loop-level durable pause.
+    """Relay clarifications to a human via the TUI with a durable pause.
 
-    When a `ToolApprovalPipeline` is attached (manual clarification mode,
-    ), it pre-filters `tool_approval` requests: deny/safety
-    stages always auto-reject dangerous actions without asking the human,
-    and allow rules auto-approve when `manual_allow_rules` is set
-    (`tool_approval.manual_scope: ambiguous_only`). Only rule-unresolved
-    actions reach the human. The pre-filter does not run on the
-    auto→manual upgrade path — the auto policy already evaluated the
-    pipeline before deferring to this policy as fallback.
+    When a ``ToolApprovalPipeline`` is attached (manual mode), it pre-filters
+    ``tool_approval`` requests — deny/safety stages auto-reject, allow rules
+    auto-approve.  Only rule-unresolved actions reach the human.
     """
 
     def __init__(
@@ -56,12 +51,7 @@ class InteractiveClarificationPolicy:
         self._emit = emit
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Pause for a human answer without re-emitting `clarification_requested`.
-
-        `await_clarification` already emitted the request (including
-        `force_manual_origins` with `mode=manual`). Re-emitting here would
-        duplicate events for every interactive pause.
-        """
+        """Pause for a human answer.  ``await_clarification`` already emitted."""
         self._escalated_rule_id = None
         static = self._evaluate_tool_approval_pipeline(request)
         if static is not None:
@@ -70,21 +60,17 @@ class InteractiveClarificationPolicy:
         return self._merge_escalated_rule_id(answer)
 
     async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
-        """Re-announce as `mode=manual` then pause (auto→manual upgrade).
+        """Re-announce as ``mode=manual`` then pause (auto→manual upgrade).
 
-        Used when veritas structured output fails and a human is attached.
-        The earlier `await_clarification` emit used `mode=auto`.
+        ``await_clarification`` emitted with ``mode=auto`` (auto policy); this
+        re-emits with ``mode=manual`` so the TUI shows the approval card.
+        On resume the re-emit is harmless — the TUI replaces the card.
         """
         answer = await self._answer(request, announce=True)
         return self._merge_escalated_rule_id(answer)
 
     def _merge_escalated_rule_id(self, answer: ClarificationAnswer) -> ClarificationAnswer:
-        """Stamp the escalated safety rule_id onto a human answer's audit.
-
-        When the pipeline pre-filter escalated a `tool_approval` action to the
-        human, the human's approval should record the rule_id so the same
-        safety rule does not re-escalate for a different command in this loop.
-        """
+        """Stamp the escalated safety rule_id onto a human answer's audit."""
         rule_id = self._escalated_rule_id
         self._escalated_rule_id = None
         if not rule_id:
@@ -138,12 +124,8 @@ class InteractiveClarificationPolicy:
     def _evaluate_tool_approval_pipeline(
         self, request: ClarificationRequest
     ) -> ClarificationAnswer | None:
-        """Run the tool-approval pipeline pre-filter for manual mode.
-
-        Returns a static answer when the pipeline resolves the batch, or
-        `None` to fall through to the human interrupt. ``escalate`` outcomes
-        return ``None`` so the human sees the approval card.
-        """
+        """Run the tool-approval pipeline pre-filter.  Returns a static answer
+        or ``None`` to fall through to the human interrupt."""
         if request.origin_node != ORIGIN_TOOL_APPROVAL or self._tool_approval_pipeline is None:
             return None
         action_requests = request.metadata.get("action_requests", [])
@@ -218,11 +200,7 @@ class InteractiveClarificationPolicy:
 
     @staticmethod
     def _normalize_payload(payload: Any) -> list[str] | None:
-        """Extract a raw answer list from an interrupt payload.
-
-        Returns stripped strings, or `None` when the payload is empty or
-        has an unrecognizable shape.
-        """
+        """Extract a raw answer list from an interrupt payload, or ``None``."""
         if payload is None:
             return None
         if isinstance(payload, str):

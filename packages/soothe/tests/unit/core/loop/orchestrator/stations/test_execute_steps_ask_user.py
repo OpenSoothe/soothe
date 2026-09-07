@@ -22,7 +22,6 @@ from soothe.sloop.relay.ticket import ResumeTicket, ticket_to_state
 from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 from soothe.sloop.stations.execute.execute import (
     PLANNER_ASK_INTERRUPT_PREFIX,
-    _coerce_resume_ticket,
     node_execute,
 )
 
@@ -837,37 +836,3 @@ async def test_ask_user_answer_resume_uses_command_resume(
     # Q&A pair still reaches the ledger for the next plan iteration.
     msgs = ce.ledger.get_messages()
     assert any("What next?" in m.content for m in msgs)
-
-
-def test_coerce_resume_ticket_preserves_prior_duration_ms() -> None:
-    """``_coerce_resume_ticket`` must carry ``prior_duration_ms`` through the
-    checkpoint dict round-trip so the resume pass can accumulate step time.
-    """
-    # Dict form (what LangGraph restores after checkpoint).
-    raw = {
-        "thread_id": "thread-1__abc",
-        "step_id": "S-01",
-        "step_description": "Do the thing",
-        "prior_duration_ms": 12345,
-    }
-    ticket = _coerce_resume_ticket(raw)
-    assert ticket is not None
-    assert ticket.thread_id == "thread-1__abc"
-    assert ticket.step_id == "S-01"
-    assert ticket.step_description == "Do the thing"
-    assert ticket.prior_duration_ms == 12345
-
-
-def test_coerce_resume_ticket_defaults_prior_duration_ms() -> None:
-    """Missing ``prior_duration_ms`` in the dict defaults to 0 (backward compat)."""
-    raw = {"thread_id": "t1", "step_id": "s1"}
-    ticket = _coerce_resume_ticket(raw)
-    assert ticket is not None
-    assert ticket.prior_duration_ms == 0
-
-
-def test_coerce_resume_ticket_passes_through_typed() -> None:
-    """An already-typed ``ResumeTicket`` passes through unchanged."""
-    rt = ResumeTicket(thread_id="t1", step_id="s1", prior_duration_ms=99)
-    assert _coerce_resume_ticket(rt) is rt
-    assert _coerce_resume_ticket(None) is None

@@ -156,16 +156,22 @@ class TestAllowlistSuppression:
         assert when_run_command(req) is True
 
     def test_approved_rule_overrides_different_command(self) -> None:
-        """A prior rule-level approval (rm -rf /) suppresses re-interrupt for a
-        different command matching the same rule."""
+        """A prior rule-level approval (rm -rf / → rm_root) suppresses re-interrupt
+        for a different command in the same rule family (rm -rf <folder> → rm_rf)."""
         allowlist = [{"rule": "command.dangerous.rm_root"}]
         req = self._req_with_allowlist(
             "run_command", {"command": "rm -rf /tmp/different_path"}, allowlist
         )
         assert when_run_command(req) is False
 
+    def test_approved_rm_rf_suppresses_rm_root(self) -> None:
+        """Family is symmetric: approving rm_rf also suppresses rm_root."""
+        allowlist = [{"rule": "command.dangerous.rm_rf"}]
+        req = self._req_with_allowlist("run_command", {"command": "rm -rf /"}, allowlist)
+        assert when_run_command(req) is False
+
     def test_different_rule_still_interrupts(self) -> None:
-        """A rule override for rm -rf does not suppress sudo."""
+        """A rule override for rm -rf does not suppress sudo (different family)."""
         allowlist = [{"rule": "command.dangerous.rm_rf"}]
         req = self._req_with_allowlist(
             "run_command", {"command": "sudo apt-get install evil"}, allowlist

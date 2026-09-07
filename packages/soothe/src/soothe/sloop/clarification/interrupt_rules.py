@@ -1,21 +1,11 @@
-"""Conditional `interrupt_on` predicates for the HITL middleware.
+"""Conditional ``interrupt_on`` predicates for the HITL middleware.
 
-Each predicate returns `True` when the tool call is dangerous enough to
-warrant a human-facing interrupt, and `False` when it is safe to execute
-silently. This keeps safe in-workspace edits and routine commands off the
-clarification queue entirely — only genuinely dangerous operations
-(out-of-workspace writes, destructive commands) trigger the interrupt.
+Each predicate returns ``True`` when the tool call is dangerous enough to
+warrant a human interrupt, ``False`` when safe to execute silently.  Fail-safe:
+when the workspace or command can't be inspected, returns ``True``.
 
-The predicates are intentionally conservative: when the workspace root or
-command cannot be inspected, they return `True` (fail-safe — interrupt).
-The nano security evaluator (`WorkspaceToolOperationSecurity`) and the
-deny-rule pipeline still run as belt-and-suspenders regardless of these
-predicates.
-
-A predicate also consults the loop-scoped `tool_approval_allowlist` (passed
-via `configurable`) so an already-approved command or safety rule does not
-re-interrupt — the tool executes silently on subsequent LLM hops. This is
-the middleware-level dedup: a single approved command matches only once.
+Also consults the loop-scoped ``tool_approval_allowlist`` (via ``configurable``)
+so an already-approved command or safety-rule family does not re-interrupt.
 """
 
 from __future__ import annotations
@@ -27,16 +17,18 @@ from typing import TYPE_CHECKING, Any
 from soothe_nano.security.operation_guard import (
     dangerous_command_rule_id as _dangerous_command_rule_id,
 )
+from soothe_nano.security.operation_guard import (
+    rule_family as _rule_family,
+)
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
 
 # ── Command patterns that are always dangerous ─────────────────────────
 
-# These overlap with the nano security evaluator's ``_BANNED_COMMAND_PATTERNS``
-# and the deny rules in ``ToolApprovalConfig``. The predicate checks them here
-# so the interrupt fires *before* execution — the safety layer is a
-# belt-and-suspenders that rejects if the interrupt is approved anyway.
+# Overlaps with the nano security evaluator's banned patterns and the deny
+# rules in ToolApprovalConfig — checked here so the interrupt fires *before*
+# execution.
 _DANGEROUS_COMMAND_RE = re.compile(
     r"|".join(
         [
@@ -64,7 +56,7 @@ _DANGEROUS_COMMAND_RE = re.compile(
     re.IGNORECASE,
 )
 
-# ── System directories ─────────────────────────────────────────────────# System directories that are never inside a user workspace.
+# System directories that are never inside a user workspace.
 _SYSTEM_PATH_PREFIXES = (
     "/etc",
     "/bin",
@@ -154,7 +146,7 @@ def _rule_approved(
     command: str,
     allowlist: list[dict[str, Any]] | None,
 ) -> bool:
-    """True when a prior human approval overrode the safety rule this command matches."""
+    """True when a prior human approval overrode this command's safety rule family."""
     if not allowlist or not command:
         return False
     approved_rules = {
@@ -163,7 +155,9 @@ def _rule_approved(
     if not approved_rules:
         return False
     rule_id = _dangerous_command_rule_id(command)
-    return bool(rule_id and rule_id in approved_rules)
+    if not rule_id:
+        return False
+    return bool(_rule_family(rule_id) & approved_rules)
 
 
 _COMMAND_TOOLS = frozenset({"run_command"})
@@ -196,13 +190,8 @@ def _should_interrupt_path_tool(
     *,
     arg_keys: tuple[str, ...] = ("file_path", "path", "directory"),
 ) -> bool:
-    """Predicate for `edit_file` / `write_file` / `delete`.
-
-    Returns `True` (interrupt) when the target path is outside the
-    workspace or targets a dangerous dotfile/config. In-workspace
-    writes are safe and do not interrupt. Already-approved exact paths
-    (loop allowlist) do not re-interrupt.
-    """
+    """Interrupt when the target path is outside the workspace or targets a
+    dangerous dotfile/config.  Already-approved exact paths don't re-interrupt."""
     args = req.tool_call.get("args") or {}
     if not isinstance(args, dict):
         return True
@@ -224,14 +213,8 @@ def _should_interrupt_path_tool(
 
 
 def _should_interrupt_run_command(req: ToolCallRequest) -> bool:
-    """Predicate for `run_command`.
-
-    Returns `True` (interrupt) when the command matches a dangerous
-    pattern (privilege escalation, destructive ops, system package
-    installs, force-push, etc.) or writes to a system path. Safe routine
-    commands do not interrupt. Already-approved commands (exact signature
-    OR a prior override of the matching safety rule) do not re-interrupt.
-    """
+    """Interrupt when the command matches a dangerous pattern.  Already-approved
+    commands (exact signature or prior rule-family override) don't re-interrupt."""
     args = req.tool_call.get("args") or {}
     if not isinstance(args, dict):
         return True
@@ -248,28 +231,22 @@ def _should_interrupt_run_command(req: ToolCallRequest) -> bool:
         if _rule_approved(command, allowlist):
             return False
         return True
-    # Check for redirects to system paths (already covered by regex, but
-    # also catch explicit file_path args on run_command wrappers).
     return False
 
 
 def when_edit_file(req: ToolCallRequest) -> bool:
-    """Interrupt only on out-of-workspace or dangerous-path edits."""
     return _should_interrupt_path_tool(req)
 
 
 def when_write_file(req: ToolCallRequest) -> bool:
-    """Interrupt only on out-of-workspace or dangerous-path writes."""
     return _should_interrupt_path_tool(req)
 
 
 def when_delete(req: ToolCallRequest) -> bool:
-    """Interrupt only on out-of-workspace or dangerous-path deletes."""
     return _should_interrupt_path_tool(req, arg_keys=("path", "file_path", "directory"))
 
 
 def when_run_command(req: ToolCallRequest) -> bool:
-    """Interrupt only on dangerous command patterns."""
     return _should_interrupt_run_command(req)
 
 

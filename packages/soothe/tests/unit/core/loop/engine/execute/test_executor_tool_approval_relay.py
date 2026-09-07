@@ -158,10 +158,9 @@ def test_detector_captures_tool_approval_interrupt() -> None:
     assert "edit_file" in q["header"]
     assert "/a.py" in q["header"]
     assert "approve" in q["header"].lower()
-    assert len(q["options"]) == 3
+    assert len(q["options"]) == 2
     labels = [opt["label"] for opt in q["options"]]
     assert "Approve" in labels
-    assert "Edit" in labels
     assert "Reject" in labels
 
 
