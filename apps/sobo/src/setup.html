@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; form-action 'none'; base-uri 'none'"
+    />
+    <title>Set up Sobo</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: #0a0a0a;
+        color: #e5e5e5;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        -webkit-user-select: none;
+      }
+      .titlebar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        -webkit-app-region: drag;
+      }
+      .titlebar-name { font-weight: 600; font-size: 14px; }
+      .titlebar-quit {
+        background: none; border: none; color: #999;
+        cursor: pointer; font-size: 13px;
+        -webkit-app-region: no-drag;
+      }
+      .titlebar-quit:hover { color: #fff; }
+      .shell {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+      }
+      .heading { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+      .subheading { font-size: 14px; color: #999; margin-bottom: 32px; }
+      .field-label { font-size: 13px; color: #aaa; margin-bottom: 6px; display: block; }
+      .field {
+        width: 320px; padding: 10px 12px;
+        background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+        color: #fff; font-size: 14px; outline: none;
+      }
+      .field:focus { border-color: #6366f1; }
+      .status { font-size: 13px; margin: 16px 0; min-height: 18px; }
+      .status[data-tone="error"] { color: #ef4444; }
+      .status[data-tone="ok"] { color: #22c55e; }
+      .actions { display: flex; gap: 12px; margin-top: 8px; }
+      .button {
+        padding: 10px 20px; border: none; border-radius: 8px;
+        font-size: 14px; font-weight: 500; cursor: pointer;
+      }
+      .button-secondary { background: #1a1a1a; color: #ccc; border: 1px solid #333; }
+      .button-primary { background: #6366f1; color: #fff; }
+      .button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .hint { font-size: 12px; color: #666; margin-top: 16px; text-align: center; max-width: 320px; }
+    </style>
+  </head>
+  <body>
+    <header class="titlebar">
+      <span class="titlebar-name">Sobo</span>
+      <button id="quit" class="titlebar-quit" type="button">Quit</button>
+    </header>
+
+    <main class="shell">
+      <h1 class="heading">Connect to Soothe</h1>
+      <p class="subheading">Enter the address of your Soothe Bridge server.</p>
+
+      <form id="setup" novalidate>
+        <label class="field-label" for="server-url">Server address</label>
+        <input
+          id="server-url"
+          class="field"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="127.0.0.1:3100"
+        />
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <div class="actions">
+          <button id="check" class="button button-secondary" type="button">Check connection</button>
+          <button id="continue" class="button button-primary" type="submit">Continue</button>
+        </div>
+      </form>
+
+      <p class="hint">
+        The Soothe Bridge connects to your Soothe daemon. Start it with
+        <code>pnpm --filter @soothe/bridge dev</code>.
+      </p>
+    </main>
+
+    <script src="setup.js"></script>
+  </body>
+</html>

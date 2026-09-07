@@ -1,0 +1,26 @@
+{
+  "name": "@soothe/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@orpc/client": "^1.4.0",
+    "@orpc/contract": "^1.4.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.2",
+    "vite": "^7.0.0"
+  }
+}

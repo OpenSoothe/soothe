@@ -1,0 +1,49 @@
+{
+  "name": "sobo",
+  "productName": "Sobo",
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "pnpm build && electron .",
+    "build": "tsc -p tsconfig.json && node scripts/copy-static.mjs",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "typescript": "^5.9.2"
+  },
+  "build": {
+    "appId": "dev.sobo.desktop",
+    "directories": {
+      "output": "out",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../soothe-web/dist",
+        "to": "web"
+      }
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": ["nsis"]
+    },
+    "linux": {
+      "executableName": "sobo",
+      "icon": "assets/icon.png",
+      "target": ["AppImage"]
+    }
+  }
+}

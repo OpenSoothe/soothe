@@ -218,6 +218,24 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Node.js / pnpm
+#   Workspace apps live under apps/ (see pnpm-workspace.yaml): soothe-web (Vite),
+#   soothe-bridge (Hono), sobo (Electron). Ignore dependencies, build artifacts,
+#   and tool caches across the monorepo.
+node_modules/
+out/
+**/out/
+*.tsbuildinfo
+*.tsbuildinfo.*
+.vite/
+.pnpm-store/
+.npm/
+.yarn/
+.yarn/cache
+.yarn/install-state.gz
+.yarn/build-state.yml
+.pnp.*
+
 .python-version
 thirdparty/
 .cursor/
