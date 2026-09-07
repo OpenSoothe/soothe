@@ -926,12 +926,16 @@ class FirecrackerLoopRunner:
         pool = await self._resolve_pool()
         await pool.force_kill_worker_by_loop_id(self._loop_id, timeout=timeout)
 
-    def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap clarification mode — not yet supported for firecracker mode.
+    async def set_clarification_mode(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> bool:
+        """Hot-swap agent mode — not supported for firecracker mode.
 
-        VM workers don't expose their `SootheRunner` to the main process.
-        Returns `False` so the caller falls back to the next-turn path.
-        (Future: add a `set_clarification_mode` frame to the vsock protocol.)
+        VM workers don't expose their `SootheRunner`. Returns `False`; the
+        caller falls back to the next-turn path.
         """
         return False
 

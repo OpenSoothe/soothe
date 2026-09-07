@@ -176,13 +176,20 @@ class LoopRunnerProtocol(Protocol):
         """
         ...
 
-    def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap the clarification mode on the running goal.
+    async def set_clarification_mode(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> bool:
+        """Hot-swap the agent mode on the running goal.
 
-        Rebuilds the `ClarificationPolicy` on the live `LoopRuntimeContext`
-        so the next `await_clarification` node entry uses the new mode without
-        waiting for a new turn. Returns `True` when the swap landed on a live
-        goal; `False` when no goal is currently running.
+        Swaps the live CoreAgent graph and rebuilds the clarification policy
+        so the next execute wave uses the new mode without a new turn. Only
+        agent sub-modes (`auto`/`manual`/`bypass`) are hot-swappable;
+        `plan`/`ask` apply next turn.
+
+        Returns `True` on a live goal, `False` when none is running.
         """
         ...
 

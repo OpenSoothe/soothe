@@ -104,11 +104,16 @@ class RayLoopRunner:
             pass
         self._actor = None
 
-    def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap clarification mode — not yet supported for distributed mode.
+    async def set_clarification_mode(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> bool:
+        """Hot-swap agent mode — not supported for distributed mode.
 
-        Ray actors don't expose their `SootheRunner` to the driver process.
-        Returns `False` so the caller falls back to the next-turn path.
+        Ray actors don't expose their `SootheRunner`. Returns `False`; the
+        caller falls back to the next-turn path.
         """
         return False
 

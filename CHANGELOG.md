@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Hot-swap the agent mode mid-goal on Shift+Tab for all three agent sub-modes (auto/bypass/manual), not just auto/manual. Bypass now takes effect on the running goal by swapping the live CoreAgent graph (compiled without `interrupt_on` for mutating tools) and the tool-approval pipeline, instead of waiting for the next turn dispatch.
+
 ## [v1.0.6] - 2026-09-07
 
 ### Changed

@@ -195,14 +195,18 @@ class LoopExecutionStateFetchParams(ParamsBase):
 class LoopSetClarificationModeParams(ParamsBase):
     """Params for method=loop_set_clarification_mode, type=request.
 
-    Hot-swap the clarification mode on a running goal so the next
-    `await_clarification` node entry uses the new policy without waiting
-    for a new turn. Returns `{"applied": bool}` — `False` when no goal is
-    currently running (the caller may retry on the next turn).
+    Hot-swap the agent mode on a running goal — swaps the live CoreAgent
+    graph and clarification policy together. Only agent sub-modes
+    (`auto`/`manual`/`bypass`) are hot-swappable; `plan`/`ask` apply next
+    turn. Returns `{"applied": bool}` (`False` when no goal is running).
     """
 
     loop_id: str = Field(..., min_length=1)
     mode: str = Field(..., description="auto or manual")
+    interaction_mode: str | None = Field(
+        default=None,
+        description="bypass to swap to the bypass graph; None keeps the default graph",
+    )
 
 
 class LoopHistoryFetchParams(ParamsBase):

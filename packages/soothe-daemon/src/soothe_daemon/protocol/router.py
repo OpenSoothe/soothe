@@ -2286,13 +2286,12 @@ class MessageRouter:
         client_id: Any,
         msg: dict[str, Any],
     ) -> None:
-        """Hot-swap the clarification mode on a running goal.
+        """Hot-swap the agent mode on a running goal.
 
-        Forwards `mode` to the active loop runner's `set_clarification_mode`
-        so the next `await_clarification` node entry uses the new policy
-        without waiting for a new turn. Returns `{"applied": False}` when no
-        goal is running or the runner backend doesn't support hot-swap yet
-        (process_pool / ray); the caller may retry on the next turn.
+        Forwards `mode` + optional `interaction_mode` (bypass) to the active
+        loop runner. Only agent sub-modes are hot-swappable; `plan`/`ask` are
+        rejected here. Returns `{"applied": False}` when no goal is running or
+        the backend doesn't support hot-swap yet (process_pool / ray).
         """
         d = self._daemon
         request_id = msg.get("request_id")
@@ -2322,6 +2321,24 @@ class MessageRouter:
                 ),
             )
             return
+        raw_interaction = msg.get("interaction_mode")
+        if raw_interaction is None or (isinstance(raw_interaction, str) and raw_interaction == ""):
+            interaction_mode: str | None = None
+        elif isinstance(raw_interaction, str):
+            interaction_mode = raw_interaction.strip().lower()
+        else:
+            interaction_mode = ""
+        if interaction_mode not in (None, "bypass"):
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_PARAMS,
+                    "interaction_mode must be 'bypass' or omitted; "
+                    "'plan'/'ask' apply on the next turn, not as a hot-swap",
+                    request_id=request_id,
+                ),
+            )
+            return
 
         qe = d._query_engine
         active = qe._active_runners.get(loop_id) if qe is not None else None
@@ -2330,7 +2347,10 @@ class MessageRouter:
             return
 
         try:
-            applied = active.runner.set_clarification_mode(mode)
+            applied = await active.runner.set_clarification_mode(
+                mode,
+                interaction_mode=interaction_mode,
+            )
         except Exception as exc:
             logger.warning(
                 "[loop_set_clarification_mode] runner call failed for loop=%s: %s",

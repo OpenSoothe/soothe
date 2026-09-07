@@ -1159,11 +1159,15 @@ class _MessagesMixin:
     def cycle_composer_mode(self) -> None:
         """Advance composer mode and refresh the status-bar badge.
 
-        Cycle: Auto → Bypass → Manual → Plan → Ask → Auto. When a goal is
-        running and the new mode is Auto or Manual, hot-swaps the daemon's
-        live clarification policy via `loop_set_clarification_mode`.
+        Cycle: Auto → Bypass → Manual → Plan → Ask → Auto. For agent sub-modes
+        (auto/bypass/manual) hot-swap the running goal's agent mode via
+        `loop_set_clarification_mode`; Plan/Ask take effect on the next turn.
         """
-        from soothe_cli.tui.composer_mode import next_composer_mode
+        from soothe_cli.tui.composer_mode import (
+            AGENT_SUB_MODES,
+            next_composer_mode,
+            resolve_composer_wire_fields,
+        )
 
         current = getattr(self, "_composer_mode", "auto")
         new_mode = next_composer_mode(current)
@@ -1171,13 +1175,21 @@ class _MessagesMixin:
         if self._status_bar is not None:
             self._status_bar.set_clarification_mode(new_mode)
 
-        # Hot-swap the running goal's clarification policy when applicable.
-        # Plan/Ask modes don't carry a clarification_mode wire field, so skip
-        # them — they only take effect on the next turn dispatch.
-        if new_mode in ("auto", "manual"):
-            self._push_clarification_mode_to_running_loop(new_mode)
+        # Bypass carries an `interaction_mode` wire field; Plan/Ask stay
+        # next-turn-only.
+        if new_mode in AGENT_SUB_MODES:
+            wire = resolve_composer_wire_fields(new_mode)
+            self._push_clarification_mode_to_running_loop(
+                wire.clarification_mode,
+                interaction_mode=wire.interaction_mode,
+            )
 
-    def _push_clarification_mode_to_running_loop(self, mode: str) -> None:
+    def _push_clarification_mode_to_running_loop(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> None:
         """Best-effort hot-swap RPC; failures are silent (next turn still works)."""
         import asyncio
 
@@ -1190,11 +1202,16 @@ class _MessagesMixin:
 
         async def _push() -> None:
             try:
-                await session.set_clarification_mode(mode)
+                await session.set_clarification_mode(
+                    mode,
+                    interaction_mode=interaction_mode,
+                )
             except Exception:
                 logger.debug(
-                    "set_clarification_mode RPC failed (mode=%s); will apply on next turn",
+                    "set_clarification_mode RPC failed (mode=%s, interaction_mode=%s); "
+                    "will apply on next turn",
                     mode,
+                    interaction_mode,
                     exc_info=True,
                 )
 

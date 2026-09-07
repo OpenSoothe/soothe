@@ -138,21 +138,27 @@ class StrangeLoop:
 
         return LoopRelay(loop_id=loop_id, emit=emit)
 
-    def set_clarification_mode(self, mode: str) -> bool:
+    def set_clarification_mode(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> bool:
         """Hot-swap the clarification policy on the live runtime context.
 
-        Rebuilds the policy via `build_clarification_policy_for_runner` and
-        atomically swaps `ctx.clarification_policy`. The `await_clarification`
-        graph node reads `ctx.clarification_policy` on each entry, so the next
-        clarification inside this goal uses the new mode without waiting for a
-        new turn.
+        Rebuilds the policy and atomically swaps `ctx.clarification_policy`
+        and `ctx.interaction_mode`; the next `await_clarification` entry uses
+        the new mode. Swaps only the policy — `SootheRunner.set_clarification_mode`
+        swaps the live CoreAgent graph and then calls this.
 
         Args:
             mode: `"auto"` or `"manual"`.
+            interaction_mode: `"bypass"` or `None` (default graph); sets the
+                rebuilt tool-approval pipeline's bypass flag.
 
         Returns:
-            `True` when the swap landed on a live context, `False` when no
-            goal is currently running (caller may retry on the next turn).
+            `True` when swapped on a live context, `False` when no goal is
+            running.
         """
         ctx = self._live_runtime_ctx
         if ctx is None:
@@ -167,6 +173,7 @@ class StrangeLoop:
                 mode=mode,
                 emit=ctx.emit,
                 human_attached=True,
+                interaction_mode=interaction_mode,
                 thread_id=str(getattr(ctx.strange_loop, "_thread_id", "") or ""),
                 loop_id=str(getattr(ctx.state_manager, "loop_id", "") or ""),
             )
@@ -177,7 +184,12 @@ class StrangeLoop:
             )
             return False
         ctx.clarification_policy = new_policy
-        logger.info("[StrangeLoop] clarification mode hot-swapped to %s", mode)
+        ctx.interaction_mode = interaction_mode
+        logger.info(
+            "[StrangeLoop] clarification mode hot-swapped to %s (interaction_mode=%s)",
+            mode,
+            interaction_mode,
+        )
         return True
 
     async def run(

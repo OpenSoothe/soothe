@@ -1523,13 +1523,17 @@ class ThreadLoopRunner:
         pool = await self._resolve_pool()
         await pool.cancel_request(self._loop_id)
 
-    def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap clarification mode on the running goal.
+    async def set_clarification_mode(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> bool:
+        """Hot-swap the agent mode on the running goal.
 
-        Reaches the live `SootheRunner` inside the worker thread via the
-        pool's `_live_runners` registry and calls `set_clarification_mode`
-        on it. Returns `False` when no goal is currently running for this
-        loop — the caller may retry on the next turn.
+        Reaches the live `SootheRunner` via the pool's `_live_runners` registry
+        and awaits its `set_clarification_mode`. Returns `False` when no goal
+        is running for this loop.
         """
         pool = self._pool
         if pool is None:
@@ -1537,7 +1541,7 @@ class ThreadLoopRunner:
         runner = pool._live_runners.get(self._loop_id)  # noqa: SLF001
         if runner is None:
             return False
-        return runner.set_clarification_mode(mode)
+        return await runner.set_clarification_mode(mode, interaction_mode=interaction_mode)
 
     async def is_idle(self) -> bool:
         """True when no busy worker is mapped to this loop's request."""

@@ -171,6 +171,11 @@ class SootheRunner(
         self._client_loop_id_for_stream: str | None = None
         # Live StrangeLoop instance for the active goal (hot-swap target).
         self._live_loop_agent: Any = None
+        # Interaction mode the live agent's CoreAgent graph was built for
+        # (`None` for the default agent/ask/plan, `"bypass"` for the bypass
+        # graph). Tracked so `set_clarification_mode` only swaps the graph when
+        # the requested `interaction_mode` differs from the live one.
+        self._live_loop_interaction_mode: str | None = None
 
         # Shared PostgreSQL pool for StrangeLoop state persistence
         # Initialized lazily in async context for high-concurrency support
@@ -737,24 +742,47 @@ class SootheRunner(
 
     # -- main stream --------------------------------------------------------
 
-    def set_clarification_mode(self, mode: str) -> bool:
-        """Hot-swap the clarification mode on the running goal.
+    async def set_clarification_mode(
+        self,
+        mode: str,
+        *,
+        interaction_mode: str | None = None,
+    ) -> bool:
+        """Hot-swap the agent mode on the running goal.
 
-        Forwards to the live `StrangeLoop` instance, which rebuilds the
-        `ClarificationPolicy` and swaps it on the active `LoopRuntimeContext`.
-        The next `await_clarification` node entry uses the new mode.
+        Swaps the live CoreAgent graph when `interaction_mode` changes (the
+        bypass graph omits `interrupt_on` for mutating tools), then rebuilds
+        the clarification policy via the live `StrangeLoop`. The execute node
+        reads `strange_loop.core_agent` fresh each wave; all graphs share the
+        checkpointer so thread state survives.
 
         Args:
             mode: `"auto"` or `"manual"`.
+            interaction_mode: `"bypass"` or `None`. Only agent sub-modes are
+                hot-swappable; `plan`/`ask` apply on the next turn dispatch.
 
         Returns:
-            `True` when the swap landed on a live goal; `False` when no
-            goal is running (the caller may retry on the next turn).
+            `True` on a live goal, `False` when none is running. Graph-swap
+            failures are logged and skipped; the policy swap still runs.
         """
         agent = self._live_loop_agent
         if agent is None:
             return False
-        return agent.set_clarification_mode(mode)
+        if interaction_mode != self._live_loop_interaction_mode:
+            try:
+                await self._materialize_core_agent(interaction_mode)
+            except Exception:
+                logger.exception(
+                    "[SootheRunner] set_clarification_mode: materialize "
+                    "interaction_mode=%s failed; keeping current graph",
+                    interaction_mode,
+                )
+            else:
+                new_graph = self._bypass_core_agent if interaction_mode == "bypass" else self._agent
+                if new_graph is not None:
+                    agent.core_agent = new_graph
+                    self._live_loop_interaction_mode = interaction_mode
+        return agent.set_clarification_mode(mode, interaction_mode=interaction_mode)
 
     async def astream(
         self,
