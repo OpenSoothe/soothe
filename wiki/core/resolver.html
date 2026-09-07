@@ -1,0 +1,580 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(6)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > ul > li:nth-child(6) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > ul > li:nth-child(6) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list > li.nav-list-item:nth-child(6) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Protocol Resolver | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Protocol Resolver" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Wiring protocol declarations from configuration to runtime instances." />
+<meta property="og:description" content="Wiring protocol declarations from configuration to runtime instances." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/core/resolver.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/core/resolver.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Protocol Resolver" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Wiring protocol declarations from configuration to runtime instances.","headline":"Protocol Resolver","url":"https://mirasoth.github.io/soothe/wiki/core/resolver.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/core/">Core Modules</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Protocol Resolver</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="protocol-resolver">
+  
+  
+    <a href="#protocol-resolver" class="anchor-heading" aria-labelledby="protocol-resolver"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Protocol Resolver
+  
+  
+</h1>
+    
+
+<p>Wiring protocol declarations from configuration to runtime instances.</p><hr />
+<h2 id="what-this-module-is">
+  
+  
+    <a href="#what-this-module-is" class="anchor-heading" aria-labelledby="what-this-module-is"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What This Module Is
+  
+  
+</h2>
+    
+
+<p>The protocol resolver (<code class="language-plaintext highlighter-rouge">soothe.runner.resolver</code>) is the bridge between SootheConfig declarations and live runtime objects. It translates YAML configuration into instantiated protocols, tools, subagents, and persistence infrastructure. Both <code class="language-plaintext highlighter-rouge">create_soothe_agent()</code> and <code class="language-plaintext highlighter-rouge">SootheRunner.__init__()</code> call into the resolver — it’s the single place where “config says X” becomes “runtime has an X instance.”</p>
+
+<p>The resolver is split across three files:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">__init__.py</code> — protocol resolution (memory, planner, policy)</li>
+  <li><code class="language-plaintext highlighter-rouge">_resolver_tools.py</code> — tool and subagent registries</li>
+  <li><code class="language-plaintext highlighter-rouge">_resolver_infra.py</code> — durability and checkpointer backends</li>
+</ul>
+
+<p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/resolver/</code></p><hr />
+<h2 id="why-a-dedicated-resolver">
+  
+  
+    <a href="#why-a-dedicated-resolver" class="anchor-heading" aria-labelledby="why-a-dedicated-resolver"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why a Dedicated Resolver?
+  
+  
+</h2>
+    
+
+<p>Without a resolver, construction logic would be duplicated between the agent factory and the runner. The resolver centralizes three concerns:</p>
+
+<ol>
+  <li><strong>Protocol instantiation</strong> — each protocol has one implementation; the resolver knows which.</li>
+  <li><strong>Backend selection</strong> — durability/checkpointer have a binary choice (SQLite vs PostgreSQL) with no in-memory fallback.</li>
+  <li><strong>Capability assembly</strong> — tools and subagents are assembled from built-in registries plus plugins plus MCP.</li>
+</ol>
+
+<p>The design is intentionally <strong>not</strong> a generic plugin/dispatch system. Each protocol has exactly one implementation:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Protocol</th>
+      <th>Implementation</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Memory</td>
+      <td><code class="language-plaintext highlighter-rouge">MemUMemory</code></td>
+      <td>Semantic search + keyword indexing; <code class="language-plaintext highlighter-rouge">None</code> if disabled</td>
+    </tr>
+    <tr>
+      <td>Planner</td>
+      <td><code class="language-plaintext highlighter-rouge">LLMPlanner</code></td>
+      <td>Unified (IG-150 consolidation); always instantiated</td>
+    </tr>
+    <tr>
+      <td>Policy</td>
+      <td><code class="language-plaintext highlighter-rouge">ConfigDrivenPolicy</code></td>
+      <td>Profile-based; always instantiated</td>
+    </tr>
+    <tr>
+      <td>Durability</td>
+      <td><code class="language-plaintext highlighter-rouge">SQLiteDurability</code> / <code class="language-plaintext highlighter-rouge">PostgreSQLDurability</code></td>
+      <td>Binary choice, no fallback</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>This intentional simplicity means adding a new protocol backend requires changing resolver code, not just config. The trade-off: less flexibility, but zero ambiguity about what gets instantiated.</p><hr />
+<h2 id="the-no-in-memory-fallback-rule">
+  
+  
+    <a href="#the-no-in-memory-fallback-rule" class="anchor-heading" aria-labelledby="the-no-in-memory-fallback-rule"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The No-In-Memory-Fallback Rule
+  
+  
+</h2>
+    
+
+<p>This is the most important design decision in the resolver. <code class="language-plaintext highlighter-rouge">resolve_checkpointer()</code> and <code class="language-plaintext highlighter-rouge">resolve_durability()</code> <strong>never fall back to in-memory storage</strong>. If the configured backend fails to initialize, they raise <code class="language-plaintext highlighter-rouge">ConfigurationError</code>.</p>
+
+<p>The rationale: in-memory storage silently loses state on process restart. For a daemon that may run for days, silently degrading to in-memory would cause checkpoint loss, thread state loss, and goal DAG loss — all without error messages. Failing loud at startup is better than failing silent at runtime.</p>
+
+<p>The error messages are explicit about remediation:</p>
+<ul>
+  <li>PostgreSQL: verify <code class="language-plaintext highlighter-rouge">postgres_base_dsn</code> and <code class="language-plaintext highlighter-rouge">postgres_databases</code> configuration; ensure PostgreSQL is reachable. <code class="language-plaintext highlighter-rouge">psycopg</code> ships with <code class="language-plaintext highlighter-rouge">soothe</code> — upgrade with <code class="language-plaintext highlighter-rouge">pip install -U soothe</code> if import errors persist.</li>
+  <li>SQLite: “Check sqlite3 installation and path configuration.”</li>
+</ul><hr />
+<h2 id="checkpointer-resolution--deferred-async-initialization">
+  
+  
+    <a href="#checkpointer-resolution--deferred-async-initialization" class="anchor-heading" aria-labelledby="checkpointer-resolution--deferred-async-initialization"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Checkpointer Resolution — Deferred Async Initialization
+  
+  
+</h2>
+    
+
+<p>The checkpointer has a subtlety: <code class="language-plaintext highlighter-rouge">resolve_checkpointer()</code> returns <strong>either</strong> a checkpointer <strong>or</strong> a <code class="language-plaintext highlighter-rouge">(None, resource)</code> tuple:</p>
+
+<ul>
+  <li><strong>PostgreSQL</strong> → returns <code class="language-plaintext highlighter-rouge">(None, SharedCheckpointerPool)</code> — the actual <code class="language-plaintext highlighter-rouge">AsyncPostgresSaver</code> is created from the pool in async context (during runner’s async initialization). This avoids “no running event loop” errors.</li>
+  <li><strong>SQLite</strong> → returns <code class="language-plaintext highlighter-rouge">(None, db_path)</code> — the <code class="language-plaintext highlighter-rouge">AsyncSqliteSaver</code> is created from the path in async context.</li>
+</ul>
+
+<p>The runner handles both cases: if it gets a tuple, it stores the pool/path and initializes the checkpointer lazily in <code class="language-plaintext highlighter-rouge">_ensure_checkpointer_initialized()</code>. The connection resource (pool) <strong>must be closed during cleanup</strong> via <code class="language-plaintext highlighter-rouge">runner.cleanup()</code>.</p>
+<h3 id="sharedcheckpointerpool">
+  
+  
+    <a href="#sharedcheckpointerpool" class="anchor-heading" aria-labelledby="sharedcheckpointerpool"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> SharedCheckpointerPool
+  
+  
+</h3>
+    
+
+<p>For PostgreSQL, the resolver uses <code class="language-plaintext highlighter-rouge">SharedCheckpointerPool.get_or_create_pool(config)</code> — a singleton pool shared across multiple runners/loops for high-concurrency support. This avoids creating a new connection pool per runner instance.</p>
+<h3 id="rfc-802-multi-database-architecture">
+  
+  
+    <a href="#rfc-802-multi-database-architecture" class="anchor-heading" aria-labelledby="rfc-802-multi-database-architecture"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> RFC-802 Multi-Database Architecture
+  
+  
+</h3>
+    
+
+<p>PostgreSQL uses <strong>dedicated databases</strong> per concern:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">metadata</code> database → durability</li>
+  <li><code class="language-plaintext highlighter-rouge">checkpoints</code> database → LangGraph checkpointer</li>
+</ul>
+
+<p>The DSN is resolved via <code class="language-plaintext highlighter-rouge">config.resolve_postgres_dsn_for_database("metadata")</code> and <code class="language-plaintext highlighter-rouge">config.resolve_postgres_dsn_for_database("checkpoints")</code>.</p><hr />
+<h2 id="protocol-resolution-details">
+  
+  
+    <a href="#protocol-resolution-details" class="anchor-heading" aria-labelledby="protocol-resolution-details"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Protocol Resolution Details
+  
+  
+</h2>
+    
+<h3 id="memory-resolve_memory">
+  
+  
+    <a href="#memory-resolve_memory" class="anchor-heading" aria-labelledby="memory-resolve_memory"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Memory (<code class="language-plaintext highlighter-rouge">resolve_memory</code>)
+  
+  
+</h3>
+    
+
+<p>Returns <code class="language-plaintext highlighter-rouge">MemUMemory(config)</code> if <code class="language-plaintext highlighter-rouge">config.agent.protocols.memory.enabled</code> is <code class="language-plaintext highlighter-rouge">True</code>, else <code class="language-plaintext highlighter-rouge">None</code>. MemU uses two model roles: <code class="language-plaintext highlighter-rouge">llm_chat_role</code> (for extraction) and <code class="language-plaintext highlighter-rouge">llm_embed_role</code> (for embeddings). If disabled, the agent simply has no memory protocol — <code class="language-plaintext highlighter-rouge">agent.memory</code> returns <code class="language-plaintext highlighter-rouge">None</code>.</p>
+<h3 id="planner-resolve_planner">
+  
+  
+    <a href="#planner-resolve_planner" class="anchor-heading" aria-labelledby="planner-resolve_planner"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Planner (<code class="language-plaintext highlighter-rouge">resolve_planner</code>)
+  
+  
+</h3>
+    
+
+<p>Always returns an <code class="language-plaintext highlighter-rouge">LLMPlanner</code> instance — there is no “disabled” state for the planner. The model is resolved with a fallback chain: first the provided <code class="language-plaintext highlighter-rouge">model</code> argument, then <code class="language-plaintext highlighter-rouge">config.create_chat_model(planner_role)</code> (default role: <code class="language-plaintext highlighter-rouge">think</code>), then <code class="language-plaintext highlighter-rouge">config.create_chat_model("default")</code>. If all fail, the planner is created with <code class="language-plaintext highlighter-rouge">model=None</code> (it will degrade at runtime).</p>
+<h3 id="policy-resolve_policy">
+  
+  
+    <a href="#policy-resolve_policy" class="anchor-heading" aria-labelledby="policy-resolve_policy"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Policy (<code class="language-plaintext highlighter-rouge">resolve_policy</code>)
+  
+  
+</h3>
+    
+
+<p>Always returns <code class="language-plaintext highlighter-rouge">ConfigDrivenPolicy(config)</code>. No backend selection — config-driven policy is the only implementation.</p><hr />
+<h2 id="tool-and-subagent-resolution">
+  
+  
+    <a href="#tool-and-subagent-resolution" class="anchor-heading" aria-labelledby="tool-and-subagent-resolution"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Tool and Subagent Resolution
+  
+  
+</h2>
+    
+
+<p><code class="language-plaintext highlighter-rouge">resolve_tools(config)</code> assembles the tool list from multiple sources:</p>
+<ol>
+  <li><strong>Built-in tools</strong> — gated by <code class="language-plaintext highlighter-rouge">config.tools.execution.enabled</code>, <code class="language-plaintext highlighter-rouge">config.tools.websearch.enabled</code>, etc.</li>
+  <li><strong>Plugin tools</strong> — loaded via <code class="language-plaintext highlighter-rouge">load_plugin_tools(config)</code></li>
+  <li><strong>MCP tools</strong> — loaded from configured MCP servers</li>
+</ol>
+
+<p><code class="language-plaintext highlighter-rouge">resolve_subagents(config)</code> assembles subagents from a <code class="language-plaintext highlighter-rouge">SUBAGENT_FACTORIES</code> registry — built-in subagents (planner, deep_research, academic_research, browser_use, veritas) plus plugin subagents. Semantic skill search is handled by <code class="language-plaintext highlighter-rouge">foundation.skillify.SkillifyService</code>, not the subagent registry.</p>
+
+<p>The resolver also provides <strong>lazy subagent</strong> loading (<code class="language-plaintext highlighter-rouge">_lazy_subagent.py</code>) — subagents can be compiled on first use rather than at agent construction time, reducing startup cost.</p><hr />
+<h2 id="configuration-mapping">
+  
+  
+    <a href="#configuration-mapping" class="anchor-heading" aria-labelledby="configuration-mapping"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration Mapping
+  
+  
+</h2>
+    
+
+<p>The resolver reads from standard config sections:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">protocols</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span>
+      <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+      <span class="na">llm_chat_role</span><span class="pi">:</span> <span class="s">fast</span>
+      <span class="na">llm_embed_role</span><span class="pi">:</span> <span class="s">embedding</span>
+    <span class="na">planner</span><span class="pi">:</span>
+      <span class="na">model</span><span class="pi">:</span> <span class="s">think</span>
+      <span class="na">routing</span><span class="pi">:</span> <span class="s">auto</span>
+    <span class="na">policy</span><span class="pi">:</span>
+      <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+      <span class="na">profile</span><span class="pi">:</span> <span class="s">standard</span>
+    <span class="na">durability</span><span class="pi">:</span>
+      <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+      <span class="na">backend</span><span class="pi">:</span> <span class="s">sqlite</span>  <span class="c1"># or postgresql</span>
+
+<span class="na">subagents</span><span class="pi">:</span>
+  <span class="na">planner</span><span class="pi">:</span>
+    <span class="na">model_role</span><span class="pi">:</span> <span class="s">think</span>
+
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">default_backend</span><span class="pi">:</span> <span class="s">sqlite</span>  <span class="c1"># drives ContextEngine backend too</span>
+</code></pre></div></div>
+
+<p>Tool and subagent configs live under their own top-level keys (<code class="language-plaintext highlighter-rouge">tools:</code> and <code class="language-plaintext highlighter-rouge">subagents:</code>), each with per-item <code class="language-plaintext highlighter-rouge">enabled</code> flags.</p><hr />
+<h2 id="integration-points">
+  
+  
+    <a href="#integration-points" class="anchor-heading" aria-labelledby="integration-points"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Integration Points
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>AgentBuilder</strong> — calls <code class="language-plaintext highlighter-rouge">resolve_memory</code>, <code class="language-plaintext highlighter-rouge">resolve_planner</code>, <code class="language-plaintext highlighter-rouge">resolve_policy</code>, <code class="language-plaintext highlighter-rouge">resolve_tools</code>, <code class="language-plaintext highlighter-rouge">resolve_subagents</code> during <code class="language-plaintext highlighter-rouge">build()</code>.</li>
+  <li><strong>SootheRunner</strong> — calls <code class="language-plaintext highlighter-rouge">resolve_checkpointer</code>, <code class="language-plaintext highlighter-rouge">resolve_durability</code>, <code class="language-plaintext highlighter-rouge">resolve_planner</code>, <code class="language-plaintext highlighter-rouge">resolve_policy</code> in <code class="language-plaintext highlighter-rouge">__init__()</code>; the checkpointer is passed to <code class="language-plaintext highlighter-rouge">create_soothe_agent()</code>.</li>
+  <li><strong>FrameworkFilesystem</strong> — uses <code class="language-plaintext highlighter-rouge">resolve_daemon_workspace()</code> for the default root directory (see <a href="/soothe/wiki/core/workspace.html">Workspace</a>).</li>
+</ul><hr />
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>PostgreSQL requires explicit setup</strong> — the <code class="language-plaintext highlighter-rouge">metadata</code> and <code class="language-plaintext highlighter-rouge">checkpoints</code> databases must be created and accessible before starting the daemon. The resolver will not create them.</li>
+  <li><strong>Checkpointer cleanup is the runner’s responsibility</strong> — if you bypass the runner and call <code class="language-plaintext highlighter-rouge">resolve_checkpointer</code> directly, you must close the returned connection resource yourself.</li>
+  <li><strong>Planner model fallback is silent</strong> — if the <code class="language-plaintext highlighter-rouge">think</code> model role isn’t configured, the planner falls back to <code class="language-plaintext highlighter-rouge">default</code>, then to <code class="language-plaintext highlighter-rouge">None</code>. A <code class="language-plaintext highlighter-rouge">None</code> model won’t fail at resolution time but will degrade during planning.</li>
+  <li><strong>Tool cache</strong> — <code class="language-plaintext highlighter-rouge">_tool_cache.py</code> caches resolved tools to avoid re-instantiating on repeated agent builds within the same process.</li>
+</ul><hr />
+<h2 id="related">
+  
+  
+    <a href="#related" class="anchor-heading" aria-labelledby="related"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/core/agent-factory.html">Agent Factory</a></strong> — consumes resolved protocols</li>
+  <li><strong><a href="/soothe/wiki/core/runner.html">SootheRunner</a></strong> — consumes checkpointer and durability</li>
+  <li><strong><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a></strong> — config schema</li>
+  <li><strong><a href="../../specs/RFC-001-core-modules-architecture.md">RFC-001</a></strong> — architecture spec</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

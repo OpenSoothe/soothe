@@ -1,0 +1,777 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(1) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(1) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(1) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(1) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(1) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Onboarding Guide | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Onboarding Guide" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Single-page onboarding path: setup, daily workflow, and debugging for new contributors to the Soothe monorepo." />
+<meta property="og:description" content="Single-page onboarding path: setup, daily workflow, and debugging for new contributors to the Soothe monorepo." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/getting-started/onboarding.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/getting-started/onboarding.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Onboarding Guide" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Single-page onboarding path: setup, daily workflow, and debugging for new contributors to the Soothe monorepo.","headline":"Onboarding Guide","url":"https://mirasoth.github.io/soothe/wiki/getting-started/onboarding.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/getting-started/">Getting Started</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Onboarding Guide</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="onboarding-guide">
+  
+  
+    <a href="#onboarding-guide" class="anchor-heading" aria-labelledby="onboarding-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Onboarding Guide
+  
+  
+</h1>
+    
+
+<p>A consolidated path from clone to first merged PR. This page stitches together
+the essentials of <a href="/soothe/wiki/getting-started/Installation.html">Installation</a>, the
+<a href="/soothe/wiki/contributing-guide.html">Contributing Guide</a>, the
+<a href="/soothe/wiki/testing-guide.html">Testing Guide</a>, and the
+<a href="/soothe/wiki/howto_debug.html">Debug Guide</a> so a new contributor can move without
+context-switching. Each section links to the deeper page when you need more.</p>
+
+<blockquote>
+  <p><strong>Audience</strong>: contributors to the <strong>owned</strong> monorepo packages
+(<code class="language-plaintext highlighter-rouge">soothe</code>, <code class="language-plaintext highlighter-rouge">soothe-daemon</code>, <code class="language-plaintext highlighter-rouge">soothe-cli</code>). If you only want to <em>use</em> Soothe,
+start at <a href="/soothe/wiki/getting-started/Quick-Start.html">Quick Start</a> instead.</p>
+</blockquote><hr />
+<h2 id="1-setup">
+  
+  
+    <a href="#1-setup" class="anchor-heading" aria-labelledby="1-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1. Setup
+  
+  
+</h2>
+    
+<h3 id="11-prerequisites">
+  
+  
+    <a href="#11-prerequisites" class="anchor-heading" aria-labelledby="11-prerequisites"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1.1 Prerequisites
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Python 3.11+</strong> — <code class="language-plaintext highlighter-rouge">python --version</code> must report 3.11.x or higher.</li>
+  <li><strong><a href="https://docs.astral.sh/uv/">uv</a></strong> — the workspace package manager used by
+every <code class="language-plaintext highlighter-rouge">make</code> target and by <code class="language-plaintext highlighter-rouge">verify_finally.sh</code>.</li>
+  <li><strong>Docker</strong> — required for integration tests and the dev stack
+(PostgreSQL + pgvector + Langfuse).</li>
+  <li><strong>Git</strong> — with submodules enabled (clients are consumed as submodules).</li>
+</ul>
+<h3 id="12-clone--sync">
+  
+  
+    <a href="#12-clone--sync" class="anchor-heading" aria-labelledby="12-clone--sync"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1.2 Clone &amp; sync
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/mirasoth/soothe.git
+<span class="nb">cd </span>soothe
+make <span class="nb">sync</span>            <span class="c"># = uv sync --all-packages --all-extras (then PyPI URL rewrite)</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">make sync</code> resolves the full workspace, installs all extras + dev deps, and
+rewrites <code class="language-plaintext highlighter-rouge">uv.lock</code> URLs to canonical PyPI (see <code class="language-plaintext highlighter-rouge">scripts/rewrite_uv_lock_to_pypi.sh</code>).
+If a sync stalls on a mirror, prefer <code class="language-plaintext highlighter-rouge">make sync-no-cache</code> (uses <code class="language-plaintext highlighter-rouge">--no-cache
+--refresh</code>).</p>
+<h3 id="13-know-the-package-layout">
+  
+  
+    <a href="#13-know-the-package-layout" class="anchor-heading" aria-labelledby="13-know-the-package-layout"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1.3 Know the package layout
+  
+  
+</h3>
+    
+
+<p>This repo <strong>owns three packages</strong> (format/lint/test/publish here):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>packages/
+├── soothe-cli/        # CLI + TUI (Typer + Textual)
+├── soothe/            # StrangeLoop / Autopilot / host composition (library)
+└── soothe-daemon/     # soothed process (WebSocket + HTTP transports)
+</code></pre></div></div>
+
+<p>Submodules (<code class="language-plaintext highlighter-rouge">client/{python,go,typescript,rust}</code>, <code class="language-plaintext highlighter-rouge">soothe-sdk</code>) are
+<strong>consumed as code</strong> — do not format, lint, test, or release them here.
+<code class="language-plaintext highlighter-rouge">soothe-nano</code> and <code class="language-plaintext highlighter-rouge">soothe-deepagents</code> are PyPI dependencies, not vendored.</p>
+<h3 id="14-dependency-direction-one-way-dag">
+  
+  
+    <a href="#14-dependency-direction-one-way-dag" class="anchor-heading" aria-labelledby="14-dependency-direction-one-way-dag"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1.4 Dependency direction (one-way DAG)
+  
+  
+</h3>
+    
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe-sdk            ← shared contracts (PyPI; leaf)
+soothe-deepagents     ← deepagents fork (PyPI; leaf)
+        ↓
+soothe-nano           ← Coding CoreAgent (PyPI)
+        ↓
+soothe                ← host: StrangeLoop, Autopilot, CE, cron, runner   ← OWNED
+        ↓
+soothe-daemon         ← soothed process                                 ← OWNED
+        ↑
+soothe-cli            ← Typer + Textual TUI                             ← OWNED
+</code></pre></div></div>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Package</th>
+      <th>May import</th>
+      <th>Must NOT import</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe-sdk</code>, <code class="language-plaintext highlighter-rouge">soothe-nano</code>, <code class="language-plaintext highlighter-rouge">soothe-deepagents</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_daemon</code>, <code class="language-plaintext highlighter-rouge">soothe_cli</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe-daemon</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe</code>, <code class="language-plaintext highlighter-rouge">soothe-nano</code>, <code class="language-plaintext highlighter-rouge">soothe-sdk</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_cli</code>, <code class="language-plaintext highlighter-rouge">soothe_client</code> (runtime)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe-cli</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe-sdk</code>, <code class="language-plaintext highlighter-rouge">soothe-client-python</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe</code>, <code class="language-plaintext highlighter-rouge">soothe_daemon</code> (use WebSocket)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Boundaries are enforced by <code class="language-plaintext highlighter-rouge">scripts/check_module_import_boundaries.sh</code>, which
+runs inside <code class="language-plaintext highlighter-rouge">./scripts/verify_finally.sh</code>. Reversing an arrow fails CI.</p>
+<h3 id="15-optional-dev-services">
+  
+  
+    <a href="#15-optional-dev-services" class="anchor-heading" aria-labelledby="15-optional-dev-services"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1.5 Optional dev services
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>make docker-dev-up    <span class="c"># pgvector + Langfuse for integration tests</span>
+make docker-dev-ps    <span class="c"># status</span>
+make docker-dev-down  <span class="c"># stop</span>
+</code></pre></div></div>
+<h3 id="16-first-verification">
+  
+  
+    <a href="#16-first-verification" class="anchor-heading" aria-labelledby="16-first-verification"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1.6 First verification
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/verify_finally.sh
+</code></pre></div></div>
+
+<p>You should see the green summary (workspace integrity → dependency validation →
+format → lint → vulture → unit tests). This is the single gate you must clear
+before every commit; see <a href="#23-the-verification-gate">§2.3</a> below.</p><hr />
+<h2 id="2-workflow">
+  
+  
+    <a href="#2-workflow" class="anchor-heading" aria-labelledby="2-workflow"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2. Workflow
+  
+  
+</h2>
+    
+<h3 id="21-daily-loop">
+  
+  
+    <a href="#21-daily-loop" class="anchor-heading" aria-labelledby="21-daily-loop"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2.1 Daily loop
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># 1. branch</span>
+git checkout <span class="nt">-b</span> feature/my-feature     <span class="c"># or bugfix/...</span>
+
+<span class="c"># 2. edit code + tests together</span>
+<span class="c">#    src:    packages/soothe/src/soothe/sloop/engine/strange_loop.py</span>
+<span class="c">#    test:   packages/soothe/tests/unit/core/loop/engine/test_strange_loop_*.py</span>
+
+<span class="c"># 3. run the targeted test</span>
+<span class="nb">cd </span>packages/soothe
+uv run pytest tests/unit/core/loop/engine/test_strange_loop_model_roles.py <span class="nt">-v</span>
+
+<span class="c"># 4. format + lint (fast feedback)</span>
+make format           <span class="c"># write</span>
+make format-check    <span class="c"># CI-equivalent</span>
+make lint
+
+<span class="c"># 5. full gate before commit</span>
+<span class="nb">cd</span> - <span class="o">&amp;&amp;</span> ./scripts/verify_finally.sh
+</code></pre></div></div>
+<h3 id="22-quality-targets-per-agentsmd">
+  
+  
+    <a href="#22-quality-targets-per-agentsmd" class="anchor-heading" aria-labelledby="22-quality-targets-per-agentsmd"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2.2 Quality targets (per AGENTS.md)
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Python ≥ 3.11</strong>, type hints on all public functions, Google-style
+docstrings (<code class="language-plaintext highlighter-rouge">Args</code>/<code class="language-plaintext highlighter-rouge">Returns</code>/<code class="language-plaintext highlighter-rouge">Raises</code>), single backticks for inline code.</li>
+  <li><strong>Naming</strong>: <code class="language-plaintext highlighter-rouge">snake_case</code> modules/functions, <code class="language-plaintext highlighter-rouge">PascalCase</code> classes,
+<code class="language-plaintext highlighter-rouge">UPPER_SNAKE_CASE</code> constants, <code class="language-plaintext highlighter-rouge">_leading_underscore</code> private.</li>
+  <li><strong>No bare <code class="language-plaintext highlighter-rouge">except:</code></strong> — typed exception handling only.</li>
+  <li><strong>No keyword heuristics</strong> for content judgment — use structured light-LLM
+fields or declarative config rules. If a regex/keyword list seems required,
+stop and ask before implementing.</li>
+  <li><strong>Ecosystem first</strong>: check <code class="language-plaintext highlighter-rouge">langchain-core</code>, <code class="language-plaintext highlighter-rouge">langchain-community</code>,
+<code class="language-plaintext highlighter-rouge">deepagents</code> before writing new tools/subagents/MCP/memory middleware.</li>
+  <li><strong>Tests live in packages</strong>: <code class="language-plaintext highlighter-rouge">packages/&lt;pkg&gt;/tests/unit/</code> or
+<code class="language-plaintext highlighter-rouge">packages/&lt;pkg&gt;/tests/integration/</code> — never a root <code class="language-plaintext highlighter-rouge">tests/</code>.</li>
+</ul>
+<h3 id="23-the-verification-gate">
+  
+  
+    <a href="#23-the-verification-gate" class="anchor-heading" aria-labelledby="23-the-verification-gate"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2.3 The verification gate
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">./scripts/verify_finally.sh</code> is mandatory before <strong>any</strong> commit. Flags:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><em>(none)</em></td>
+      <td>Full suite: sync → deps → format → lint → vulture → unit tests</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--quick</code></td>
+      <td>Skip tests (format + lint only)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--fix</code></td>
+      <td>Auto-fix formatting and linting, then re-check</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">--deps</code></td>
+      <td>Dependency/boundary validation only</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>All checks must pass: zero lint errors, all unit tests green (900+). Do not
+stop at a failing run — fix the implementation, not the test expectations
+(AGENTS.md rule: “Passing tests” ≠ “Working correctly”).</p>
+<h3 id="24-after-code-cleanse--verify--fix">
+  
+  
+    <a href="#24-after-code-cleanse--verify--fix" class="anchor-heading" aria-labelledby="24-after-code-cleanse--verify--fix"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2.4 After-code cleanse → verify → fix
+  
+  
+</h3>
+    
+
+<p>Per AGENTS.md rule 6, once an implementation is finished (and before marking
+work done):</p>
+
+<ol>
+  <li><strong>Ask</strong> whether to cleanse legacy code, backward-compat shims, and dead code
+related to the change.</li>
+  <li>If approved, <strong>cleanse</strong> — delete/consolidate only; do not rewrite behavior.</li>
+  <li><strong>Run</strong> <code class="language-plaintext highlighter-rouge">./scripts/verify_finally.sh</code>.</li>
+  <li><strong>Fix</strong> all errors (lint, format, tests, vulture). Re-cleanse if fixes leave
+new dead code, then re-run verify until green.</li>
+</ol>
+<h3 id="25-config-sync-rule">
+  
+  
+    <a href="#25-config-sync-rule" class="anchor-heading" aria-labelledby="25-config-sync-rule"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2.5 Config-sync rule
+  
+  
+</h3>
+    
+
+<p>When editing <code class="language-plaintext highlighter-rouge">config/templates/nano.yml</code>, you <strong>must</strong> also update
+<code class="language-plaintext highlighter-rouge">config/develop/nano.yml</code> with matching structure. The packaged templates under
+<code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/setup/templates/</code> are the SoT;
+<code class="language-plaintext highlighter-rouge">config/templates/</code> are symlinks to them. Enforced by <code class="language-plaintext highlighter-rouge">scripts/check_config_sync.sh</code> (writes
+<code class="language-plaintext highlighter-rouge">config-sync-diff.txt</code>).</p>
+<h3 id="26-pr-process">
+  
+  
+    <a href="#26-pr-process" class="anchor-heading" aria-labelledby="26-pr-process"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2.6 PR process
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/verify_finally.sh          <span class="c"># MANDATORY, all green</span>
+git add <span class="nt">-A</span> <span class="o">&amp;&amp;</span> git commit <span class="nt">-m</span> <span class="s2">"feat: ..."</span>   <span class="c"># see commit guidelines in Contributing Guide</span>
+git push origin feature/my-feature
+<span class="c"># open PR on GitHub using the repo PR template</span>
+</code></pre></div></div>
+
+<p>CI (<code class="language-plaintext highlighter-rouge">.github/workflows/alignment-check.yml</code>) re-runs five checks on PRs to
+<code class="language-plaintext highlighter-rouge">main</code>/<code class="language-plaintext highlighter-rouge">develop</code>: first-party pin alignment, config-sync, wiki staleness lint,
+workflow YAML validate, and RFC metadata. Passing locally with
+<code class="language-plaintext highlighter-rouge">verify_finally.sh</code> makes CI green in the large majority of cases.</p><hr />
+<h2 id="3-debugging">
+  
+  
+    <a href="#3-debugging" class="anchor-heading" aria-labelledby="3-debugging"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3. Debugging
+  
+  
+</h2>
+    
+<h3 id="31-log-locations">
+  
+  
+    <a href="#31-log-locations" class="anchor-heading" aria-labelledby="31-log-locations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3.1 Log locations
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Log File</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">~/.soothe/logs/soothed.log</code></td>
+      <td>Daemon backend (agent execution, protocols, tools)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">~/.soothe/logs/soothe-cli.log</code></td>
+      <td>CLI client (connection, UI, event handling)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">~/.soothe/data/threads/{thread_id}/logs/</code></td>
+      <td>Thread conversation audit (when <code class="language-plaintext highlighter-rouge">thread_logging.enabled</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">~/.soothe/data/databases/checkpoints.db</code></td>
+      <td>StrangeLoop + LangGraph checkpoints</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">~/.soothe/data/databases/metadata.db</code></td>
+      <td>Metadata / durability</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="32-enabling-debug-logging">
+  
+  
+    <a href="#32-enabling-debug-logging" class="anchor-heading" aria-labelledby="32-enabling-debug-logging"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3.2 Enabling debug logging
+  
+  
+</h3>
+    
+
+<p><strong>Quick (env, no restart of CLI):</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_DEBUG</span><span class="o">=</span><span class="nb">true</span>            <span class="c"># global verbose behavior logging</span>
+<span class="nb">export </span><span class="nv">SOOTHE_LOG_LEVEL</span><span class="o">=</span>DEBUG       <span class="c"># file logging to DEBUG for daemon + CLI</span>
+soothed stop <span class="o">&amp;&amp;</span> soothed start
+soothe
+</code></pre></div></div>
+
+<p><strong>Persistent (config):</strong> set <code class="language-plaintext highlighter-rouge">debug: true</code> and <code class="language-plaintext highlighter-rouge">logging.file.level: DEBUG</code> in
+<code class="language-plaintext highlighter-rouge">~/.soothe/config/nano.yml</code>; optionally enable <code class="language-plaintext highlighter-rouge">thread_logging</code> for per-thread
+audit. Restart the daemon to pick up config changes. CLI picks up
+<code class="language-plaintext highlighter-rouge">--log-level</code> / <code class="language-plaintext highlighter-rouge">SOOTHE_LOG_LEVEL</code> on every invocation, no restart needed.</p>
+
+<blockquote>
+  <p><strong>Verbosity vs log level</strong>: TUI progress verbosity is a client-side
+preference (<code class="language-plaintext highlighter-rouge">quiet</code> / <code class="language-plaintext highlighter-rouge">normal</code> / <code class="language-plaintext highlighter-rouge">debug</code>) controlling what events are
+displayed. <code class="language-plaintext highlighter-rouge">--log-level</code> / <code class="language-plaintext highlighter-rouge">SOOTHE_LOG_LEVEL</code> controls what gets written
+to the CLI log file (Python logging). They are independent.</p>
+</blockquote>
+<h3 id="33-live-log-inspection">
+  
+  
+    <a href="#33-live-log-inspection" class="anchor-heading" aria-labelledby="33-live-log-inspection"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3.3 Live log inspection
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothed.log         <span class="c"># daemon backend</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothe-cli.log      <span class="c"># CLI client</span>
+<span class="nb">grep</span> <span class="nt">-i</span> <span class="s2">"error</span><span class="se">\|</span><span class="s2">exception</span><span class="se">\|</span><span class="s2">failed"</span> ~/.soothe/logs/soothed.log
+<span class="nb">grep</span> <span class="nt">-i</span> <span class="s2">"websocket</span><span class="se">\|</span><span class="s2">connection</span><span class="se">\|</span><span class="s2">timeout"</span> ~/.soothe/logs/soothe-cli.log
+<span class="nb">grep</span> <span class="nt">-i</span> <span class="s2">"subagent"</span> ~/.soothe/logs/soothed.log
+</code></pre></div></div>
+<h3 id="34-common-workflows">
+  
+  
+    <a href="#34-common-workflows" class="anchor-heading" aria-labelledby="34-common-workflows"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3.4 Common workflows
+  
+  
+</h3>
+    
+
+<p><strong>Agent behavior</strong> (not executing steps, tools not called, subagent failing):
+enable <code class="language-plaintext highlighter-rouge">SOOTHE_LOG_LEVEL=DEBUG</code>, run <code class="language-plaintext highlighter-rouge">soothe -p "..."</code>, then watch
+<code class="language-plaintext highlighter-rouge">soothed.log</code> for loop iteration count, planner decisions, tool selection,
+subagent delegation, goal state transitions.</p>
+
+<p><strong>Model/LLM</strong> (wrong model, malformed prompts): enable Langfuse under
+<code class="language-plaintext highlighter-rouge">observability.langfuse</code> in <code class="language-plaintext highlighter-rouge">nano.yml</code> (<code class="language-plaintext highlighter-rouge">pip install langfuse</code>), restart the
+daemon, run a query, then inspect model resolution, prompt construction, tool
+definitions sent, response parsing, token usage in the Langfuse UI (the daemon
+log only records that Langfuse is active).</p>
+
+<p><strong>Daemon request timeout</strong> (<code class="language-plaintext highlighter-rouge">Request exceeded …s</code>, step cancelled mid-run):
+confirm wall-clock vs configured cap:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rg <span class="s1">'request timeout|Request exceeded|cancelled after'</span> <span class="se">\</span>
+   ~/.soothe/logs/daemon.log ~/.soothe/data/loops/<span class="k">*</span>/runner.log
+<span class="nb">grep</span> <span class="nt">-A2</span> <span class="s1">'request_timeout_seconds'</span> ~/.soothe/config/daemon.yml
+<span class="nb">grep</span> <span class="nt">-A2</span> <span class="s1">'goal_deadline_seconds'</span> ~/.soothe/config/nano.yml
+</code></pre></div></div>
+
+<p>Defaults (template): <strong>1209600s (14 days)</strong> for both daemon request timeout and
+autopilot goal deadline. Resume/re-run with a higher cap if the goal legitimately
+needs more wall-clock time.</p>
+
+<p><strong>Stale worker_pool subprocesses</strong>: enable <code class="language-plaintext highlighter-rouge">worker_pool</code> + <code class="language-plaintext highlighter-rouge">stale_worker_reap</code>
+in <code class="language-plaintext highlighter-rouge">daemon.yml</code> (default interval 1800s) for automatic periodic reap while the
+daemon runs; for a one-off manual cleanup with the daemon stopped, run
+<code class="language-plaintext highlighter-rouge">uv run python -m soothe_daemon.persistence</code> (add <code class="language-plaintext highlighter-rouge">--dry-run</code> to preview).
+<code class="language-plaintext highlighter-rouge">thread_pool</code> mode has no spawn workers, so periodic reap is not started.</p>
+<h3 id="35-troubleshooting-cross-refs">
+  
+  
+    <a href="#35-troubleshooting-cross-refs" class="anchor-heading" aria-labelledby="35-troubleshooting-cross-refs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3.5 Troubleshooting cross-refs
+  
+  
+</h3>
+    
+
+<p>For exhaustive error catalogs (API key, subagent disabled, WebSocket refused,
+config schema, persistence backend mode), see
+<a href="/soothe/wiki/troubleshooting/">Troubleshooting</a>. For the full debug playbook
+(verbosity levels, thread conversation logs, model/connection/stale-worker
+workflows), see the <a href="/soothe/wiki/howto_debug.html">Debug Guide</a>.</p><hr />
+<h2 id="4-next-steps">
+  
+  
+    <a href="#4-next-steps" class="anchor-heading" aria-labelledby="4-next-steps"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 4. Next steps
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Architecture</strong>: <a href="/soothe/wiki/architecture/">Architecture Overview</a>,
+<a href="/soothe/wiki/core/">Core Modules</a>.</li>
+  <li><strong>Configuration</strong>: <a href="/soothe/wiki/configuration-guide/">Configuration Guide</a>
+(YAML reference, env vars, provider setup).</li>
+  <li><strong>Reference</strong>: <a href="/soothe/wiki/cli-reference.html">CLI Reference</a>,
+<a href="/soothe/wiki/tui-guide.html">TUI Guide</a>, <a href="/soothe/wiki/api-reference/">API Reference</a>.</li>
+  <li><strong>Specs</strong>: <a href="../../specs/rfc-index.md">RFC Index</a> for design context
+(internal-only references — never surfaced to users in runtime strings).</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

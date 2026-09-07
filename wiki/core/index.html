@@ -1,0 +1,553 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li:not(:nth-child(5)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Core Modules | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Core Modules" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Agent factory, runner, strange loop, context engine, events, resolver, workspace." />
+<meta property="og:description" content="Agent factory, runner, strange loop, context engine, events, resolver, workspace." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/core/" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/core/" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Core Modules" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Agent factory, runner, strange loop, context engine, events, resolver, workspace.","headline":"Core Modules","url":"https://mirasoth.github.io/soothe/wiki/core/"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Core Modules</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="core-modules-architecture">
+  
+  
+    <a href="#core-modules-architecture" class="anchor-heading" aria-labelledby="core-modules-architecture"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Core Modules Architecture
+  
+  
+</h1>
+    
+
+<p>Soothe’s core framework provides the foundational runtime for autonomous agent execution. This is an index of the core module knowledge articles — each linked page distills the architecture, design decisions, and integration points you won’t find by reading source code alone.</p><hr />
+<h2 id="where-core-fits">
+  
+  
+    <a href="#where-core-fits" class="anchor-heading" aria-labelledby="where-core-fits"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Where Core Fits
+  
+  
+</h2>
+    
+
+<p>The <code class="language-plaintext highlighter-rouge">soothe</code> package implements a protocol-orchestrated agent runtime with <strong>no transport or UI dependencies</strong>. It sits between the CLI/daemon transport and the protocol/backend infrastructure:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>CLI / Daemon  →  soothe (core runtime)  →  Protocols / Backends / LangGraph
+</code></pre></div></div>
+
+<p>The core package is intentionally decoupled from how queries arrive (CLI, WebSocket, autopilot dispatch) and from where state is stored (SQLite, PostgreSQL). This separation lets the same runtime power one-shot CLI commands, long-running daemon sessions, and autonomous multi-goal workflows.</p><hr />
+<h2 id="three-level-execution-model">
+  
+  
+    <a href="#three-level-execution-model" class="anchor-heading" aria-labelledby="three-level-execution-model"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Three-Level Execution Model
+  
+  
+</h2>
+    
+
+<p>Soothe organizes execution into three hierarchical tiers. See the <a href="/soothe/wiki/architecture/#three-level-execution">Architecture Overview</a> for the full conceptual model.</p>
+
+<p><strong>Core module responsibilities</strong>:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Tier</th>
+      <th>Module</th>
+      <th>Scope</th>
+      <th>Key File</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>ContextEngine</strong></td>
+      <td><a href="/soothe/wiki/core/context-engine.html">context-engine.md</a></td>
+      <td>Long-running multi-goal DAGs</td>
+      <td><code class="language-plaintext highlighter-rouge">context/</code></td>
+    </tr>
+    <tr>
+      <td><strong>StrangeLoop</strong></td>
+      <td><a href="/soothe/wiki/core/strangeloop.html">strangeloop.md</a></td>
+      <td>Single-goal iterative refinement</td>
+      <td><code class="language-plaintext highlighter-rouge">sloop/</code></td>
+    </tr>
+    <tr>
+      <td><strong>CoreAgent</strong></td>
+      <td><a href="/soothe/wiki/core/agent-factory.html">agent-factory.md</a></td>
+      <td>Model → Tools → Model turn loop</td>
+      <td><code class="language-plaintext highlighter-rouge">coreagent/</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Each tier delegates downward via <strong>advisory hints</strong> (passed through <code class="language-plaintext highlighter-rouge">config.configurable</code>) — CoreAgent never knows about goals, it only executes prompts with optional execution hints.</p><hr />
+<h2 id="core-module-index">
+  
+  
+    <a href="#core-module-index" class="anchor-heading" aria-labelledby="core-module-index"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Core Module Index
+  
+  
+</h2>
+    
+<h3 id="execution-runtime">
+  
+  
+    <a href="#execution-runtime" class="anchor-heading" aria-labelledby="execution-runtime"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Execution Runtime
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/core/agent-factory.html">Agent Factory</a></strong> — CoreAgent construction. The <code class="language-plaintext highlighter-rouge">create_soothe_agent()</code> factory assembles tools, subagents, middlewares, and protocol instances into a compiled LangGraph. Covers the builder pattern, lazy initialization, and the CoreAgent/StrangeLoop contract.</li>
+  <li><strong><a href="/soothe/wiki/core/runner.html">SootheRunner</a></strong> — Top-level execution coordinator. Wraps CoreAgent with protocol pre/post-processing (policy validation, memory restore, context projection, checkpointing) and yields the canonical <code class="language-plaintext highlighter-rouge">soothe.*</code> event stream.</li>
+  <li><strong><a href="/soothe/wiki/core/strangeloop.html">StrangeLoop</a></strong> — Plan-Execute loop for single goals. The middle tier: LLM-driven planning via structured <code class="language-plaintext highlighter-rouge">PlanResult</code>, evidence accumulation, DAG-style step scheduling, and convergence detection.</li>
+</ul>
+<h3 id="goal--context-management">
+  
+  
+    <a href="#goal--context-management" class="anchor-heading" aria-labelledby="goal--context-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Goal &amp; Context Management
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/core/context-engine.html">ContextEngine</a></strong> — Autonomous goal management. Manages goal DAGs with dependencies, priorities, dynamic restructuring, backoff reasoning, and dreaming. The top tier for complex workflows.</li>
+</ul>
+<h3 id="infrastructure">
+  
+  
+    <a href="#infrastructure" class="anchor-heading" aria-labelledby="infrastructure"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Infrastructure
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/core/events.html">Event System</a></strong> — Centralized event infrastructure. Covers the <code class="language-plaintext highlighter-rouge">soothe.&lt;domain&gt;.&lt;component&gt;.&lt;action&gt;</code> naming convention, the internal vs. client-facing namespace split, visibility tiers, and the registry pattern.</li>
+  <li><strong><a href="/soothe/wiki/core/resolver.html">Protocol Resolver</a></strong> — Wires protocols from configuration to runtime instances. Handles checkpointer/durability resolution, the no-in-memory-fallback rule, and tool/subagent registry assembly.</li>
+  <li><strong><a href="/soothe/wiki/core/workspace.html">Workspace Management</a></strong> — Unified workspace resolution, path validation, and sandbox boundaries. Covers the <code class="language-plaintext highlighter-rouge">SOOTHE_WORKSPACE</code> priority chain, virtual mode semantics, thread/goal isolation, and the <code class="language-plaintext highlighter-rouge">FrameworkFilesystem</code> singleton.</li>
+</ul><hr />
+<h2 id="supporting-modules">
+  
+  
+    <a href="#supporting-modules" class="anchor-heading" aria-labelledby="supporting-modules"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Supporting Modules
+  
+  
+</h2>
+    
+
+<p>These modules don’t have dedicated knowledge articles but are referenced throughout:</p>
+
+<ul>
+  <li><strong>Middleware Stack</strong> (<code class="language-plaintext highlighter-rouge">soothe.middleware</code>) — Soothe-specific middlewares assembled by <code class="language-plaintext highlighter-rouge">build_soothe_middleware_stack()</code>: <code class="language-plaintext highlighter-rouge">IdentityMiddleware</code> (JWT/identity), <code class="language-plaintext highlighter-rouge">SoothePolicyMiddleware</code> (policy enforcement), <code class="language-plaintext highlighter-rouge">SystemPromptMiddleware</code> (dynamic prompt), <code class="language-plaintext highlighter-rouge">LLMRateLimitMiddleware</code> (LLM-level rate limiting), <code class="language-plaintext highlighter-rouge">WorkspaceContextMiddleware</code> (thread-aware workspace), <code class="language-plaintext highlighter-rouge">PerTurnModelMiddleware</code> (per-stream model override), <code class="language-plaintext highlighter-rouge">SootheFilesystemMiddleware</code> (extended filesystem tools), <code class="language-plaintext highlighter-rouge">CodeInterpreterMiddleware</code> (embedded QuickJS), <code class="language-plaintext highlighter-rouge">MCPActivationMiddleware</code> (MCP progressive disclosure), <code class="language-plaintext highlighter-rouge">ToolTimeoutMiddleware</code> (tool call timeout), plus profiler and tool-context helpers.</li>
+  <li><strong>Persistence</strong> (<code class="language-plaintext highlighter-rouge">soothe.persistence</code>) — Artifact store and configuration-driven policy for run outputs.</li>
+  <li><strong>Prompts</strong> (<code class="language-plaintext highlighter-rouge">soothe.prompts</code>) — Host prompt construction: nano CoreAgent re-exports, StrangeLoop envelopes/ledger projection, context XML, and fragment loading.</li>
+</ul><hr />
+<h2 id="key-rfcs">
+  
+  
+    <a href="#key-rfcs" class="anchor-heading" aria-labelledby="key-rfcs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key RFCs
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>RFC</th>
+      <th>Title</th>
+      <th>Primary Module</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="../../specs/RFC-100-coreagent-runtime.md">RFC-100</a></td>
+      <td>CoreAgent Runtime</td>
+      <td>agent</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/archive/RFC-200-autonomous-goal-management.md">RFC-200</a></td>
+      <td>Autonomous Goal Management (archived — superseded by RFC-624/625)</td>
+      <td>context</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-624-context-engine.md">RFC-624</a></td>
+      <td>Context Engine</td>
+      <td>context</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-625-autopilot-monitor-context-engine-unification.md">RFC-625</a></td>
+      <td>Autopilot-Monitor-ContextEngine Unification</td>
+      <td>context</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-201-strangeloop-plan-execute-loop.md">RFC-201</a></td>
+      <td>StrangeLoop Plan-Execute Loop</td>
+      <td>loop</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-001-core-modules-architecture.md">RFC-001</a></td>
+      <td>Core Protocol Modules</td>
+      <td>multiple</td>
+    </tr>
+  </tbody>
+</table></div><hr />
+<h2 id="quick-start">
+  
+  
+    <a href="#quick-start" class="anchor-heading" aria-labelledby="quick-start"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Quick Start
+  
+  
+</h2>
+    
+
+<p>The two entry points for using the core framework:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Direct agent execution (CoreAgent only)
+</span><span class="kn">from</span> <span class="nn">soothe.core.agent</span> <span class="kn">import</span> <span class="n">create_soothe_agent</span>
+<span class="n">agent</span> <span class="o">=</span> <span class="n">create_soothe_agent</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">agent</span><span class="p">.</span><span class="n">astream</span><span class="p">(</span><span class="s">"query"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s">"thread_id"</span><span class="p">:</span> <span class="s">"t1"</span><span class="p">}):</span>
+    <span class="n">process</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+
+<span class="c1"># Protocol-orchestrated execution (full stack)
+</span><span class="kn">from</span> <span class="nn">soothe.runner</span> <span class="kn">import</span> <span class="n">SootheRunner</span>
+<span class="n">runner</span> <span class="o">=</span> <span class="n">SootheRunner</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">runner</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="s">"query"</span><span class="p">):</span>
+    <span class="n">process</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Use <code class="language-plaintext highlighter-rouge">create_soothe_agent</code> directly for CoreAgent-only execution (tests, CLI one-shots). Use <code class="language-plaintext highlighter-rouge">SootheRunner</code> when you need protocol orchestration — thread lifecycle, policy validation, memory persistence, and the <code class="language-plaintext highlighter-rouge">soothe.*</code> event stream.</p><hr />
+<h2 id="additional-resources">
+  
+  
+    <a href="#additional-resources" class="anchor-heading" aria-labelledby="additional-resources"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Additional Resources
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/architecture/">Architecture Overview</a></strong> — Protocol definitions</li>
+  <li><strong><a href="/soothe/wiki/backends/">Backends</a></strong> — Protocol implementations</li>
+  <li><strong><a href="../../specs/">RFC Index</a></strong> — All RFCs</li>
+</ul>
+
+          
+
+          
+            <hr>
+<h2 class="text-delta">Table of contents</h2>
+
+<ul>
+  
+  <li>
+    <a href="/soothe/wiki/core/agent-factory.html">Agent Factory</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/core/runner.html">SootheRunner</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/core/strangeloop.html">StrangeLoop</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/core/context-engine.html">ContextEngine</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/core/events.html">Event System</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/core/resolver.html">Protocol Resolver</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/core/workspace.html">Workspace Management</a>
+  </li>
+  
+</ul>
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

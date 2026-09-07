@@ -1,0 +1,551 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(5)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > ul > li:nth-child(5) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > ul > li:nth-child(5) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Event System | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Event System" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Centralized event infrastructure for Soothe’s protocol observability and event registration." />
+<meta property="og:description" content="Centralized event infrastructure for Soothe’s protocol observability and event registration." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/core/events.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/core/events.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Event System" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Centralized event infrastructure for Soothe’s protocol observability and event registration.","headline":"Event System","url":"https://mirasoth.github.io/soothe/wiki/core/events.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/core/">Core Modules</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Event System</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="event-system">
+  
+  
+    <a href="#event-system" class="anchor-heading" aria-labelledby="event-system"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event System
+  
+  
+</h1>
+    
+
+<p>Centralized event infrastructure for Soothe’s protocol observability.</p><hr />
+<h2 id="what-this-module-is">
+  
+  
+    <a href="#what-this-module-is" class="anchor-heading" aria-labelledby="what-this-module-is"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What This Module Is
+  
+  
+</h2>
+    
+
+<p>The event system (<code class="language-plaintext highlighter-rouge">soothe.events</code>) provides the vocabulary and plumbing for all observability in Soothe. It defines event type constants, Pydantic event models, a registry for O(1) lookup, and the visibility rules that decide which events reach WebSocket clients. Every <code class="language-plaintext highlighter-rouge">soothe.*</code> custom event in the stream originates here.</p>
+
+<p>The system exists because Soothe streams execution progress to clients in real time. Without a centralized event catalog, visibility rules would be scattered across daemon delivery stages, and bugs would silently drop user-visible output.</p>
+
+<p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/events/</code> (<code class="language-plaintext highlighter-rouge">constants.py</code>, <code class="language-plaintext highlighter-rouge">catalog.py</code>, <code class="language-plaintext highlighter-rouge">visibility.py</code>, <code class="language-plaintext highlighter-rouge">internal_bus.py</code>)</p><hr />
+<h2 id="the-naming-convention-rfc-403">
+  
+  
+    <a href="#the-naming-convention-rfc-403" class="anchor-heading" aria-labelledby="the-naming-convention-rfc-403"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Naming Convention (RFC-403)
+  
+  
+</h2>
+    
+
+<p>All event types follow a <strong>4-segment convention</strong>: <code class="language-plaintext highlighter-rouge">soothe.&lt;domain&gt;.&lt;component&gt;.&lt;action&gt;</code></p>
+
+<p>This is enforced as string constants in <code class="language-plaintext highlighter-rouge">constants.py</code> — the single source of truth. There is no string concatenation at call sites; every event type is a named constant imported from the catalog.</p>
+
+<p>The critical design split is between two namespaces:</p>
+
+<ul>
+  <li><strong>Client-facing</strong> (<code class="language-plaintext highlighter-rouge">soothe.&lt;domain&gt;.*</code>) — events that may reach WebSocket clients. Domains include <code class="language-plaintext highlighter-rouge">cognition</code> (goal/plan/strange_loop), <code class="language-plaintext highlighter-rouge">system</code> (autopilot status), and <code class="language-plaintext highlighter-rouge">error</code>.</li>
+  <li><strong>Internal</strong> (<code class="language-plaintext highlighter-rouge">soothe.internal.*</code>) — <strong>never</strong> broadcast to clients. These cover iteration lifecycle, checkpointing, recovery, loop lifecycle, memory/policy protocol internals, daemon heartbeats, plugin lifecycle, and branch internals.</li>
+</ul>
+
+<p>This split exists because the daemon, workers, and internal tooling need fine-grained observability that clients shouldn’t see (implementation details, high-frequency checkpoints, internal state transitions). Mixing them into one namespace would require filtering logic everywhere; the prefix makes the intent explicit at the constant definition site.</p><hr />
+<h2 id="event-domains-at-a-glance">
+  
+  
+    <a href="#event-domains-at-a-glance" class="anchor-heading" aria-labelledby="event-domains-at-a-glance"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event Domains at a Glance
+  
+  
+</h2>
+    
+
+<p>Rather than enumerate all 60+ constants, here are the domains and what they represent:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Domain</th>
+      <th>Namespace</th>
+      <th>Covers</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Goal cognition</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.cognition.goal.*</code></td>
+      <td>created, completed, failed, removed, decomposed, deferred, reported</td>
+    </tr>
+    <tr>
+      <td><strong>Plan cognition</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.cognition.plan.*</code></td>
+      <td>created, reflected</td>
+    </tr>
+    <tr>
+      <td><strong>StrangeLoop</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.cognition.strange_loop.*</code></td>
+      <td>started, completed, step started/queued/completed, plan decision, reasoned, context compacted</td>
+    </tr>
+    <tr>
+      <td><strong>Branch</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.cognition.branch.*</code></td>
+      <td>created, retry started</td>
+    </tr>
+    <tr>
+      <td><strong>Autopilot</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.system.autopilot.*</code></td>
+      <td>status changed, goal created/progress/completed/suspended/blocked, dreaming</td>
+    </tr>
+    <tr>
+      <td><strong>Intent</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.cognition.intent.*</code></td>
+      <td>classified (IG-518)</td>
+    </tr>
+    <tr>
+      <td><strong>Error</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.error.*</code></td>
+      <td>general failures</td>
+    </tr>
+    <tr>
+      <td><strong>LLM retry</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.cognition.llm.retry.*</code></td>
+      <td>retry attempts (IG-504)</td>
+    </tr>
+    <tr>
+      <td><strong>Internal</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.internal.*</code></td>
+      <td>iteration, checkpoint, recovery, loop, memory, policy, daemon, plugin, plan DAG, skill, MCP, branch analysis, autopilot details</td>
+    </tr>
+  </tbody>
+</table></div><hr />
+<h2 id="the-registry-pattern">
+  
+  
+    <a href="#the-registry-pattern" class="anchor-heading" aria-labelledby="the-registry-pattern"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Registry Pattern
+  
+  
+</h2>
+    
+
+<p>Event models (Pydantic subclasses of <code class="language-plaintext highlighter-rouge">SootheEvent</code> from <code class="language-plaintext highlighter-rouge">soothe_sdk</code>) are registered in an <code class="language-plaintext highlighter-rouge">EventRegistry</code> at import time. The registry provides:</p>
+
+<ul>
+  <li><strong>O(1) lookup</strong> by event type string — used by the daemon’s delivery pipeline to check visibility and verbosity.</li>
+  <li><strong>Summary templates</strong> — string templates (e.g., <code class="language-plaintext highlighter-rouge">"Goal {goal_id} created"</code>) that interpolate event fields for human-readable summaries.</li>
+  <li><strong>Verbosity tiers</strong> — each event type is assigned a tier (<code class="language-plaintext highlighter-rouge">QUIET</code>, <code class="language-plaintext highlighter-rouge">NORMAL</code>, <code class="language-plaintext highlighter-rouge">VERBOSE</code>, <code class="language-plaintext highlighter-rouge">DEBUG</code>) that controls client delivery based on the client’s configured verbosity ceiling.</li>
+</ul>
+
+<p>Custom events from plugins register via <code class="language-plaintext highlighter-rouge">register_event()</code>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe.events</span> <span class="kn">import</span> <span class="n">register_event</span><span class="p">,</span> <span class="n">SootheEvent</span>
+
+<span class="k">class</span> <span class="nc">MyCustomEvent</span><span class="p">(</span><span class="n">SootheEvent</span><span class="p">):</span>
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">"soothe.cognition.plugin.my_event"</span>
+    <span class="n">custom_data</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="n">register_event</span><span class="p">(</span><span class="n">MyCustomEvent</span><span class="p">,</span> <span class="n">summary_template</span><span class="o">=</span><span class="s">"Custom: {custom_data}"</span><span class="p">)</span>
+</code></pre></div></div><hr />
+<h2 id="the-visibility-system--why-its-centralized">
+  
+  
+    <a href="#the-visibility-system--why-its-centralized" class="anchor-heading" aria-labelledby="the-visibility-system--why-its-centralized"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Visibility System — Why It’s Centralized
+  
+  
+</h2>
+    
+
+<p>Visibility rules silently drop frames. A bug here is invisible until users report “no output.” The IG-435 regression postmortem documented exactly this: <code class="language-plaintext highlighter-rouge">mode=messages</code> envelopes weren’t enumerated as a wire shape, fell through to “unknown event type → DEBUG tier → suppress,” and every synthesized answer was dropped.</p>
+
+<p>To prevent that class of regression, <code class="language-plaintext highlighter-rouge">visibility.py</code> classifies each wire frame into an explicit <code class="language-plaintext highlighter-rouge">WireEnvelopeKind</code> and dispatches on it. <strong>There is no implicit fallback.</strong> Unknown shapes fail loud (warning log + suppress) so future schema changes are caught immediately.</p>
+
+<p>The visibility module is the single authority for “may this frame reach a WebSocket client?” Four daemon delivery stages funnel through it:</p>
+
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">SootheDaemon._broadcast</code> — broadcast-time gate</li>
+  <li>Session manager sender — per-client tier filter</li>
+  <li><code class="language-plaintext highlighter-rouge">StreamDeliveryCoalescer</code> — early drop of invisible <code class="language-plaintext highlighter-rouge">custom</code> payloads</li>
+  <li>Event reattachment — history-replay filter on reattach</li>
+</ol>
+<h3 id="wire-frame-shapes">
+  
+  
+    <a href="#wire-frame-shapes" class="anchor-heading" aria-labelledby="wire-frame-shapes"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Wire Frame Shapes
+  
+  
+</h3>
+    
+
+<p>The daemon sends five kinds of frames to clients:</p>
+
+<ol>
+  <li><strong>Control frames</strong> (<code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">error</code>, <code class="language-plaintext highlighter-rouge">replay_complete</code>, <code class="language-plaintext highlighter-rouge">loop_*_response</code>) — always visible.</li>
+  <li><strong>Catalog events</strong> — <code class="language-plaintext highlighter-rouge">{"type": "event", "mode": "custom", "data": {"type": "soothe.*"}}</code>. Visible iff non-internal and verbosity tier ≤ client ceiling.</li>
+  <li><strong>LangGraph message chunks</strong> — <code class="language-plaintext highlighter-rouge">mode: "messages"</code>. Always visible (carries assistant text and tool I/O).</li>
+  <li><strong>LangGraph updates</strong> — <code class="language-plaintext highlighter-rouge">mode: "updates"</code>. Dropped earlier by the coalescer (only interrupts survive).</li>
+  <li><strong>Unknown</strong> — logged at WARNING on first observation, then suppressed.</li>
+</ol><hr />
+<h2 id="the-canonical-stream-chunk">
+  
+  
+    <a href="#the-canonical-stream-chunk" class="anchor-heading" aria-labelledby="the-canonical-stream-chunk"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Canonical Stream Chunk
+  
+  
+</h2>
+    
+
+<p>Events flow through the system as <code class="language-plaintext highlighter-rouge">StreamChunk</code> tuples: <code class="language-plaintext highlighter-rouge">(namespace, mode, data)</code>. The helper <code class="language-plaintext highlighter-rouge">custom_event(data)</code> builds a chunk with an empty namespace and <code class="language-plaintext highlighter-rouge">"custom"</code> mode. This is the deepagents-canonical format that the runner yields and the daemon delivers.</p><hr />
+<h2 id="event-emission-pattern">
+  
+  
+    <a href="#event-emission-pattern" class="anchor-heading" aria-labelledby="event-emission-pattern"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event Emission Pattern
+  
+  
+</h2>
+    
+
+<p>The recommended pattern for type-safe emission:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe.events</span> <span class="kn">import</span> <span class="n">GoalCreatedEvent</span><span class="p">,</span> <span class="n">custom_event</span>
+
+<span class="k">yield</span> <span class="n">custom_event</span><span class="p">(</span><span class="n">GoalCreatedEvent</span><span class="p">(</span><span class="n">goal_id</span><span class="o">=</span><span class="n">gid</span><span class="p">).</span><span class="n">to_dict</span><span class="p">())</span>
+</code></pre></div></div>
+
+<p>For comparisons and routing, use the string constants:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe.events</span> <span class="kn">import</span> <span class="n">GOAL_CREATED</span>
+<span class="k">if</span> <span class="n">event_type</span> <span class="o">==</span> <span class="n">GOAL_CREATED</span><span class="p">:</span>
+    <span class="n">handle_goal_created</span><span class="p">(</span><span class="n">event_data</span><span class="p">)</span>
+</code></pre></div></div><hr />
+<h2 id="internal-event-bus">
+  
+  
+    <a href="#internal-event-bus" class="anchor-heading" aria-labelledby="internal-event-bus"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Internal Event Bus
+  
+  
+</h2>
+    
+
+<p>Beyond the client-facing stream, there’s an <code class="language-plaintext highlighter-rouge">InternalEventBus</code> for daemon/worker-internal pub/sub. This is separate from the client stream — internal events (<code class="language-plaintext highlighter-rouge">soothe.internal.*</code>) never appear on the WebSocket. The bus supports subscribing to specific event types with handler callbacks, used for cross-component coordination within the daemon process.</p><hr />
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Never broadcast <code class="language-plaintext highlighter-rouge">soothe.internal.*</code></strong> — the visibility module enforces this, but if you bypass the centralized predicates (e.g., by writing directly to the WebSocket), you’ll leak internal state to clients.</li>
+  <li><strong>Adding a new wire shape requires extending the enum</strong> — the <code class="language-plaintext highlighter-rouge">WireEnvelopeKind</code> dispatch table has no implicit fallback. If you introduce a new <code class="language-plaintext highlighter-rouge">mode</code> value, you must register it or it will be suppressed with a warning.</li>
+  <li><strong>Verbosity tiers are per-event-type, not per-event-instance</strong> — the registry assigns the tier at registration time. To change visibility, re-register the event type.</li>
+  <li><strong>The <code class="language-plaintext highlighter-rouge">REPLAY_COMPLETE</code> constant</strong> is a wire envelope, not a <code class="language-plaintext highlighter-rouge">soothe.*</code> catalog event. Prefer the wire <code class="language-plaintext highlighter-rouge">replay_complete</code> envelope over the deprecated <code class="language-plaintext highlighter-rouge">HISTORY_REPLAY_COMPLETE</code> alias.</li>
+</ul><hr />
+<h2 id="related">
+  
+  
+    <a href="#related" class="anchor-heading" aria-labelledby="related"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/core/runner.html">SootheRunner</a></strong> — yields the canonical event stream</li>
+  <li><strong><a href="/soothe/wiki/core/strangeloop.html">StrangeLoop</a></strong> — emits cognition events during execution</li>
+  <li><strong><a href="/soothe/wiki/core/context-engine.html">ContextEngine</a></strong> — emits goal lifecycle events</li>
+  <li><strong><a href="../../specs/RFC-401-event-processing.md">RFC-401</a></strong> — event processing spec</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

@@ -1,0 +1,547 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(5) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>ContextEngine | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="ContextEngine" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Autonomous goal management via goal DAGs, ledger, and bounded projection." />
+<meta property="og:description" content="Autonomous goal management via goal DAGs, ledger, and bounded projection." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/core/context-engine.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/core/context-engine.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="ContextEngine" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Autonomous goal management via goal DAGs, ledger, and bounded projection.","headline":"ContextEngine","url":"https://mirasoth.github.io/soothe/wiki/core/context-engine.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/core/">Core Modules</a></li>
+    <li class="breadcrumb-nav-list-item"><span>ContextEngine</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="contextengine">
+  
+  
+    <a href="#contextengine" class="anchor-heading" aria-labelledby="contextengine"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> ContextEngine
+  
+  
+</h1>
+    
+
+<p>Autonomous goal management via goal DAGs, ledger, and bounded projection.</p><hr />
+<h2 id="what-this-module-is">
+  
+  
+    <a href="#what-this-module-is" class="anchor-heading" aria-labelledby="what-this-module-is"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What This Module Is
+  
+  
+</h2>
+    
+
+<p>ContextEngine (<code class="language-plaintext highlighter-rouge">soothe.context</code>) is the <strong>top tier</strong> of Soothe’s execution model — the autonomous goal engine. It manages goal execution for long-running, complex workflows. Where StrangeLoop executes a single goal iteratively, ContextEngine orchestrates <em>which</em> goals to pursue, in what order, and how they relate to each other.</p>
+
+<blockquote>
+  <p><strong>Note</strong>: The legacy <code class="language-plaintext highlighter-rouge">GoalEngine</code> class was deleted (RFC-625). ContextEngine is now the sole source of truth for goal management. The old goal-engine naming persists in file paths and some config keys for backward compatibility.</p>
+</blockquote>
+
+<p>ContextEngine composes five subsystems into a single interface: <code class="language-plaintext highlighter-rouge">GoalStepDAG</code> (goal/step graph), <code class="language-plaintext highlighter-rouge">LedgerManager</code> (message history), <code class="language-plaintext highlighter-rouge">SemanticLoader</code> (file/context loading), <code class="language-plaintext highlighter-rouge">ProjectionEngine</code> (bounded context for prompts), and a pluggable persistence backend (SQLite or PostgreSQL).</p>
+
+<p><strong>RFC</strong>: <a href="../../specs/RFC-624-context-engine.md">RFC-624</a>, <a href="../../specs/RFC-625-autopilot-monitor-context-engine-unification.md">RFC-625</a>
+<strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/context/engine.py</code>, <code class="language-plaintext highlighter-rouge">models.py</code></p><hr />
+<h2 id="the-goal-dag--why-a-graph-not-a-list">
+  
+  
+    <a href="#the-goal-dag--why-a-graph-not-a-list" class="anchor-heading" aria-labelledby="the-goal-dag--why-a-graph-not-a-list"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Goal DAG — Why a Graph, Not a List
+  
+  
+</h2>
+    
+
+<p>Goals are organized as a <strong>Directed Acyclic Graph</strong> (DAG), not a flat queue. This is the core design decision. A DAG captures four relationship types that a queue cannot:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">depends_on</code></strong> — hard dependency: goal B cannot start until goal A completes.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">informs</code></strong> — soft relationship: goal B should consider A’s results, but can proceed without them.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">conflicts_with</code></strong> — mutual exclusion: goals that shouldn’t run concurrently.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">parent_id</code></strong> — decomposition hierarchy: sub-goals spawned by a parent goal.</li>
+</ul>
+
+<p>Each <code class="language-plaintext highlighter-rouge">GoalNode</code> also embeds its own <code class="language-plaintext highlighter-rouge">StepDAG</code> — a per-goal DAG of execution steps with dependencies. This two-level structure (goals form a DAG, each goal’s steps form a sub-DAG) lets the engine reason about both inter-goal ordering and intra-goal execution sequencing.</p>
+<h3 id="goal-lifecycle-states">
+  
+  
+    <a href="#goal-lifecycle-states" class="anchor-heading" aria-labelledby="goal-lifecycle-states"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Goal Lifecycle States
+  
+  
+</h3>
+    
+
+<p>Goals move through these states: <code class="language-plaintext highlighter-rouge">pending → active → completed</code> (happy path), with branches for <code class="language-plaintext highlighter-rouge">failed</code>, <code class="language-plaintext highlighter-rouge">suspended</code>, <code class="language-plaintext highlighter-rouge">blocked</code>, <code class="language-plaintext highlighter-rouge">awaiting_clarification</code>, <code class="language-plaintext highlighter-rouge">validated</code>, and <code class="language-plaintext highlighter-rouge">cancelled</code>.</p>
+
+<p>Key groupings:</p>
+<ul>
+  <li><strong>Terminal states</strong> (<code class="language-plaintext highlighter-rouge">completed</code>, <code class="language-plaintext highlighter-rouge">failed</code>, <code class="language-plaintext highlighter-rouge">cancelled</code>) — no further transitions.</li>
+  <li><strong>Blocked states</strong> (<code class="language-plaintext highlighter-rouge">awaiting_clarification</code>, <code class="language-plaintext highlighter-rouge">suspended</code>) — paused, can resume.</li>
+</ul>
+<h3 id="goal-depth-limit">
+  
+  
+    <a href="#goal-depth-limit" class="anchor-heading" aria-labelledby="goal-depth-limit"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Goal Depth Limit
+  
+  
+</h3>
+    
+
+<p>There’s a <code class="language-plaintext highlighter-rouge">MAX_GOAL_DEPTH = 5</code> constant — the decomposition hierarchy can’t nest deeper than 5 levels. This prevents infinite goal decomposition chains.</p><hr />
+<h2 id="the-planning-submodule">
+  
+  
+    <a href="#the-planning-submodule" class="anchor-heading" aria-labelledby="the-planning-submodule"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Planning Submodule
+  
+  
+</h2>
+    
+
+<p>ContextEngine exposes a planning facade with three sub-engines:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">StepPlanningSubengine</code></strong> — plans steps within a single goal’s step DAG.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">GoalPlanningSubengine</code></strong> — decomposes goals, detects relationships between goals.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">GoalScheduler</code></strong> — decides which ready goals to activate next (priority-based, dependency-aware).</li>
+</ul>
+
+<p>Access via <code class="language-plaintext highlighter-rouge">engine.planning.step</code>, <code class="language-plaintext highlighter-rouge">engine.planning.goal</code>, <code class="language-plaintext highlighter-rouge">engine.planning.scheduler</code>.</p><hr />
+<h2 id="projection--bounded-context-for-prompts">
+  
+  
+    <a href="#projection--bounded-context-for-prompts" class="anchor-heading" aria-labelledby="projection--bounded-context-for-prompts"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Projection — Bounded Context for Prompts
+  
+  
+</h2>
+    
+
+<p>A critical responsibility: ContextEngine produces <strong>bounded projections</strong> of its state for injection into LLM prompts. Without bounds, a long-running workflow with 50 goals and 200 steps would blow the context window.</p>
+
+<p>Projection limits are configured under <code class="language-plaintext highlighter-rouge">agent.loop.context_engine</code>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">loop</span><span class="pi">:</span>
+    <span class="na">context_engine</span><span class="pi">:</span>
+      <span class="na">projection_max_goals</span><span class="pi">:</span> <span class="m">5</span>
+      <span class="na">projection_max_steps_per_goal</span><span class="pi">:</span> <span class="m">10</span>
+      <span class="na">projection_max_ledger_chars</span><span class="pi">:</span> <span class="m">4000</span>
+      <span class="na">projection_max_ledger_messages</span><span class="pi">:</span> <span class="m">20</span>
+      <span class="na">projection_max_lineage_chars</span><span class="pi">:</span> <span class="m">2000</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">ProjectionEngine</code> assembles a <code class="language-plaintext highlighter-rouge">ContextBundle</code> containing: DAG snapshot (truncated goals/steps), ledger entries (optionally filtered by phase), goal lineage, and project instructions — all within character/count bounds.</p>
+<h3 id="ledger-phase-filtering">
+  
+  
+    <a href="#ledger-phase-filtering" class="anchor-heading" aria-labelledby="ledger-phase-filtering"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Ledger Phase Filtering
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">get_ledger_entries(phases=["plan", "execute"])</code> returns only messages from specified phases. This lets the projection include just the relevant reasoning history, not the entire conversation.</p><hr />
+<h2 id="persistence--follows-the-global-backend">
+  
+  
+    <a href="#persistence--follows-the-global-backend" class="anchor-heading" aria-labelledby="persistence--follows-the-global-backend"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Persistence — Follows the Global Backend
+  
+  
+</h2>
+    
+
+<p>ContextEngine does <strong>not</strong> have its own persistence configuration. It follows <code class="language-plaintext highlighter-rouge">persistence.default_backend</code>:</p>
+
+<ul>
+  <li>When the global backend is <code class="language-plaintext highlighter-rouge">postgresql</code>, ContextEngine uses <code class="language-plaintext highlighter-rouge">PgsqlContextPersistence</code> with the same DSN.</li>
+  <li>When <code class="language-plaintext highlighter-rouge">sqlite</code> (default), it uses <code class="language-plaintext highlighter-rouge">SqliteContextPersistence</code>.</li>
+  <li>If no persistence is supplied, it defaults to <strong>in-memory SQLite</strong> (<code class="language-plaintext highlighter-rouge">:memory:</code>) — suitable for tests only. Production code must supply an explicit backend.</li>
+</ul><hr />
+<h2 id="goal-lifecycle-operations">
+  
+  
+    <a href="#goal-lifecycle-operations" class="anchor-heading" aria-labelledby="goal-lifecycle-operations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Goal Lifecycle Operations
+  
+  
+</h2>
+    
+
+<p>The async API manages goal state transitions:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">create_goal(description, priority=, depends_on=)</code> — creates a pending goal with optional dependencies.</li>
+  <li><code class="language-plaintext highlighter-rouge">activate_goal(goal_id, loop_id=)</code> — transitions pending → active, assigning it to a StrangeLoop instance.</li>
+  <li><code class="language-plaintext highlighter-rouge">complete_goal(goal_id)</code> — terminal transition to completed.</li>
+  <li><code class="language-plaintext highlighter-rouge">fail_goal(goal_id, error=, evidence=)</code> — terminal failure (retry/backoff is applied by AutopilotMonitor / consensus, not by CE itself).</li>
+  <li><code class="language-plaintext highlighter-rouge">suspend_goal(goal_id, reason)</code> / <code class="language-plaintext highlighter-rouge">block_goal(goal_id)</code> / <code class="language-plaintext highlighter-rouge">unblock_goal(goal_id)</code> — temporary pauses.</li>
+  <li><code class="language-plaintext highlighter-rouge">cancel_goal(goal_id, reason=)</code> — terminal cancellation.</li>
+  <li><code class="language-plaintext highlighter-rouge">absorb_guidance(goal_id, text, scope=, *, source=)</code> — async; accumulates operator guidance for the next autopilot dispatch (prefer <code class="language-plaintext highlighter-rouge">soothe.autopilot.intake.absorb_*</code> for typed intake).</li>
+</ul>
+<h3 id="retry-and-backoff">
+  
+  
+    <a href="#retry-and-backoff" class="anchor-heading" aria-labelledby="retry-and-backoff"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Retry and Backoff
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">GoalNode</code> tracks <code class="language-plaintext highlighter-rouge">retry_count</code>, <code class="language-plaintext highlighter-rouge">max_retries</code> (default 2), <code class="language-plaintext highlighter-rouge">send_back_count</code>, and <code class="language-plaintext highlighter-rouge">max_send_backs</code> (default 3). Automatic retry-from-failed is <strong>not</strong> performed inside <code class="language-plaintext highlighter-rouge">fail_goal</code> today — Autopilot consensus <code class="language-plaintext highlighter-rouge">send_back</code> and monitor backoff (IG-678) own re-queue policy.</p>
+<h3 id="dreaming-rfc-625">
+  
+  
+    <a href="#dreaming-rfc-625" class="anchor-heading" aria-labelledby="dreaming-rfc-625"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Dreaming (RFC-625)
+  
+  
+</h3>
+    
+
+<p>Goals have <code class="language-plaintext highlighter-rouge">topic</code> and <code class="language-plaintext highlighter-rouge">findings</code> fields for “cross-loop dreaming.” AutopilotMonitor currently emits dreaming/awake <strong>events only</strong>; per-mode LLM distillation is deferred.</p><hr />
+<h2 id="lifecycle-observers">
+  
+  
+    <a href="#lifecycle-observers" class="anchor-heading" aria-labelledby="lifecycle-observers"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Lifecycle observers
+  
+  
+</h2>
+    
+
+<p>ContextEngine does <strong>not</strong> expose an in-process <code class="language-plaintext highlighter-rouge">.on()</code> callback API. Autopilot coordinates via the daemon <code class="language-plaintext highlighter-rouge">InternalEventBus</code> (<code class="language-plaintext highlighter-rouge">soothe.internal.goal.completed</code> / <code class="language-plaintext highlighter-rouge">.failed</code> / <code class="language-plaintext highlighter-rouge">.state_changed</code>, etc.). See AutopilotService / AutopilotMonitor.</p><hr />
+<h2 id="step-dag-dependency-resolution">
+  
+  
+    <a href="#step-dag-dependency-resolution" class="anchor-heading" aria-labelledby="step-dag-dependency-resolution"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Step DAG Dependency Resolution
+  
+  
+</h2>
+    
+
+<p>A non-obvious detail: <code class="language-plaintext highlighter-rouge">StepDAG.ready_steps()</code> uses <strong>dependency token expansion</strong>. When a composite step ID like <code class="language-plaintext highlighter-rouge">KFA-01</code> is completed, later plans may reference it as <code class="language-plaintext highlighter-rouge">01</code> or <code class="language-plaintext highlighter-rouge">1</code>. The <code class="language-plaintext highlighter-rouge">_expand_dependency_satisfaction_ids()</code> function adds these numeric aliases — but only when unambiguous (i.e., only one completed step has that numeric suffix). This handles the LLM’s tendency to use shorthand step references.</p><hr />
+<h2 id="integration-points">
+  
+  
+    <a href="#integration-points" class="anchor-heading" aria-labelledby="integration-points"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Integration Points
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>StrangeLoop</strong> — ContextEngine activates goals and assigns them to StrangeLoop instances via <code class="language-plaintext highlighter-rouge">loop_id</code>. StrangeLoop reports back via <code class="language-plaintext highlighter-rouge">complete_goal</code>/<code class="language-plaintext highlighter-rouge">fail_goal</code>.</li>
+  <li><strong>SootheRunner</strong> — the runner creates loop-scoped ContextEngine instances (RFC-624 Phase 4) and uses projection for prompt context injection.</li>
+  <li><strong>Autopilot</strong> — the daemon-owned autopilot system dispatches goals through ContextEngine, arriving via <code class="language-plaintext highlighter-rouge">LoopRunRequest.autopilot_job</code>.</li>
+</ul><hr />
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>In-memory default is for tests only</strong> — if you construct <code class="language-plaintext highlighter-rouge">ContextEngine()</code> without a persistence backend, you get <code class="language-plaintext highlighter-rouge">:memory:</code> SQLite. State vanishes on process exit. Always pass an explicit backend in production.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">max_entries=0</code> means unlimited</strong> — the <code class="language-plaintext highlighter-rouge">LedgerManager</code> is initialized with <code class="language-plaintext highlighter-rouge">max_entries=0</code>, which preserves <em>full</em> ledger history. A positive value caps it. This is intentional: downstream LLM calls benefit from full history unless explicitly bounded.</li>
+  <li><strong>Goal source tracking</strong> — <code class="language-plaintext highlighter-rouge">GoalNode.source</code> can be <code class="language-plaintext highlighter-rouge">user</code>, <code class="language-plaintext highlighter-rouge">directive</code>, <code class="language-plaintext highlighter-rouge">file_discovery</code>, or <code class="language-plaintext highlighter-rouge">decomposition</code>. This affects how the goal is displayed and whether it can be auto-cancelled.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">awaiting_clarification</code> is a blocked state</strong> — goals in this state won’t be scheduled until clarification is provided (RFC-622). They’re not terminal.</li>
+</ul><hr />
+<h2 id="related">
+  
+  
+    <a href="#related" class="anchor-heading" aria-labelledby="related"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/core/strangeloop.html">StrangeLoop</a></strong> — single-goal execution (middle tier)</li>
+  <li><strong><a href="/soothe/wiki/core/runner.html">SootheRunner</a></strong> — runner orchestration</li>
+  <li><strong><a href="../../specs/RFC-624-context-engine.md">RFC-624</a></strong> — Context Engine specification</li>
+  <li><strong><a href="../../specs/RFC-625-autopilot-monitor-context-engine-unification.md">RFC-625</a></strong> — unification spec</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

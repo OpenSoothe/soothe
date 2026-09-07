@@ -1,0 +1,650 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(10) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(10) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(10) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(10) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(10) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Extension Patterns | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Extension Patterns" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Design decisions, patterns, and gotchas for building extensions that integrate cleanly with Soothe’s plugin architecture." />
+<meta property="og:description" content="Design decisions, patterns, and gotchas for building extensions that integrate cleanly with Soothe’s plugin architecture." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/capabilities/extension-patterns.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/capabilities/extension-patterns.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Extension Patterns" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Design decisions, patterns, and gotchas for building extensions that integrate cleanly with Soothe’s plugin architecture.","headline":"Extension Patterns","url":"https://mirasoth.github.io/soothe/wiki/capabilities/extension-patterns.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/capabilities/">Capabilities</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Extension Patterns</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="extension-patterns">
+  
+  
+    <a href="#extension-patterns" class="anchor-heading" aria-labelledby="extension-patterns"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Extension Patterns
+  
+  
+</h1>
+    
+
+<p>The <strong>Plugin System</strong> (RFC-600) provides a decorator-based API for extending Soothe with custom tools, subagents, and event types. This guide covers the design decisions, patterns, and gotchas for building extensions that integrate cleanly with Soothe’s architecture.</p>
+
+<p>→ SDK Source: <code class="language-plaintext highlighter-rouge">packages/soothe-sdk/src/soothe_sdk/plugin/</code></p>
+<h2 id="design-philosophy">
+  
+  
+    <a href="#design-philosophy" class="anchor-heading" aria-labelledby="design-philosophy"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Design Philosophy
+  
+  
+</h2>
+    
+
+<p>Soothe’s extension model is built on three principles:</p>
+
+<ol>
+  <li><strong>Decorator-based, not inheritance-heavy</strong> — plugins are plain Python classes decorated with <code class="language-plaintext highlighter-rouge">@plugin</code>, with <code class="language-plaintext highlighter-rouge">@tool</code>/<code class="language-plaintext highlighter-rouge">@subagent</code> methods. No deep class hierarchies to learn. The decorators attach a <code class="language-plaintext highlighter-rouge">PluginManifest</code> to the class and add helper methods for extracting tools/subagents.</li>
+  <li><strong>Manifest as single source of truth</strong> — the <code class="language-plaintext highlighter-rouge">@plugin</code> decorator’s arguments become a <code class="language-plaintext highlighter-rouge">PluginManifest</code> (Pydantic model with <code class="language-plaintext highlighter-rouge">extra="forbid"</code>) that carries all metadata: name, version, dependencies, trust level, config requirements. This is the contract between plugin and loader.</li>
+  <li><strong>Graceful degradation</strong> — a failing plugin disables itself, not the orchestrator. Missing dependencies prevent loading but don’t crash the daemon. This is critical for a system that loads many plugins at startup.</li>
+</ol>
+<h2 id="extension-points">
+  
+  
+    <a href="#extension-points" class="anchor-heading" aria-labelledby="extension-points"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Extension Points
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Extension Point</th>
+      <th>Decorator</th>
+      <th>Produces</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Tools</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">@tool</code></td>
+      <td><code class="language-plaintext highlighter-rouge">BaseTool</code> or callable registered for agent use</td>
+    </tr>
+    <tr>
+      <td><strong>Subagents</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">@subagent</code></td>
+      <td>Factory returning a <code class="language-plaintext highlighter-rouge">CompiledSubAgent</code> runnable</td>
+    </tr>
+    <tr>
+      <td><strong>Tool groups</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">@tool_group</code></td>
+      <td>Class of related tools registered as a set</td>
+    </tr>
+    <tr>
+      <td><strong>Events</strong></td>
+      <td><code class="language-plaintext highlighter-rouge">register_event()</code></td>
+      <td>Wire event class registration for observability</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="trust-levels-and-security-boundaries">
+  
+  
+    <a href="#trust-levels-and-security-boundaries" class="anchor-heading" aria-labelledby="trust-levels-and-security-boundaries"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Trust Levels and Security Boundaries
+  
+  
+</h2>
+    
+
+<p>Plugins declare a <code class="language-plaintext highlighter-rouge">trust_level</code> that determines their permission envelope:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Level</th>
+      <th>Use Case</th>
+      <th>Permissions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">built-in</code></td>
+      <td>Core capabilities (planner, deep_research, academic_research, browser_use, veritas)</td>
+      <td>Full — can request any permission</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">trusted</code></td>
+      <td>Verified third-party plugins</td>
+      <td>Elevated</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">standard</code></td>
+      <td>Most third-party plugins (default)</td>
+      <td>Default permissions</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">untrusted</code></td>
+      <td>Experimental/plugins under review</td>
+      <td>Restricted</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Built-in plugins cannot be overridden by lower-trust plugins — the discovery priority system enforces this. Trust levels are not advisory; they’re enforced by PolicyProtocol when the plugin requests permissions at runtime.</p>
+<h2 id="plugin-lifecycle">
+  
+  
+    <a href="#plugin-lifecycle" class="anchor-heading" aria-labelledby="plugin-lifecycle"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Plugin Lifecycle
+  
+  
+</h2>
+    
+
+<p>A plugin’s lifecycle has three hooks:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">on_load(context)</code></strong> — called when the plugin is loaded. Use for: initializing resources, validating configuration, setting up connections. The <code class="language-plaintext highlighter-rouge">context</code> provides config, a logger, runtime services (policy, persistence, vector_store), and an <code class="language-plaintext highlighter-rouge">emit_event</code> callable.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">on_unload()</code></strong> — called when the plugin is unloaded. Use for: closing connections, saving state, releasing resources.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">health_check()</code></strong> — called periodically. Returns a <code class="language-plaintext highlighter-rouge">PluginHealth</code> with status and message. The daemon uses this to monitor plugin health.</li>
+</ul>
+
+<p>The services dict in <code class="language-plaintext highlighter-rouge">context</code> is populated by the daemon during loading — it includes <code class="language-plaintext highlighter-rouge">"policy"</code> (PolicyProtocol), <code class="language-plaintext highlighter-rouge">"persistence"</code>, <code class="language-plaintext highlighter-rouge">"emit_progress"</code>, and <code class="language-plaintext highlighter-rouge">"vector_store"</code>. Plugins access these via <code class="language-plaintext highlighter-rouge">context.services["policy"]</code> rather than importing daemon internals directly.</p>
+<h2 id="discovery-mechanisms-and-priority">
+  
+  
+    <a href="#discovery-mechanisms-and-priority" class="anchor-heading" aria-labelledby="discovery-mechanisms-and-priority"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Discovery Mechanisms and Priority
+  
+  
+</h2>
+    
+
+<p>Soothe discovers plugins through three mechanisms, resolved in priority order:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Priority</th>
+      <th>Mechanism</th>
+      <th>Best For</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>100</td>
+      <td><strong>Built-in</strong> (always wins, cannot be overridden)</td>
+      <td>Core capabilities</td>
+    </tr>
+    <tr>
+      <td>50</td>
+      <td><strong>Entry points</strong> (<code class="language-plaintext highlighter-rouge">[project.entry-points."soothe.plugins"]</code> in pyproject.toml)</td>
+      <td>Distributable packages</td>
+    </tr>
+    <tr>
+      <td>30</td>
+      <td><strong>Config-declared</strong> (<code class="language-plaintext highlighter-rouge">plugins:</code> in nano.yml with <code class="language-plaintext highlighter-rouge">module: "path:Class"</code>)</td>
+      <td>Runtime/environment-specific plugins</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td><strong>Filesystem</strong> (<code class="language-plaintext highlighter-rouge">~/.soothe/plugins/&lt;name&gt;/plugin.py</code>)</td>
+      <td>User-specific, quick experimentation</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Entry points are recommended for distributable plugins — they use standard Python packaging and are discovered via <code class="language-plaintext highlighter-rouge">importlib.metadata</code>. Config-declared plugins need no installation, making them ideal for environment-specific or development setups. Filesystem plugins are lowest priority but require zero setup.</p>
+
+<p>When the same plugin name is found by multiple mechanisms, the highest priority wins. Built-in plugins are untouchable.</p>
+<h2 id="dependency-management">
+  
+  
+    <a href="#dependency-management" class="anchor-heading" aria-labelledby="dependency-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Dependency Management
+  
+  
+</h2>
+    
+
+<p>Plugins declare two types of dependencies in the manifest:</p>
+
+<ul>
+  <li><strong>Library dependencies</strong> (<code class="language-plaintext highlighter-rouge">dependencies</code>): PEP 440 version specifiers (e.g., <code class="language-plaintext highlighter-rouge">"arxiv&gt;=2.0.0"</code>). Missing dependencies prevent plugin loading — the orchestrator logs the error and continues with other plugins.</li>
+  <li><strong>Configuration dependencies</strong> (<code class="language-plaintext highlighter-rouge">config_requirements</code>): dotted paths to required config values (e.g., <code class="language-plaintext highlighter-rouge">"providers.openai.api_key"</code>). These are validated at load time.</li>
+</ul>
+
+<p>For <strong>optional dependencies</strong> (features that work with or without a library), use try/except ImportError in <code class="language-plaintext highlighter-rouge">on_load()</code> and degrade gracefully — log a warning and set a flag. The plugin loads either way, and tools can check the flag at call time.</p>
+<h2 id="minimal-plugin-example">
+  
+  
+    <a href="#minimal-plugin-example" class="anchor-heading" aria-labelledby="minimal-plugin-example"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Minimal Plugin Example
+  
+  
+</h2>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe_sdk.plugin</span> <span class="kn">import</span> <span class="n">plugin</span><span class="p">,</span> <span class="n">tool</span>
+
+<span class="o">@</span><span class="n">plugin</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">"my-tools"</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s">"1.0.0"</span><span class="p">,</span> <span class="n">trust_level</span><span class="o">=</span><span class="s">"standard"</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MyToolsPlugin</span><span class="p">:</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">on_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="n">context</span><span class="p">.</span><span class="n">config</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">"api_key"</span><span class="p">)</span>
+        <span class="n">context</span><span class="p">.</span><span class="n">logger</span><span class="p">.</span><span class="n">info</span><span class="p">(</span><span class="s">"Loaded my-tools v1.0.0"</span><span class="p">)</span>
+
+    <span class="o">@</span><span class="n">tool</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s">"greet"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s">"Greet someone by name"</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">greet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s">"Hello, </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s">!"</span>
+</code></pre></div></div>
+
+<p>For subagents, the <code class="language-plaintext highlighter-rouge">@subagent</code> method is a <strong>factory</strong> — it receives <code class="language-plaintext highlighter-rouge">(model, config, context)</code> and returns a compiled LangGraph runnable. See <a href="/soothe/wiki/capabilities/subagents.html">Subagents Architecture</a> for the full subagent pattern.</p>
+<h2 id="module-self-containment-ig-047">
+  
+  
+    <a href="#module-self-containment-ig-047" class="anchor-heading" aria-labelledby="module-self-containment-ig-047"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Module Self-Containment (IG-047)
+  
+  
+</h2>
+    
+
+<p>Plugins should follow the self-containment pattern: each subagent or tool group is a complete module with its own <code class="language-plaintext highlighter-rouge">__init__.py</code> (plugin definition + public API), <code class="language-plaintext highlighter-rouge">events.py</code> (wire events + <code class="language-plaintext highlighter-rouge">register_event()</code> calls), <code class="language-plaintext highlighter-rouge">implementation.py</code> (factory functions), <code class="language-plaintext highlighter-rouge">schemas.py</code> (state/output schemas), and <code class="language-plaintext highlighter-rouge">engine.py</code> (LangGraph engine, if complex).</p>
+
+<p>The critical detail: <strong>events are registered via side-effect imports</strong>. The <code class="language-plaintext highlighter-rouge">events.py</code> module calls <code class="language-plaintext highlighter-rouge">register_event()</code> at module load. The <code class="language-plaintext highlighter-rouge">__init__.py</code> imports <code class="language-plaintext highlighter-rouge">events</code> (with <code class="language-plaintext highlighter-rouge"># noqa: F401</code>) to trigger registration. Forgetting this import means events silently don’t fire — a common and hard-to-debug issue.</p>
+<h2 id="configuration-validation">
+  
+  
+    <a href="#configuration-validation" class="anchor-heading" aria-labelledby="configuration-validation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration Validation
+  
+  
+</h2>
+    
+
+<p>Plugins validate their config in <code class="language-plaintext highlighter-rouge">on_load()</code>. The recommended pattern is to define a Pydantic model for the plugin’s config schema and instantiate it from <code class="language-plaintext highlighter-rouge">context.config</code>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">pydantic</span> <span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="k">class</span> <span class="nc">MyPluginConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">30</span>
+
+<span class="k">class</span> <span class="nc">MyPlugin</span><span class="p">:</span>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">on_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">MyPluginConfig</span><span class="p">(</span><span class="o">**</span><span class="n">context</span><span class="p">.</span><span class="n">config</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Environment variable interpolation (<code class="language-plaintext highlighter-rouge">${ENV_VAR}</code>) is handled by SootheConfig before the config reaches the plugin, so plugins receive resolved values.</p>
+<h2 id="event-registration-pattern">
+  
+  
+    <a href="#event-registration-pattern" class="anchor-heading" aria-labelledby="event-registration-pattern"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event Registration Pattern
+  
+  
+</h2>
+    
+
+<p>Events follow RFC-403 namespacing: <code class="language-plaintext highlighter-rouge">soothe.plugin.&lt;name&gt;.*</code> for plugin lifecycle, <code class="language-plaintext highlighter-rouge">soothe.tool.&lt;component&gt;.*</code> for tool operations, <code class="language-plaintext highlighter-rouge">soothe.subagent.&lt;name&gt;.*</code> for subagent lifecycle. Register at module load:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe.events</span> <span class="kn">import</span> <span class="n">register_event</span>
+
+<span class="k">class</span> <span class="nc">MyToolEvent</span><span class="p">(</span><span class="n">SootheEvent</span><span class="p">):</span>
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">"soothe.tool.my_plugin.operation"</span>
+    <span class="n">target</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="n">register_event</span><span class="p">(</span><span class="n">MyToolEvent</span><span class="p">,</span> <span class="n">summary_template</span><span class="o">=</span><span class="s">"Operation on {target}"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">summary_template</code> provides human-readable event summaries for the daemon’s event stream.</p>
+<h2 id="testing-extensions">
+  
+  
+    <a href="#testing-extensions" class="anchor-heading" aria-labelledby="testing-extensions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Testing Extensions
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Unit tests</strong>: test tool methods directly (call them as functions), test subagent factories with mock models, verify output schemas.</li>
+  <li><strong>Integration tests</strong>: test the full plugin lifecycle — load via <code class="language-plaintext highlighter-rouge">PluginLifecycleManager</code>, verify tools/subagents appear in the registry, check event registration.</li>
+  <li><strong>Security tests</strong>: verify workspace boundaries are enforced for any tool that touches the filesystem.</li>
+</ul>
+
+<p>Run <code class="language-plaintext highlighter-rouge">./scripts/verify_finally.sh</code> after changes — this is Soothe’s standard verification script.</p>
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Built-in plugins are immutable</strong>: you cannot override <code class="language-plaintext highlighter-rouge">planner</code>, <code class="language-plaintext highlighter-rouge">deep_research</code>, <code class="language-plaintext highlighter-rouge">academic_research</code>, <code class="language-plaintext highlighter-rouge">browser_use</code>, <code class="language-plaintext highlighter-rouge">veritas</code>, etc. with a lower-priority plugin of the same name. Use a different name.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">extra="forbid"</code> on manifests</strong>: the <code class="language-plaintext highlighter-rouge">PluginManifest</code> Pydantic model forbids extra fields. Passing an unrecognized argument to <code class="language-plaintext highlighter-rouge">@plugin()</code> raises a validation error.</li>
+  <li><strong>Event registration is import-dependent</strong>: if <code class="language-plaintext highlighter-rouge">events.py</code> isn’t imported, events don’t register. Always include the side-effect import in <code class="language-plaintext highlighter-rouge">__init__.py</code>.</li>
+  <li><strong>Graceful degradation is mandatory</strong>: a plugin that raises in <code class="language-plaintext highlighter-rouge">on_load()</code> is disabled, but a plugin that crashes during tool execution can disrupt the agent loop. Wrap risky operations in try/except and return error messages rather than raising.</li>
+  <li><strong>Optional dependencies</strong>: use try/except ImportError, not <code class="language-plaintext highlighter-rouge">dependencies</code> in the manifest. Manifest dependencies are <em>required</em> — if listed, the plugin won’t load without them.</li>
+  <li><strong>Config requirements are validated</strong>: <code class="language-plaintext highlighter-rouge">config_requirements</code> entries are checked at load. A missing required config value prevents loading — make requirements optional by not listing them and checking in <code class="language-plaintext highlighter-rouge">on_load()</code> instead.</li>
+</ul>
+<h2 id="related-rfcs">
+  
+  
+    <a href="#related-rfcs" class="anchor-heading" aria-labelledby="related-rfcs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related RFCs
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>RFC</th>
+      <th>Title</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="../../specs/RFC-600-plugin-extension-system.md">RFC-600</a></td>
+      <td>Plugin Extension System</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-601-built-in-agents.md">RFC-601</a></td>
+      <td>Built-in Plugin Agents</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-101-tool-interface.md">RFC-101</a></td>
+      <td>Tool Interface (single-purpose design)</td>
+    </tr>
+    <tr>
+      <td><a href="../../impl/IG-047-module-self-containment.md">IG-047</a></td>
+      <td>Module Self-Containment</td>
+    </tr>
+  </tbody>
+</table></div><hr />
+
+<div class="table-wrapper"><table>
+  <tbody>
+    <tr>
+      <td><strong>Previous</strong>: <a href="/soothe/wiki/capabilities/mcp.html">MCP Integration</a></td>
+      <td><strong>Back to</strong>: <a href="/soothe/wiki/capabilities/">Capabilities Index</a></td>
+    </tr>
+  </tbody>
+</table></div>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

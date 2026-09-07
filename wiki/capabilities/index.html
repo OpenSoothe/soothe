@@ -1,0 +1,585 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li:not(:nth-child(10)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(10) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(10) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(10) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Capabilities | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Capabilities" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Subagents, tools, MCP integration, and the plugin system." />
+<meta property="og:description" content="Subagents, tools, MCP integration, and the plugin system." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/capabilities/" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/capabilities/" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Capabilities" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Subagents, tools, MCP integration, and the plugin system.","headline":"Capabilities","url":"https://mirasoth.github.io/soothe/wiki/capabilities/"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Capabilities</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="capabilities-layer">
+  
+  
+    <a href="#capabilities-layer" class="anchor-heading" aria-labelledby="capabilities-layer"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Capabilities Layer
+  
+  
+</h1>
+    
+
+<p>The <strong>Capabilities Layer</strong> is Soothe’s extensibility framework for adding specialized behaviors through subagents, tools, and MCP integration. It sits between the protocol layer and the backend implementations, providing concrete capabilities that the agent can invoke during execution.</p>
+<h2 id="architectural-role">
+  
+  
+    <a href="#architectural-role" class="anchor-heading" aria-labelledby="architectural-role"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Architectural Role
+  
+  
+</h2>
+    
+
+<p>Soothe’s core agent loop (ContextEngine → StrangeLoop → CoreAgent) is intentionally agnostic about <em>what</em> the agent can do. The Capabilities Layer plugs concrete abilities into that loop: single-shot utilities (tools), multi-step workflows (subagents), and externally-sourced capabilities (MCP). All three share the same plugin-based registration and policy-gated execution infrastructure.</p>
+
+<p>The key architectural insight is the <strong>capability spectrum</strong>: tools are stateless and immediate, subagents are stateful and long-running, and MCP bridges to external systems. Choosing the right capability type for a given task is the primary design decision — see the comparison below.</p>
+<h2 id="the-three-capabilities">
+  
+  
+    <a href="#the-three-capabilities" class="anchor-heading" aria-labelledby="the-three-capabilities"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Three Capabilities
+  
+  
+</h2>
+    
+<h3 id="subagents--multi-step-workflows">
+  
+  
+    <a href="#subagents--multi-step-workflows" class="anchor-heading" aria-labelledby="subagents--multi-step-workflows"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Subagents — Multi-Step Workflows
+  
+  
+</h3>
+    
+
+<p>Subagents are specialized autonomous agents that perform multi-step, stateful workflows lasting seconds to minutes. They use the LLM as an orchestrator, can call tools or even other subagents, and return comprehensive structured reports. Each subagent is a compiled LangGraph <code class="language-plaintext highlighter-rouge">StateGraph</code> with its own state schema, nodes, and flow control.</p>
+
+<p><strong>Built-in subagents</strong> include:</p>
+<ul>
+  <li><strong>planner</strong> (RFC-618): Structured planning with iterative refinement</li>
+  <li><strong>deep_research</strong> (RFC-619): Public web research with crawl-on-discovery</li>
+  <li><strong>academic_research</strong> (RFC-619): Academic literature research (DeepXiv)</li>
+  <li><strong>browser_use</strong>: Browser automation (included in base dependencies)</li>
+  <li><strong>SkillifyService</strong> (<code class="language-plaintext highlighter-rouge">skillify:</code> config): Semantic skill retrieval via <code class="language-plaintext highlighter-rouge">search_skills</code></li>
+  <li><strong>veritas</strong> (RFC-622): Intent-grounded clarification auto-answerer</li>
+</ul>
+
+<p>→ See <a href="/soothe/wiki/subagents.html">Subagents</a> for usage, configuration, and architecture.</p>
+<h3 id="tools--single-purpose-utilities">
+  
+  
+    <a href="#tools--single-purpose-utilities" class="anchor-heading" aria-labelledby="tools--single-purpose-utilities"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Tools — Single-Purpose Utilities
+  
+  
+</h3>
+    
+
+<p>Tools are stateless, single-shot utilities the agent invokes for immediate operations. Soothe follows the <strong>single-purpose tool design pattern</strong> (RFC-101): one tool performs exactly one operation, named with <code class="language-plaintext highlighter-rouge">{verb}_{noun}</code> convention, with no mode/action parameters. This eliminates the cognitive load that unified dispatch tools create for the LLM.</p>
+
+<p>Tools are organized into domain-specific <strong>toolkits</strong>: execution, file operations, web search, academic search, media analysis, data inspection, HTTP requests, and datetime. The philosophy is to reuse the langchain ecosystem wherever possible and only build custom tools when no equivalent exists.</p>
+
+<p>→ See <a href="/soothe/wiki/capabilities/tools.html">Tools System</a> for design rationale and extension patterns.</p>
+<h3 id="mcp-integration--external-capabilities">
+  
+  
+    <a href="#mcp-integration--external-capabilities" class="anchor-heading" aria-labelledby="mcp-integration--external-capabilities"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> MCP Integration — External Capabilities
+  
+  
+</h3>
+    
+
+<p>MCP (Model Context Protocol) integration provides standardized access to external tools, prompts, and resources. Soothe implements a daemon-singleton MCP subsystem (RFC-412) that wraps <code class="language-plaintext highlighter-rouge">langchain_mcp_adapters.MultiServerMCPClient</code> with three key additions not found in the base library:</p>
+
+<ol>
+  <li><strong>Progressive disclosure</strong> — deferred tools are surfaced via search rather than loaded all at once, avoiding context bloat when MCP servers expose hundreds of tools.</li>
+  <li><strong>Policy gating</strong> — every MCP operation passes through PolicyProtocol for permission checks.</li>
+  <li><strong>Reconnect scheduling</strong> — remote transports auto-reconnect with exponential backoff.</li>
+</ol>
+
+<p>→ See <a href="/soothe/wiki/capabilities/mcp.html">MCP Integration</a> for architecture and configuration patterns.</p>
+<h2 id="plugin-system">
+  
+  
+    <a href="#plugin-system" class="anchor-heading" aria-labelledby="plugin-system"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Plugin System
+  
+  
+</h2>
+    
+
+<p>All three capability types are extended through the same <strong>Plugin System</strong> (RFC-600), a decorator-based API:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">@plugin</code> marks a class as a plugin with a manifest (name, version, dependencies, trust level)</li>
+  <li><code class="language-plaintext highlighter-rouge">@tool</code> registers methods as tools</li>
+  <li><code class="language-plaintext highlighter-rouge">@subagent</code> registers methods as subagent factories</li>
+  <li><code class="language-plaintext highlighter-rouge">@tool_group</code> marks a class as a collection of related tools</li>
+</ul>
+
+<p>Plugins are discovered through three mechanisms: Python entry points (highest priority), config-declared modules, and filesystem plugins in <code class="language-plaintext highlighter-rouge">~/.soothe/plugins/</code>. Built-in plugins always win and cannot be overridden.</p>
+
+<p>Trust levels (<code class="language-plaintext highlighter-rouge">built-in</code>, <code class="language-plaintext highlighter-rouge">trusted</code>, <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">untrusted</code>) create security boundaries — a plugin’s trust level determines what permissions it can request.</p>
+
+<p>→ See <a href="/soothe/wiki/capabilities/extension-patterns.html">Extension Patterns</a> for the full plugin development guide.</p>
+<h2 id="cross-cutting-concerns">
+  
+  
+    <a href="#cross-cutting-concerns" class="anchor-heading" aria-labelledby="cross-cutting-concerns"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Cross-Cutting Concerns
+  
+  
+</h2>
+    
+<h3 id="protocol-integration">
+  
+  
+    <a href="#protocol-integration" class="anchor-heading" aria-labelledby="protocol-integration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Protocol Integration
+  
+  
+</h3>
+    
+
+<p>Every capability is mediated by the protocol layer:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Capability</th>
+      <th>Protocol Gate</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Subagents</td>
+      <td>PolicyProtocol checks before execution (<code class="language-plaintext highlighter-rouge">subagent:invoke:&lt;name&gt;</code>)</td>
+    </tr>
+    <tr>
+      <td>Tools</td>
+      <td>OperationSecurityProtocol for workspace boundaries</td>
+    </tr>
+    <tr>
+      <td>MCP</td>
+      <td>PolicyProtocol gates every tool/resource/prompt call</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="event-system">
+  
+  
+    <a href="#event-system" class="anchor-heading" aria-labelledby="event-system"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event System
+  
+  
+</h3>
+    
+
+<p>Capabilities emit domain-specific wire events (RFC-403) following namespaced conventions: <code class="language-plaintext highlighter-rouge">soothe.subagent.&lt;name&gt;.*</code>, <code class="language-plaintext highlighter-rouge">soothe.tool.&lt;component&gt;.*</code>, and <code class="language-plaintext highlighter-rouge">soothe.mcp.*</code>. Events are registered via <code class="language-plaintext highlighter-rouge">register_event()</code> at module load time and provide observability for the daemon’s event stream.</p>
+<h3 id="configuration">
+  
+  
+    <a href="#configuration" class="anchor-heading" aria-labelledby="configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration
+  
+  
+</h3>
+    
+
+<p>All capabilities are configured via <code class="language-plaintext highlighter-rouge">nano.yml</code>. Subagents and MCP servers have their own top-level config sections; plugins are declared with module paths and plugin-specific config dicts. Environment variable interpolation (<code class="language-plaintext highlighter-rouge">${ENV_VAR}</code>) is supported throughout for secrets.</p>
+<h2 id="key-rfcs">
+  
+  
+    <a href="#key-rfcs" class="anchor-heading" aria-labelledby="key-rfcs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key RFCs
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>RFC</th>
+      <th>Title</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="../../specs/RFC-600-plugin-extension-system.md">RFC-600</a></td>
+      <td>Plugin Extension System</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-601-built-in-agents.md">RFC-601</a></td>
+      <td>Built-in Plugin Agents</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-618-plan-subagent-delegation.md">RFC-618</a></td>
+      <td>Plan Subagent</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-619-deep-research-subagent.md">RFC-619</a></td>
+      <td>Deep Research Subagent</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-622-veritas-auto-clarification.md">RFC-622</a></td>
+      <td>Veritas Auto-Clarification</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-101-tool-interface.md">RFC-101</a></td>
+      <td>Tool Interface (single-purpose design)</td>
+    </tr>
+    <tr>
+      <td><a href="../../specs/RFC-412-mcp-management.md">RFC-412</a></td>
+      <td>MCP Management</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="decision-guide-when-to-use-what">
+  
+  
+    <a href="#decision-guide-when-to-use-what" class="anchor-heading" aria-labelledby="decision-guide-when-to-use-what"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Decision Guide: When to Use What
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>You need to…</th>
+      <th>Use</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Perform a single, immediate operation</td>
+      <td>A <strong>tool</strong></td>
+    </tr>
+    <tr>
+      <td>Run a multi-step workflow with LLM orchestration</td>
+      <td>A <strong>subagent</strong></td>
+    </tr>
+    <tr>
+      <td>Integrate an external service that speaks MCP</td>
+      <td>An <strong>MCP server</strong></td>
+    </tr>
+    <tr>
+      <td>Add a capability not available in langchain</td>
+      <td>A custom <strong>tool</strong> via plugin</td>
+    </tr>
+    <tr>
+      <td>Compose multiple searches into a research flow</td>
+      <td>A <strong>subagent</strong> (e.g., <code class="language-plaintext highlighter-rouge">deep_research</code> or <code class="language-plaintext highlighter-rouge">academic_research</code>)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>The golden rule: <strong>check the langchain ecosystem first</strong>. If langchain or deepagents already provides a tool or agent for your need, use it rather than building a custom one.</p><hr />
+
+<div class="table-wrapper"><table>
+  <tbody>
+    <tr>
+      <td><strong>Next</strong>: <a href="/soothe/wiki/capabilities/subagents.html">Subagents Architecture</a></td>
+      <td><a href="/soothe/wiki/capabilities/tools.html">Tools System</a></td>
+      <td><a href="/soothe/wiki/capabilities/mcp.html">MCP Integration</a></td>
+      <td><a href="/soothe/wiki/capabilities/extension-patterns.html">Extension Patterns</a></td>
+    </tr>
+  </tbody>
+</table></div>
+
+          
+
+          
+            <hr>
+<h2 class="text-delta">Table of contents</h2>
+
+<ul>
+  
+  <li>
+    <a href="/soothe/wiki/capabilities/subagents.html">Subagents Architecture</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/capabilities/tools.html">Tools System</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/capabilities/mcp.html">MCP Integration</a>
+  </li>
+  
+  <li>
+    <a href="/soothe/wiki/capabilities/extension-patterns.html">Extension Patterns</a>
+  </li>
+  
+</ul>
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

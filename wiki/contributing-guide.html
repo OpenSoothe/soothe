@@ -1,0 +1,1293 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+    .site-nav ul li a {
+      background-image: none;
+    }
+
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Contributing Guide | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Contributing Guide" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Development workflow, code standards, and contribution process." />
+<meta property="og:description" content="Development workflow, code standards, and contribution process." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/contributing-guide.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/contributing-guide.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Contributing Guide" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Development workflow, code standards, and contribution process.","headline":"Contributing Guide","url":"https://mirasoth.github.io/soothe/wiki/contributing-guide.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><span>Contributing Guide</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="contributing-guide">
+  
+  
+    <a href="#contributing-guide" class="anchor-heading" aria-labelledby="contributing-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Contributing Guide
+  
+  
+</h1>
+    
+
+<p>Welcome to Soothe! This guide covers development workflow, code standards, and contribution process.</p><hr />
+<h2 id="table-of-contents">
+  
+  
+    <a href="#table-of-contents" class="anchor-heading" aria-labelledby="table-of-contents"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Table of Contents
+  
+  
+</h2>
+    
+
+<ol>
+  <li><a href="#development-setup">Development Setup</a></li>
+  <li><a href="#code-standards">Code Standards</a></li>
+  <li><a href="#development-workflow">Development Workflow</a></li>
+  <li><a href="#pull-request-process">Pull Request Process</a></li>
+  <li><a href="#architecture-guidelines">Architecture Guidelines</a></li>
+  <li><a href="#commit-guidelines">Commit Guidelines</a></li>
+</ol><hr />
+<h2 id="development-setup">
+  
+  
+    <a href="#development-setup" class="anchor-heading" aria-labelledby="development-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Development Setup
+  
+  
+</h2>
+    
+<h3 id="prerequisites">
+  
+  
+    <a href="#prerequisites" class="anchor-heading" aria-labelledby="prerequisites"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Prerequisites
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Python 3.11+</strong> (required)</li>
+  <li><strong>uv</strong> package manager (recommended)</li>
+  <li><strong>Docker</strong> (for integration tests)</li>
+  <li><strong>Git</strong> (for version control)</li>
+</ul>
+<h3 id="initial-setup">
+  
+  
+    <a href="#initial-setup" class="anchor-heading" aria-labelledby="initial-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Initial Setup
+  
+  
+</h3>
+    
+
+<ol>
+  <li><strong>Clone the repository</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>git clone https://github.com/mirasoth/soothe.git
+<span class="nb">cd </span>soothe
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Sync dependencies</strong>:
+```bash
+<h1 id="sync-all-packages-with-all-extras-and-dev-dependencies">
+  
+  
+    <a href="#sync-all-packages-with-all-extras-and-dev-dependencies" class="anchor-heading" aria-labelledby="sync-all-packages-with-all-extras-and-dev-dependencies"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Sync all packages with all extras and dev dependencies
+  
+  
+</h1>
+    
+    <p>make sync</p>
+  </li>
+</ol>
+<h1 id="or-manually">
+  
+  
+    <a href="#or-manually" class="anchor-heading" aria-labelledby="or-manually"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Or manually
+  
+  
+</h1>
+    
+<p>uv sync –all-packages –all-extras</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+3. **Verify setup**:
+```bash
+# Run verification script
+./scripts/verify_finally.sh
+
+# Should see:
+# ✅ All checks passed
+</code></pre></div></div>
+
+<ol>
+  <li><strong>Start development services</strong> (optional, for integration tests):
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># PostgreSQL + pgvector + Langfuse (dev stack)</span>
+docker compose <span class="nt">-f</span> docker-compose.yml up <span class="nt">-d</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+<h3 id="workspace-structure">
+  
+  
+    <a href="#workspace-structure" class="anchor-heading" aria-labelledby="workspace-structure"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Workspace Structure
+  
+  
+</h3>
+    
+
+<p>This monorepo <strong>owns</strong> three packages (format / lint / test / publish here):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>packages/
+├── soothe-cli/        # CLI + TUI
+├── soothe/            # Agent core (library)
+└── soothe-daemon/     # Daemon server
+</code></pre></div></div>
+
+<p>Submodules are <strong>consumed only</strong> (do not format, lint, test, or release them here):</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-sdk</code> — <a href="https://github.com/mirasoth/soothe-sdk">mirasoth/soothe-sdk</a></li>
+  <li><code class="language-plaintext highlighter-rouge">client/{python,go,typescript,rust}</code> — language clients</li>
+</ul>
+
+<p>PyPI-only first-party deps (not vendored in this tree):</p>
+
+<ul>
+  <li><a href="https://github.com/mirasoth/soothe-nano">soothe-nano</a> — Coding CoreAgent</li>
+  <li><a href="https://github.com/mirasoth/soothe-deepagents">soothe-deepagents</a> — deepagents fork</li>
+</ul>
+
+<p>Community plugins ship from <a href="https://github.com/mirasoth/soothe-plugins">mirasoth/soothe-plugins</a>.</p>
+
+<p><strong>Dependency order</strong> (imports):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe-sdk → soothe-nano (PyPI) → soothe → soothe-daemon
+soothe-sdk → soothe-client-python → soothe-cli
+</code></pre></div></div>
+
+<p><strong>Rules</strong> (owned packages):</p>
+<ul>
+  <li><strong>CLI</strong>: Can import SDK + client, <strong>NOT</strong> soothe/daemon</li>
+  <li><strong>soothe</strong>: Can import SDK + nano, <strong>NOT</strong> daemon</li>
+  <li><strong>daemon</strong>: Can import soothe + SDK (+ nano via soothe); <strong>NOT</strong> CLI/client</li>
+</ul><hr />
+<h2 id="code-standards">
+  
+  
+    <a href="#code-standards" class="anchor-heading" aria-labelledby="code-standards"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Code Standards
+  
+  
+</h2>
+    
+<h3 id="python-style">
+  
+  
+    <a href="#python-style" class="anchor-heading" aria-labelledby="python-style"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Python Style
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Python &gt;=3.11</strong></li>
+  <li><strong>Type hints</strong> on all public functions</li>
+  <li><strong>Google-style docstrings</strong> with Args, Returns, Raises</li>
+  <li><strong>Ruff</strong> for linting and formatting</li>
+  <li><strong>No bare <code class="language-plaintext highlighter-rouge">except:</code></strong> - use typed exception handling</li>
+</ul>
+<h3 id="docstring-format">
+  
+  
+    <a href="#docstring-format" class="anchor-heading" aria-labelledby="docstring-format"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Docstring Format
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">my_function</span><span class="p">(</span><span class="n">arg</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">optional</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="s">"""Brief description of function.
+
+    Args:
+        arg: Description of arg.
+        optional: Description of optional parameter.
+
+    Returns:
+        Description of return value.
+
+    Raises:
+        ValueError: When arg is invalid.
+
+    Example:
+        &gt;&gt;&gt; result = my_function("test")
+        &gt;&gt;&gt; print(result)
+    """</span>
+    <span class="k">pass</span>
+</code></pre></div></div>
+<h3 id="single-backticks">
+  
+  
+    <a href="#single-backticks" class="anchor-heading" aria-labelledby="single-backticks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Single Backticks
+  
+  
+</h3>
+    
+
+<p>Use single backticks for inline code in docstrings:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># ✅ Good
+</span><span class="s">"""Use `create_agent()` to instantiate."""</span>
+
+<span class="c1"># ❌ Bad (Sphinx double backticks)
+</span><span class="s">"""Use ``create_agent()`` to instantiate."""</span>
+</code></pre></div></div>
+<h3 id="naming-conventions">
+  
+  
+    <a href="#naming-conventions" class="anchor-heading" aria-labelledby="naming-conventions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Naming Conventions
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Modules</strong>: <code class="language-plaintext highlighter-rouge">snake_case</code> (e.g., <code class="language-plaintext highlighter-rouge">strange_loop.py</code>)</li>
+  <li><strong>Classes</strong>: <code class="language-plaintext highlighter-rouge">PascalCase</code> (e.g., <code class="language-plaintext highlighter-rouge">StrangeLoop</code>)</li>
+  <li><strong>Functions</strong>: <code class="language-plaintext highlighter-rouge">snake_case</code> (e.g., <code class="language-plaintext highlighter-rouge">create_agent</code>)</li>
+  <li><strong>Constants</strong>: <code class="language-plaintext highlighter-rouge">UPPER_SNAKE_CASE</code> (e.g., <code class="language-plaintext highlighter-rouge">MAX_ITERATIONS</code>)</li>
+  <li><strong>Private</strong>: <code class="language-plaintext highlighter-rouge">_leading_underscore</code> (e.g., <code class="language-plaintext highlighter-rouge">_internal_method</code>)</li>
+</ul>
+<h3 id="import-order">
+  
+  
+    <a href="#import-order" class="anchor-heading" aria-labelledby="import-order"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Import Order
+  
+  
+</h3>
+    
+
+<p>Use isort/ruff import sorting:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Standard library
+</span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="c1"># Third-party
+</span><span class="kn">import</span> <span class="nn">pytest</span>
+<span class="kn">from</span> <span class="nn">langchain_core.language_models</span> <span class="kn">import</span> <span class="n">BaseChatModel</span>
+
+<span class="c1"># Local imports (relative)
+</span><span class="kn">from</span> <span class="nn">.agent</span> <span class="kn">import</span> <span class="n">AgentConfig</span>
+<span class="kn">from</span> <span class="nn">.events</span> <span class="kn">import</span> <span class="n">MyEvent</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="c1"># Type-only imports (avoid circular deps)
+</span>    <span class="kn">from</span> <span class="nn">langchain_core.embeddings</span> <span class="kn">import</span> <span class="n">Embeddings</span>
+</code></pre></div></div><hr />
+<h2 id="development-workflow">
+  
+  
+    <a href="#development-workflow" class="anchor-heading" aria-labelledby="development-workflow"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Development Workflow
+  
+  
+</h2>
+    
+<h3 id="daily-workflow">
+  
+  
+    <a href="#daily-workflow" class="anchor-heading" aria-labelledby="daily-workflow"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daily Workflow
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># 1. Make code changes</span>
+vim packages/soothe/src/soothe/sloop/engine/strange_loop.py
+
+<span class="c"># 2. Write/update tests</span>
+vim packages/soothe/tests/unit/core/loop/engine/test_strange_loop_model_roles.py
+
+<span class="c"># 3. Run relevant tests</span>
+<span class="nb">cd </span>packages/soothe
+uv run pytest tests/unit/core/loop/engine/test_strange_loop_model_roles.py <span class="nt">-v</span>
+
+<span class="c"># 4. Format code</span>
+make format
+
+<span class="c"># 5. Check linting</span>
+make lint
+
+<span class="c"># 6. Full verification before commit</span>
+./scripts/verify_finally.sh
+</code></pre></div></div>
+<h3 id="format-and-lint">
+  
+  
+    <a href="#format-and-lint" class="anchor-heading" aria-labelledby="format-and-lint"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Format and Lint
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Format all packages</span>
+make format
+
+<span class="c"># Check formatting (for CI)</span>
+make format-check
+
+<span class="c"># Lint all packages</span>
+make lint
+
+<span class="c"># Auto-fix linting issues</span>
+make lint-fix
+</code></pre></div></div>
+<h3 id="testing">
+  
+  
+    <a href="#testing" class="anchor-heading" aria-labelledby="testing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Testing
+  
+  
+</h3>
+    
+
+<p>See <strong><a href="/soothe/wiki/testing-guide.html">Testing Guide</a></strong> for comprehensive testing instructions.</p>
+
+<p><strong>Quick commands</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Unit tests only</span>
+make test-unit
+
+<span class="c"># Integration tests</span>
+make test-integration
+
+<span class="c"># Coverage report</span>
+make test-coverage
+</code></pre></div></div>
+<h3 id="pre-commit-hook-optional">
+  
+  
+    <a href="#pre-commit-hook-optional" class="anchor-heading" aria-labelledby="pre-commit-hook-optional"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Pre-Commit Hook (Optional)
+  
+  
+</h3>
+    
+
+<p>Install git hook for automatic verification:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create pre-commit hook</span>
+<span class="nb">echo</span> <span class="s1">'./scripts/verify_finally.sh'</span> <span class="o">&gt;</span> .git/hooks/pre-commit
+<span class="nb">chmod</span> +x .git/hooks/pre-commit
+
+<span class="c"># Now every commit runs verification automatically</span>
+git commit <span class="nt">-m</span> <span class="s2">"my changes"</span>
+</code></pre></div></div><hr />
+<h2 id="pull-request-process">
+  
+  
+    <a href="#pull-request-process" class="anchor-heading" aria-labelledby="pull-request-process"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Pull Request Process
+  
+  
+</h2>
+    
+<h3 id="1-create-feature-branch">
+  
+  
+    <a href="#1-create-feature-branch" class="anchor-heading" aria-labelledby="1-create-feature-branch"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1. Create Feature Branch
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Create branch</span>
+git checkout <span class="nt">-b</span> feature/my-feature
+
+<span class="c"># Or for bugfix</span>
+git checkout <span class="nt">-b</span> bugfix/my-bugfix
+</code></pre></div></div>
+<h3 id="2-make-changes">
+  
+  
+    <a href="#2-make-changes" class="anchor-heading" aria-labelledby="2-make-changes"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2. Make Changes
+  
+  
+</h3>
+    
+
+<p>Follow the daily workflow above.</p>
+<h3 id="3-run-verification">
+  
+  
+    <a href="#3-run-verification" class="anchor-heading" aria-labelledby="3-run-verification"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3. Run Verification
+  
+  
+</h3>
+    
+
+<p><strong>MANDATORY</strong>: Run full verification before pushing:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/verify_finally.sh
+</code></pre></div></div>
+
+<p>All checks must pass:</p>
+<ul>
+  <li>✅ Workspace integrity</li>
+  <li>✅ Dependency validation</li>
+  <li>✅ Formatting check</li>
+  <li>✅ Linting (zero errors)</li>
+  <li>✅ Unit tests (900+ tests)</li>
+</ul>
+<h3 id="4-commit-changes">
+  
+  
+    <a href="#4-commit-changes" class="anchor-heading" aria-labelledby="4-commit-changes"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 4. Commit Changes
+  
+  
+</h3>
+    
+
+<p>See <a href="#commit-guidelines">Commit Guidelines</a> below.</p>
+<h3 id="5-push-and-create-pr">
+  
+  
+    <a href="#5-push-and-create-pr" class="anchor-heading" aria-labelledby="5-push-and-create-pr"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 5. Push and Create PR
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Push branch</span>
+git push origin feature/my-feature
+
+<span class="c"># Create pull request on GitHub</span>
+<span class="c"># Use PR template</span>
+</code></pre></div></div>
+<h3 id="pr-template">
+  
+  
+    <a href="#pr-template" class="anchor-heading" aria-labelledby="pr-template"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PR Template
+  
+  
+</h3>
+    
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gu">## Summary</span>
+Brief description of changes.
+
+<span class="gu">## Changes</span>
+<span class="p">-</span> Change 1
+<span class="p">-</span> Change 2
+
+<span class="gu">## Testing</span>
+<span class="p">-</span> [ ] Unit tests added/updated
+<span class="p">-</span> [ ] Integration tests passed
+<span class="p">-</span> [ ] Manual testing performed
+
+<span class="gu">## Checklist</span>
+<span class="p">-</span> [ ] Code formatted (<span class="sb">`make format`</span>)
+<span class="p">-</span> [ ] Linting passed (<span class="sb">`make lint`</span>)
+<span class="p">-</span> [ ] Tests passed (<span class="sb">`./scripts/verify_finally.sh`</span>)
+<span class="p">-</span> [ ] Docstrings updated
+<span class="p">-</span> [ ] Implementation guide created (if substantial)
+</code></pre></div></div>
+<h3 id="6-code-review">
+  
+  
+    <a href="#6-code-review" class="anchor-heading" aria-labelledby="6-code-review"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 6. Code Review
+  
+  
+</h3>
+    
+
+<ul>
+  <li>Address reviewer feedback</li>
+  <li>Run verification after changes</li>
+  <li>Squash commits if requested</li>
+</ul>
+<h3 id="7-merge">
+  
+  
+    <a href="#7-merge" class="anchor-heading" aria-labelledby="7-merge"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 7. Merge
+  
+  
+</h3>
+    
+
+<p>PR will be merged after:</p>
+<ul>
+  <li>✅ All checks pass</li>
+  <li>✅ Code review approved</li>
+  <li>✅ Documentation updated</li>
+</ul><hr />
+<h2 id="architecture-guidelines">
+  
+  
+    <a href="#architecture-guidelines" class="anchor-heading" aria-labelledby="architecture-guidelines"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Architecture Guidelines
+  
+  
+</h2>
+    
+<h3 id="module-self-containment-ig-047">
+  
+  
+    <a href="#module-self-containment-ig-047" class="anchor-heading" aria-labelledby="module-self-containment-ig-047"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Module Self-Containment (IG-047)
+  
+  
+</h3>
+    
+
+<p>Place tests <strong>close to the code they test</strong>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>packages/soothe/src/soothe/sloop/engine/
+├── __init__.py
+├── strange_loop.py
+
+packages/soothe/tests/unit/core/loop/engine/
+├── test_strange_loop_model_roles.py      # Tests for strange_loop.py
+</code></pre></div></div>
+<h3 id="event-registration">
+  
+  
+    <a href="#event-registration" class="anchor-heading" aria-labelledby="event-registration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event Registration
+  
+  
+</h3>
+    
+
+<p>Each module registers its own events:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe.events</span> <span class="kn">import</span> <span class="n">register_event</span>
+<span class="kn">from</span> <span class="nn">soothe_sdk.core.events</span> <span class="kn">import</span> <span class="n">SootheEvent</span>
+
+<span class="k">class</span> <span class="nc">MyCustomEvent</span><span class="p">(</span><span class="n">SootheEvent</span><span class="p">):</span>
+    <span class="nb">type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">"soothe.my_module.custom.event"</span>
+    <span class="n">data</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="c1"># Register at module load time
+</span><span class="n">register_event</span><span class="p">(</span><span class="n">MyCustomEvent</span><span class="p">,</span> <span class="n">summary_template</span><span class="o">=</span><span class="s">"Custom: {data}"</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 id="protocol-first-design">
+  
+  
+    <a href="#protocol-first-design" class="anchor-heading" aria-labelledby="protocol-first-design"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Protocol-First Design
+  
+  
+</h3>
+    
+
+<p>Define protocols before implementations:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Protocol</span>
+
+<span class="k">class</span> <span class="nc">MyProtocol</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+    <span class="s">"""Protocol definition."""</span>
+    
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">goal</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Result</span><span class="p">:</span>
+        <span class="s">"""Execute a goal."""</span>
+        <span class="p">...</span>
+
+<span class="c1"># Then implement
+</span><span class="k">class</span> <span class="nc">MyImplementation</span><span class="p">:</span>
+    <span class="s">"""Protocol implementation."""</span>
+    
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">goal</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Result</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Result</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s">"completed"</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 id="no-layer-n-terminology">
+  
+  
+    <a href="#no-layer-n-terminology" class="anchor-heading" aria-labelledby="no-layer-n-terminology"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> No “Layer N” Terminology
+  
+  
+</h3>
+    
+
+<p>Use concrete module names instead:</p>
+
+<ul>
+  <li>❌ “Layer 1” → ✅ “CoreAgent”</li>
+  <li>❌ “Layer 2” → ✅ “StrangeLoop”</li>
+  <li>❌ “Layer 3” → ✅ “ContextEngine”</li>
+</ul>
+
+<p>Apply to: docstrings, comments, log messages, documentation.</p>
+<h3 id="no-internal-doc-references-in-user-facing-text">
+  
+  
+    <a href="#no-internal-doc-references-in-user-facing-text" class="anchor-heading" aria-labelledby="no-internal-doc-references-in-user-facing-text"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> No Internal Doc References in User-Facing Text
+  
+  
+</h3>
+    
+
+<p>Don’t expose IG-XXX or RFC-XXX in user-facing text:</p>
+
+<ul>
+  <li>❌ <code class="language-plaintext highlighter-rouge">logger.info("[Plan] IG-226 thread continuation")</code></li>
+  <li>✅ <code class="language-plaintext highlighter-rouge">logger.info("[Plan] Thread continuation mode enabled")</code></li>
+</ul>
+
+<p><strong>OK in</strong>: Code comments, docstrings (for developer context)
+<strong>NOT OK in</strong>: Log messages, user text, CLI output, TUI, events</p><hr />
+<h2 id="commit-guidelines">
+  
+  
+    <a href="#commit-guidelines" class="anchor-heading" aria-labelledby="commit-guidelines"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Commit Guidelines
+  
+  
+</h2>
+    
+<h3 id="commit-message-format">
+  
+  
+    <a href="#commit-message-format" class="anchor-heading" aria-labelledby="commit-message-format"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Commit Message Format
+  
+  
+</h3>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;type&gt;(&lt;scope&gt;): &lt;subject&gt;
+
+&lt;body&gt;
+
+&lt;footer&gt;
+</code></pre></div></div>
+<h3 id="types">
+  
+  
+    <a href="#types" class="anchor-heading" aria-labelledby="types"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Types
+  
+  
+</h3>
+    
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">feat</code>: New feature</li>
+  <li><code class="language-plaintext highlighter-rouge">fix</code>: Bug fix</li>
+  <li><code class="language-plaintext highlighter-rouge">docs</code>: Documentation only</li>
+  <li><code class="language-plaintext highlighter-rouge">style</code>: Formatting, missing semicolons, etc.</li>
+  <li><code class="language-plaintext highlighter-rouge">refactor</code>: Code restructuring</li>
+  <li><code class="language-plaintext highlighter-rouge">test</code>: Adding tests</li>
+  <li><code class="language-plaintext highlighter-rouge">chore</code>: Maintenance tasks</li>
+</ul>
+<h3 id="scopes">
+  
+  
+    <a href="#scopes" class="anchor-heading" aria-labelledby="scopes"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Scopes
+  
+  
+</h3>
+    
+
+<p>Package names or modules:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">sdk</code>, <code class="language-plaintext highlighter-rouge">cli</code>, <code class="language-plaintext highlighter-rouge">core</code>, <code class="language-plaintext highlighter-rouge">daemon</code></li>
+  <li><code class="language-plaintext highlighter-rouge">agent</code>, <code class="language-plaintext highlighter-rouge">loop</code>, <code class="language-plaintext highlighter-rouge">memory</code>, <code class="language-plaintext highlighter-rouge">planner</code></li>
+  <li><code class="language-plaintext highlighter-rouge">config</code>, <code class="language-plaintext highlighter-rouge">events</code>, <code class="language-plaintext highlighter-rouge">backends</code></li>
+</ul>
+<h3 id="examples">
+  
+  
+    <a href="#examples" class="anchor-heading" aria-labelledby="examples"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Examples
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Feature</span>
+feat<span class="o">(</span>agent<span class="o">)</span>: add autonomous goal scheduling
+
+<span class="c"># Bugfix</span>
+fix<span class="o">(</span>loop<span class="o">)</span>: correct iteration count on <span class="nb">timeout</span>
+
+<span class="c"># Documentation</span>
+docs<span class="o">(</span>config<span class="o">)</span>: update YAML reference with examples
+
+<span class="c"># Refactor</span>
+refactor<span class="o">(</span>events<span class="o">)</span>: move event registration to modules
+
+<span class="c"># Test</span>
+<span class="nb">test</span><span class="o">(</span>loop<span class="o">)</span>: add unit tests <span class="k">for </span><span class="nb">timeout </span>retry
+
+<span class="c"># Chore</span>
+chore<span class="o">(</span>deps<span class="o">)</span>: update langchain to 0.3.0
+</code></pre></div></div>
+<h3 id="commit-body">
+  
+  
+    <a href="#commit-body" class="anchor-heading" aria-labelledby="commit-body"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Commit Body
+  
+  
+</h3>
+    
+
+<p>Explain <strong>why</strong> the change was made:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>feat(agent): add autonomous goal scheduling
+
+Add RFC-222 AutopilotService for background goal execution.
+Enables 24/7 autonomous operation without human intervention.
+
+- AutopilotService manages goal queue
+- Worker pool dispatches goals to StrangeLoop
+- Context projection for parent→child lineage
+
+Implements: RFC-222
+</code></pre></div></div><hr />
+<h2 id="implementation-guides">
+  
+  
+    <a href="#implementation-guides" class="anchor-heading" aria-labelledby="implementation-guides"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Implementation Guides
+  
+  
+</h2>
+    
+<h3 id="when-to-create-ig">
+  
+  
+    <a href="#when-to-create-ig" class="anchor-heading" aria-labelledby="when-to-create-ig"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> When to Create IG
+  
+  
+</h3>
+    
+
+<p><strong>Substantial work</strong> (multi-step, cross-module, new features):</p>
+<ul>
+  <li>Create <code class="language-plaintext highlighter-rouge">docs/impl/NNN-brief-title.md</code></li>
+  <li>Track scope, decisions, progress</li>
+</ul>
+
+<p><strong>Minor changes</strong> (bugfixes, single-file, trivial config):</p>
+<ul>
+  <li><strong>Do NOT</strong> create verbose IG</li>
+  <li>Use clear commit message + PR description</li>
+</ul>
+<h3 id="ig-naming">
+  
+  
+    <a href="#ig-naming" class="anchor-heading" aria-labelledby="ig-naming"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> IG Naming
+  
+  
+</h3>
+    
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">NNN-brief-title.md</code> (NNN = sequential number)</li>
+  <li>Example: <code class="language-plaintext highlighter-rouge">docs/impl/IG-295-loop-graph-refactor.md</code></li>
+</ul>
+<h3 id="ig-template">
+  
+  
+    <a href="#ig-template" class="anchor-heading" aria-labelledby="ig-template"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> IG Template
+  
+  
+</h3>
+    
+
+<div class="language-markdown highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gh"># IG-NNN: Brief Title</span>
+
+<span class="gs">**Status**</span>: In Progress | Completed
+
+<span class="gu">## Goal</span>
+What we're implementing and why.
+
+<span class="gu">## Scope</span>
+Files and modules affected.
+
+<span class="gu">## Approach</span>
+Implementation strategy.
+
+<span class="gu">## Progress</span>
+<span class="p">-</span> [ ] Task 1
+<span class="p">-</span> [ ] Task 2
+<span class="p">-</span> [ ] Task 3
+
+<span class="gu">## Decisions</span>
+Key decisions made during implementation.
+
+<span class="gu">## References</span>
+<span class="p">-</span> RFC-XXX (if applicable)
+</code></pre></div></div><hr />
+<h2 id="ecosystem-dependencies">
+  
+  
+    <a href="#ecosystem-dependencies" class="anchor-heading" aria-labelledby="ecosystem-dependencies"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Ecosystem Dependencies
+  
+  
+</h2>
+    
+<h3 id="check-langchain-first">
+  
+  
+    <a href="#check-langchain-first" class="anchor-heading" aria-labelledby="check-langchain-first"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Check LangChain First
+  
+  
+</h3>
+    
+
+<p><strong>DO NOT reinvent modules</strong> if langchain ecosystem provides them:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Use</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Tools</td>
+      <td><code class="language-plaintext highlighter-rouge">langchain.BaseTool</code> or <code class="language-plaintext highlighter-rouge">@tool</code> decorator</td>
+    </tr>
+    <tr>
+      <td>Subagents</td>
+      <td><code class="language-plaintext highlighter-rouge">deepagents.SubAgent</code> or <code class="language-plaintext highlighter-rouge">CompiledSubAgent</code></td>
+    </tr>
+    <tr>
+      <td>MCP</td>
+      <td><code class="language-plaintext highlighter-rouge">langchain-mcp-adapters</code></td>
+    </tr>
+    <tr>
+      <td>Skills</td>
+      <td><code class="language-plaintext highlighter-rouge">deepagents.SkillsMiddleware</code></td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td><code class="language-plaintext highlighter-rouge">deepagents.MemoryMiddleware</code></td>
+    </tr>
+    <tr>
+      <td>Web search</td>
+      <td><code class="language-plaintext highlighter-rouge">TavilySearchResults</code>, <code class="language-plaintext highlighter-rouge">DuckDuckGoSearchRun</code></td>
+    </tr>
+    <tr>
+      <td>ArXiv</td>
+      <td><code class="language-plaintext highlighter-rouge">ArxivQueryRun</code></td>
+    </tr>
+    <tr>
+      <td>Wikipedia</td>
+      <td><code class="language-plaintext highlighter-rouge">WikipediaQueryRun</code></td>
+    </tr>
+    <tr>
+      <td>Python REPL</td>
+      <td><code class="language-plaintext highlighter-rouge">PythonREPLTool</code></td>
+    </tr>
+    <tr>
+      <td>Document loaders</td>
+      <td><code class="language-plaintext highlighter-rouge">PyPDFLoader</code>, <code class="language-plaintext highlighter-rouge">Docx2txtLoader</code></td>
+    </tr>
+    <tr>
+      <td>Model init</td>
+      <td><code class="language-plaintext highlighter-rouge">init_chat_model()</code>, <code class="language-plaintext highlighter-rouge">init_embeddings()</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Check</strong>: <code class="language-plaintext highlighter-rouge">langchain-core</code>, <code class="language-plaintext highlighter-rouge">langchain-community</code>, <code class="language-plaintext highlighter-rouge">deepagents</code> first!</p><hr />
+<h2 id="documentation">
+  
+  
+    <a href="#documentation" class="anchor-heading" aria-labelledby="documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Documentation
+  
+  
+</h2>
+    
+<h3 id="update-documentation">
+  
+  
+    <a href="#update-documentation" class="anchor-heading" aria-labelledby="update-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Update Documentation
+  
+  
+</h3>
+    
+
+<p>When making changes, update relevant docs:</p>
+
+<ul>
+  <li><strong>Code changes</strong>: Update docstrings, inline comments</li>
+  <li><strong>API changes</strong>: Update <a href="/soothe/wiki/api-reference/">API Reference</a></li>
+  <li><strong>Config changes</strong>: Update <a href="/soothe/wiki/configuration-guide/">Configuration Guide</a></li>
+  <li><strong>Architecture changes</strong>: Update <a href="/soothe/wiki/architecture/">Architecture Overview</a></li>
+</ul>
+<h3 id="docstring-standards">
+  
+  
+    <a href="#docstring-standards" class="anchor-heading" aria-labelledby="docstring-standards"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Docstring Standards
+  
+  
+</h3>
+    
+
+<ul>
+  <li>Google-style format</li>
+  <li>Args, Returns, Raises sections</li>
+  <li>Examples for complex functions</li>
+  <li>Keep concise but complete</li>
+</ul><hr />
+<h2 id="release-process">
+  
+  
+    <a href="#release-process" class="anchor-heading" aria-labelledby="release-process"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Release Process
+  
+  
+</h2>
+    
+<h3 id="versioning">
+  
+  
+    <a href="#versioning" class="anchor-heading" aria-labelledby="versioning"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Versioning
+  
+  
+</h3>
+    
+
+<ul>
+  <li>Semantic versioning: <code class="language-plaintext highlighter-rouge">MAJOR.MINOR.PATCH</code></li>
+  <li>Version file: <code class="language-plaintext highlighter-rouge">VERSION</code></li>
+  <li>Package versions in <code class="language-plaintext highlighter-rouge">pyproject.toml</code></li>
+</ul>
+<h3 id="publishing">
+  
+  
+    <a href="#publishing" class="anchor-heading" aria-labelledby="publishing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Publishing
+  
+  
+</h3>
+    
+
+<p>Publishes <strong>owned</strong> packages only (<code class="language-plaintext highlighter-rouge">soothe</code>, <code class="language-plaintext highlighter-rouge">soothe-cli</code>, <code class="language-plaintext highlighter-rouge">soothe-daemon</code>).
+Submodule packages and language clients release from their own repositories.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Publish to TestPyPI first</span>
+make publish-test
+
+<span class="c"># Then publish to PyPI</span>
+make publish
+
+<span class="c"># Or per-package</span>
+make cli-publish
+make soothe-publish
+make daemon-publish
+</code></pre></div></div><hr />
+<h2 id="getting-help">
+  
+  
+    <a href="#getting-help" class="anchor-heading" aria-labelledby="getting-help"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Getting Help
+  
+  
+</h2>
+    
+<h3 id="resources">
+  
+  
+    <a href="#resources" class="anchor-heading" aria-labelledby="resources"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Resources
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/architecture/">Architecture Overview</a></strong> - System design</li>
+  <li><strong><a href="/soothe/wiki/testing-guide.html">Testing Guide</a></strong> - Testing instructions</li>
+  <li><strong><a href="../specs/RFC-000-system-conceptual-design.md">RFC-000</a></strong> - Conceptual design</li>
+  <li><strong><a href="../../AGENTS.md">AGENTS.md</a></strong> - AI agent instructions</li>
+</ul>
+<h3 id="communication">
+  
+  
+    <a href="#communication" class="anchor-heading" aria-labelledby="communication"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Communication
+  
+  
+</h3>
+    
+
+<ul>
+  <li>GitHub Issues: Bug reports, feature requests</li>
+  <li>Pull Requests: Code contributions</li>
+  <li>Discussions: Questions, ideas</li>
+</ul><hr />
+<h2 id="summary-checklist">
+  
+  
+    <a href="#summary-checklist" class="anchor-heading" aria-labelledby="summary-checklist"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Summary Checklist
+  
+  
+</h2>
+    
+
+<p>Before submitting PR:</p>
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Code follows style guidelines</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Tests added/updated and passing</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" /><code class="language-plaintext highlighter-rouge">./scripts/verify_finally.sh</code> passes</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Docstrings updated</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Documentation updated (if needed)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Implementation guide created (if substantial)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Commit messages follow guidelines</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />PR template filled out</li>
+</ul><hr />
+<h2 id="see-also">
+  
+  
+    <a href="#see-also" class="anchor-heading" aria-labelledby="see-also"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> See Also
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/testing-guide.html">Testing Guide</a></strong> - Testing workflow and best practices</li>
+  <li><strong><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a></strong> - Development configuration</li>
+  <li><strong><a href="/soothe/wiki/architecture/">Architecture Overview</a></strong> - System architecture</li>
+  <li><strong><a href="../specs/RFC-000-system-conceptual-design.md">RFC-000</a></strong> - Conceptual design</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

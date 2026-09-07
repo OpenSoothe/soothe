@@ -1,0 +1,973 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li:not(:nth-child(14)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(14) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(14) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(14) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>User Query Processing Flow | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="User Query Processing Flow" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="How a user query flows through Soothe from CLI entry to final response, covering the runner and StrangeLoop engine." />
+<meta property="og:description" content="How a user query flows through Soothe from CLI entry to final response, covering the runner and StrangeLoop engine." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/query-processing-flow.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/query-processing-flow.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="User Query Processing Flow" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"How a user query flows through Soothe from CLI entry to final response, covering the runner and StrangeLoop engine.","headline":"User Query Processing Flow","url":"https://mirasoth.github.io/soothe/wiki/query-processing-flow.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><span>User Query Processing Flow</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="user-query-processing-flow">
+  
+  
+    <a href="#user-query-processing-flow" class="anchor-heading" aria-labelledby="user-query-processing-flow"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> User Query Processing Flow
+  
+  
+</h1>
+    
+
+<p>This document describes how a user query flows through Soothe from CLI entry to final response.</p>
+
+<p><strong>Repository layout:</strong> The runner lives under <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/</code> and the StrangeLoop engine under <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/</code>. The CLI Typer app lives under <code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/</code>.</p>
+<h2 id="overview">
+  
+  
+    <a href="#overview" class="anchor-heading" aria-labelledby="overview"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Overview
+  
+  
+</h2>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>User Input → CLI Entry → Daemon → Runner → Planning → Agent Execution → Response
+</code></pre></div></div>
+<h2 id="1-entry-points">
+  
+  
+    <a href="#1-entry-points" class="anchor-heading" aria-labelledby="1-entry-points"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1. Entry Points
+  
+  
+</h2>
+    
+<h3 id="cli-entry">
+  
+  
+    <a href="#cli-entry" class="anchor-heading" aria-labelledby="cli-entry"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> CLI Entry
+  
+  
+</h3>
+    
+
+<p>The CLI supports two primary modes:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe -p "query"     →  Headless mode (single query)
+soothe                →  TUI mode (interactive)
+</code></pre></div></div>
+
+<p><strong>Flow:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>main.py:main()
+    ↓
+run_cmd.py:run_impl()
+    ↓
+┌─────────────┐
+│ --no-tui?   │
+└─────────────┘
+    ↓           ↓
+   YES         NO
+    ↓           ↓
+headless.py   run_tui()
+    ↓
+run_headless()
+</code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/main.py</code> — Typer app entry point</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/commands/run_cmd.py</code> — <code class="language-plaintext highlighter-rouge">run_impl()</code> routing logic</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/execution/headless.py</code> — Headless execution</li>
+</ul>
+<h3 id="daemon-connection">
+  
+  
+    <a href="#daemon-connection" class="anchor-heading" aria-labelledby="daemon-connection"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Connection
+  
+  
+</h3>
+    
+
+<p>In headless mode, the system checks for a running daemon:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>run_headless()
+    ↓
+SootheDaemon._is_socket_live()?
+    ↓              ↓
+   YES            NO
+    ↓              ↓
+Connect via    Auto-start daemon
+DaemonClient      ↓
+    ↓         daemon.py:auto-start daemon
+run_headless_via_daemon()
+</code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/execution/daemon.py</code> — Daemon client interaction</li>
+</ul>
+<h2 id="2-daemon-processing">
+  
+  
+    <a href="#2-daemon-processing" class="anchor-heading" aria-labelledby="2-daemon-processing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2. Daemon Processing
+  
+  
+</h2>
+    
+
+<p>The daemon server handles incoming queries:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>DaemonClient.send_new_thread(text, thread_id)
+    ↓
+DaemonServer._handle_transport_message()
+    ↓
+_handle_client_message()
+    ↓
+┌────────────────────┐
+│ Message Type:       │
+│ - "input"           │ → _run_query()
+│ - "resume_thread"   │ → Resume existing thread
+│ - "interrupt"       │ → Handle interrupt
+└────────────────────┘
+    ↓
+_run_query()
+    ↓
+SootheRunner.astream(text, thread_id, ...)
+    ↓
+Broadcast events → EventBus → Subscribed clients
+</code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/core.py</code> — <code class="language-plaintext highlighter-rouge">SootheDaemon</code> class</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/handlers.py</code> — Query handling logic</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/event/bus.py</code> — Event routing (EventBus)</li>
+</ul>
+<h2 id="3-runner-orchestration">
+  
+  
+    <a href="#3-runner-orchestration" class="anchor-heading" aria-labelledby="3-runner-orchestration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3. Runner Orchestration
+  
+  
+</h2>
+    
+
+<p><code class="language-plaintext highlighter-rouge">SootheRunner.astream()</code> is the central orchestration point:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>SootheRunner.astream(text, thread_id, autonomous, subagent)
+    ↓
+┌─────────────────────────────────────┐
+│         Initial Classification      │
+│   UnifiedClassifier.classify()     │
+└─────────────────────────────────────┘
+                 ↓
+    ┌────────────┼────────────┐
+    ↓            ↓            ↓
+quiz        agentic      subagent?
+    ↓            ↓            ↓
+quiz        default      direct
+response    mode         execution
+                ↓
+        _run_strange_loop()
+</code></pre></div></div>
+
+<p><strong>Routing Logic:</strong></p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Condition</th>
+      <th>Path</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">subagent</code> specified</td>
+      <td>Direct</td>
+      <td>Route directly to subagent</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">autonomous=True</code></td>
+      <td>Autonomous</td>
+      <td>Goal-driven execution</td>
+    </tr>
+    <tr>
+      <td>Default</td>
+      <td>Agentic Loop</td>
+      <td>Iterative observe-act-verify</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/__init__.py</code> — Runner package entry</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_strange_loop.py</code> — Agentic loop</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_autonomous.py</code> — Autonomous mode</li>
+</ul>
+<h2 id="4-agentic-loop-rfc-624">
+  
+  
+    <a href="#4-agentic-loop-rfc-624" class="anchor-heading" aria-labelledby="4-agentic-loop-rfc-624"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 4. Agentic Loop (RFC-624)
+  
+  
+</h2>
+    
+
+<p>The default execution mode follows an iterative observe-act-verify cycle:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────────────────────────────────────────────┐
+│                  AGENTIC LOOP                       │
+│           (max_iterations: default 3)              │
+└─────────────────────────────────────────────────────┘
+                        │
+         ┌──────────────┼──────────────┐
+         ↓              ↓              ↓
+    ┌─────────┐   ┌──────────┐   ┌───────────┐
+    │ OBSERVE │ → │   ACT    │ → │  VERIFY   │
+    └─────────┘   └──────────┘   └───────────┘
+         │              │              │
+         ↓              ↓              ↓
+    - Context      - Plan         - Reflect
+      projection     creation      on results
+    - Memory        - Agent       - Should
+      recall         execution     continue?
+    - Classify     - Tools
+</code></pre></div></div>
+<h3 id="observe-phase">
+  
+  
+    <a href="#observe-phase" class="anchor-heading" aria-labelledby="observe-phase"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Observe Phase
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># _agentic_observe()
+</span><span class="o">-</span> <span class="n">Context</span> <span class="n">projection</span> <span class="k">from</span> <span class="n">context</span> <span class="n">ledger</span>
+<span class="o">-</span> <span class="n">Memory</span> <span class="n">recall</span> <span class="k">from</span> <span class="n">memory</span> <span class="n">backend</span>
+<span class="o">-</span> <span class="n">Unified</span> <span class="n">classification</span> <span class="n">of</span> <span class="n">task</span>
+</code></pre></div></div>
+<h3 id="act-phase">
+  
+  
+    <a href="#act-phase" class="anchor-heading" aria-labelledby="act-phase"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Act Phase
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># _agentic_act()
+</span><span class="o">-</span> <span class="n">Delegate</span> <span class="n">to</span> <span class="sb">`StrangeLoop`</span> <span class="p">(</span><span class="sb">`packages/soothe/src/soothe/sloop/engine/strange_loop.py`</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">Plan</span> <span class="n">via</span> <span class="sb">`LLMPlanner`</span> <span class="p">(</span><span class="sb">`packages/soothe/src/soothe/sloop/cognition/planner.py`</span><span class="p">,</span> <span class="n">RFC</span><span class="o">-</span><span class="mi">604</span> <span class="n">two</span><span class="o">-</span><span class="n">phase</span> <span class="n">assess</span> <span class="o">+</span> <span class="n">generate</span><span class="p">)</span>
+<span class="o">-</span> <span class="n">Execute</span> <span class="n">plan</span> <span class="p">(</span><span class="n">single</span> <span class="n">step</span> <span class="ow">or</span> <span class="n">multi</span><span class="o">-</span><span class="n">step</span> <span class="n">DAG</span> <span class="n">via</span> <span class="sb">`packages/soothe/src/soothe/sloop/engine/executor.py`</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 id="verify-phase">
+  
+  
+    <a href="#verify-phase" class="anchor-heading" aria-labelledby="verify-phase"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Verify Phase
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># _agentic_verify()
+</span><span class="o">-</span> <span class="n">Planner</span> <span class="n">reflection</span> <span class="n">on</span> <span class="n">results</span>
+<span class="o">-</span> <span class="n">Decision</span><span class="p">:</span> <span class="k">continue</span> <span class="n">to</span> <span class="nb">next</span> <span class="n">iteration</span> <span class="ow">or</span> <span class="n">complete</span>
+</code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_strange_loop.py</code> — Agentic loop</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_phases.py</code> — Phase helpers</li>
+</ul>
+<h2 id="5-planning-strangeloop--llmplanner">
+  
+  
+    <a href="#5-planning-strangeloop--llmplanner" class="anchor-heading" aria-labelledby="5-planning-strangeloop--llmplanner"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 5. Planning (StrangeLoop + LLMPlanner)
+  
+  
+</h2>
+    
+
+<p>Planning is implemented inside <strong>StrangeLoop</strong>, not a separate <code class="language-plaintext highlighter-rouge">cognition/planning</code> package. <strong><code class="language-plaintext highlighter-rouge">LLMPlanner</code></strong> (<code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/cognition/planner.py</code>, RFC-604) performs:</p>
+
+<ol>
+  <li><strong>StatusAssessment</strong> — structured <code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">goal_progress</code>, <code class="language-plaintext highlighter-rouge">confidence</code>, <code class="language-plaintext highlighter-rouge">require_goal_completion</code></li>
+  <li><strong>PlanGeneration</strong> (when not <code class="language-plaintext highlighter-rouge">done</code>) — <code class="language-plaintext highlighter-rouge">plan_action</code>, <code class="language-plaintext highlighter-rouge">AgentDecision</code> steps, <code class="language-plaintext highlighter-rouge">next_action</code></li>
+</ol>
+
+<p>Routing (quiz fast path vs agentic vs subagent) happens earlier in <strong><code class="language-plaintext highlighter-rouge">SootheRunner</code></strong> / unified classification. Historical <strong>AutoPlanner / SimplePlanner / ClaudePlanner</strong> routers have been removed (IG-150 consolidation).</p>
+<h3 id="plan-structure-conceptual">
+  
+  
+    <a href="#plan-structure-conceptual" class="anchor-heading" aria-labelledby="plan-structure-conceptual"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Plan structure (conceptual)
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">PlanResult</code> / <code class="language-plaintext highlighter-rouge">AgentDecision</code> still expose DAG-shaped work:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Plan</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">steps</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">PlanStep</span><span class="p">]</span>
+
+<span class="k">class</span> <span class="nc">PlanStep</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">execution_hint</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="bp">None</span>
+    <span class="n">depends_on</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># DAG dependencies
+</span></code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/cognition/planner.py</code> — <code class="language-plaintext highlighter-rouge">LLMPlanner</code></li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/cognition/phase.py</code> — Plan phase wiring</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/prompts/builder.py</code> — <code class="language-plaintext highlighter-rouge">PromptBuilder</code> for assess/generate prompts</li>
+</ul>
+<h2 id="6-step-execution-dag-based">
+  
+  
+    <a href="#6-step-execution-dag-based" class="anchor-heading" aria-labelledby="6-step-execution-dag-based"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 6. Step Execution (DAG-based)
+  
+  
+</h2>
+    
+
+<p>Multi-step plans are executed inside <strong>StrangeLoop</strong> (RFC-220): the compiled graph’s
+execute phase uses <code class="language-plaintext highlighter-rouge">StepScheduler</code> / <code class="language-plaintext highlighter-rouge">Executor</code> to respect DAG dependencies and
+optional parallelism. Each ready step is run as a <strong>CoreAgent</strong> <code class="language-plaintext highlighter-rouge">astream</code> turn with
+LangGraph interrupt auto-resume in <code class="language-plaintext highlighter-rouge">Executor._core_agent_astream_with_interrupt_resume</code>.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>StrangeLoop graph (execute_steps)
+    ↓
+Executor: StepScheduler(plan)  →  Build DAG from depends_on
+    ↓
+ready_steps = scheduler.ready_steps(limit, parallelism)
+    ↓
+Single step OR asyncio.gather for parallel steps
+    ↓
+CoreAgent.astream(stream_input, ...)  (+ interrupt auto-resume loop)
+    ↓
+PlanStepCompletedEvent / PlanStepFailedEvent (protocol events)
+</code></pre></div></div>
+<h3 id="parallel-execution">
+  
+  
+    <a href="#parallel-execution" class="anchor-heading" aria-labelledby="parallel-execution"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Parallel Execution
+  
+  
+</h3>
+    
+
+<p>Steps with no dependencies run in parallel:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Step A (no deps) ─┬─→ Step C (depends on A, B)
+Step B (no deps) ─┘
+
+Execution: A + B parallel, then C
+</code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/engine/executor.py</code> — execute waves, DAG batches, CoreAgent streaming</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/cognition/plan_dag_normalizer.py</code> — DAG normalization</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/state/schemas.py</code> — <code class="language-plaintext highlighter-rouge">LoopState</code>, step ledger metadata</li>
+</ul>
+<h2 id="7-agent-execution">
+  
+  
+    <a href="#7-agent-execution" class="anchor-heading" aria-labelledby="7-agent-execution"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 7. Agent Execution
+  
+  
+</h2>
+    
+<h3 id="coreagent-streaming-execute-phase">
+  
+  
+    <a href="#coreagent-streaming-execute-phase" class="anchor-heading" aria-labelledby="coreagent-streaming-execute-phase"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> CoreAgent streaming (execute phase)
+  
+  
+</h3>
+    
+
+<p>Execute steps stream the compiled LangGraph agent via <code class="language-plaintext highlighter-rouge">CoreAgent.astream</code> (see
+<code class="language-plaintext highlighter-rouge">Executor._core_agent_astream_with_interrupt_resume</code> for interrupt / resume). The graph input
+dict carries messages plus optional <code class="language-plaintext highlighter-rouge">workspace</code>, <code class="language-plaintext highlighter-rouge">git_status</code>,
+<code class="language-plaintext highlighter-rouge">routing_classification</code>, and related fields for middleware and system-prompt XML
+injection (RFC-104).</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Executor builds graph input (simplified)
+</span>
+<span class="n">stream_input</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">"messages"</span><span class="p">:</span> <span class="n">messages</span><span class="p">,</span>
+    <span class="s">"workspace"</span><span class="p">:</span> <span class="n">workspace</span><span class="p">,</span>
+    <span class="s">"git_status"</span><span class="p">:</span> <span class="n">git_status</span><span class="p">,</span>
+    <span class="s">"routing_classification"</span><span class="p">:</span> <span class="n">routing_classification</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="k">async</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">core_agent</span><span class="p">.</span><span class="n">astream</span><span class="p">(</span>
+    <span class="n">stream_input</span><span class="p">,</span>
+    <span class="n">stream_mode</span><span class="o">=</span><span class="p">[</span><span class="s">"messages"</span><span class="p">,</span> <span class="s">"updates"</span><span class="p">,</span> <span class="s">"custom"</span><span class="p">],</span>
+    <span class="n">subgraphs</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="c1"># On __interrupt__, Executor auto-resumes in-process (approve tools / empty ask_user)
+</span>    <span class="k">yield</span> <span class="n">chunk</span>
+</code></pre></div></div>
+<h3 id="event-types">
+  
+  
+    <a href="#event-types" class="anchor-heading" aria-labelledby="event-types"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Event Types
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Mode</th>
+      <th>Content</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">messages</code></td>
+      <td>AI messages, tool calls</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">updates</code></td>
+      <td>State updates</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">custom</code></td>
+      <td>Protocol events</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/engine/executor.py</code> — CoreAgent streaming for execute waves</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/coreagent/_builder.py</code> — CoreAgent factory</li>
+</ul>
+<h2 id="8-response-streaming">
+  
+  
+    <a href="#8-response-streaming" class="anchor-heading" aria-labelledby="8-response-streaming"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 8. Response Streaming
+  
+  
+</h2>
+    
+
+<p>Events flow back to the client through the daemon:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>agent.astream() yields (namespace, mode, data)
+    ↓
+Runner yields events
+    ↓
+Daemon._run_query() receives events
+    ↓
+_broadcast(event_msg)
+    ↓
+EventBus.publish(topic="loop:{loop_id}")
+    ↓
+Subscribed client sessions receive event
+    ↓
+Transport.send() to client
+    ↓
+CLI EventProcessor + Renderer
+    ↓
+Output to stdout/stderr
+</code></pre></div></div>
+<h3 id="client-event-handling">
+  
+  
+    <a href="#client-event-handling" class="anchor-heading" aria-labelledby="client-event-handling"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Client Event Handling
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># In CLI/TUI
+</span><span class="k">async</span> <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">daemon_client</span><span class="p">.</span><span class="n">subscribe_thread</span><span class="p">(</span><span class="n">thread_id</span><span class="p">):</span>
+    <span class="n">match</span> <span class="n">event</span><span class="p">[</span><span class="s">"type"</span><span class="p">]:</span>
+        <span class="n">case</span> <span class="s">"status"</span><span class="p">:</span>
+            <span class="c1"># idle, running, stopped
+</span>        <span class="n">case</span> <span class="s">"event"</span><span class="p">:</span>
+            <span class="n">namespace</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s">"namespace"</span><span class="p">]</span>
+            <span class="n">mode</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s">"mode"</span><span class="p">]</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">event</span><span class="p">[</span><span class="s">"data"</span><span class="p">]</span>
+            <span class="c1"># Render based on event type
+</span></code></pre></div></div>
+<h2 id="9-autonomous-mode-rfc-624">
+  
+  
+    <a href="#9-autonomous-mode-rfc-624" class="anchor-heading" aria-labelledby="9-autonomous-mode-rfc-624"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 9. Autonomous Mode (RFC-624)
+  
+  
+</h2>
+    
+
+<p>When <code class="language-plaintext highlighter-rouge">autonomous=True</code>, the system uses explicit goal-driven execution:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>_run_autonomous()
+    ↓
+_context_engine.create_goal(user_input)
+    ↓
+GoalCreatedEvent
+    ↓
+┌─────────────────────────────────────┐
+│      GOAL EXECUTION LOOP            │
+└─────────────────────────────────────┘
+    ↓
+ready_goals = context_engine.list_goals()
+    ↓
+_execute_autonomous_goal() per goal
+    ↓
+- Plan creation
+- Step loop execution
+- Reflection
+- Goal directives processing
+    ↓
+GoalCompletedEvent / GoalFailedEvent
+    ↓
+FinalReportEvent
+</code></pre></div></div>
+
+<p><strong>Key files:</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_autonomous.py</code></li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/context/engine.py</code></li>
+</ul>
+<h2 id="10-event-flow-summary">
+  
+  
+    <a href="#10-event-flow-summary" class="anchor-heading" aria-labelledby="10-event-flow-summary"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 10. Event Flow Summary
+  
+  
+</h2>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>User Query
+    │
+    ▼
+┌─────────────┐
+│ CLI Entry   │  main.py → run_impl()
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Daemon      │  Client → Server → _run_query()
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Runner      │  SootheRunner.astream()
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Classify    │  Unified routing (intent, complexity, workspace, …)
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Plan        │  `LLMPlanner` / StrangeLoop Plan phase
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Execute     │  Single step or DAG parallel
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Stream      │  agent.astream() → events
+└─────────────┘
+    │
+    ▼
+┌─────────────┐
+│ Respond     │  EventBus → Client → stdout
+└─────────────┘
+</code></pre></div></div>
+<h2 id="quick-reference">
+  
+  
+    <a href="#quick-reference" class="anchor-heading" aria-labelledby="quick-reference"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Quick Reference
+  
+  
+</h2>
+    
+<h3 id="key-files-quick-reference">
+  
+  
+    <a href="#key-files-quick-reference" class="anchor-heading" aria-labelledby="key-files-quick-reference"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key files (quick reference)
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Area</th>
+      <th>File</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CLI</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/main.py</code></td>
+      <td>Entry point</td>
+    </tr>
+    <tr>
+      <td>CLI</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/commands/run_cmd.py</code></td>
+      <td>Run command</td>
+    </tr>
+    <tr>
+      <td>CLI</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe-cli/src/soothe_cli/cli/execution/headless.py</code></td>
+      <td>Headless mode</td>
+    </tr>
+    <tr>
+      <td>Daemon</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/core.py</code></td>
+      <td>Daemon server</td>
+    </tr>
+    <tr>
+      <td>Daemon</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/handlers.py</code></td>
+      <td>Query handling</td>
+    </tr>
+    <tr>
+      <td>Runner</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/__init__.py</code></td>
+      <td>Runner package</td>
+    </tr>
+    <tr>
+      <td>Runner</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_strange_loop.py</code></td>
+      <td>Agentic loop</td>
+    </tr>
+    <tr>
+      <td>Runner</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/_runner_phases.py</code></td>
+      <td>Pre-stream (thread, policy, memory, plan bootstrap)</td>
+    </tr>
+    <tr>
+      <td>Planning</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/sloop/cognition/planner.py</code></td>
+      <td><code class="language-plaintext highlighter-rouge">LLMPlanner</code> (RFC-604)</td>
+    </tr>
+    <tr>
+      <td>Agent</td>
+      <td><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/coreagent/builder.py</code></td>
+      <td>CoreAgent factory (<code class="language-plaintext highlighter-rouge">AgentBuilder</code>, <code class="language-plaintext highlighter-rouge">create_soothe_agent</code>)</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="rfc-references">
+  
+  
+    <a href="#rfc-references" class="anchor-heading" aria-labelledby="rfc-references"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> RFC References
+  
+  
+</h3>
+    
+
+<ul>
+  <li><a href="../specs/RFC-201-strangeloop-plan-execute-loop.md">RFC-201</a> — StrangeLoop plan–execute (observe / act / verify)</li>
+  <li><a href="../specs/RFC-624-context-engine.md">RFC-624</a> — Autonomous goal management (ContextEngine)</li>
+  <li><a href="../specs/archive/RFC-200-autonomous-goal-management.md">RFC-200</a> — Autonomous goal management (archived, superseded by RFC-624)</li>
+  <li><a href="../specs/RFC-604-reason-phase-robustness.md">RFC-604</a> — Two-phase plan assess and generation (<code class="language-plaintext highlighter-rouge">LLMPlanner</code>)</li>
+  <li><a href="../specs/RFC-450-daemon-communication-protocol.md">RFC-450</a> — Daemon communication</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

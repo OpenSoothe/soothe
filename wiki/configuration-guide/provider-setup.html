@@ -1,0 +1,685 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(8) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(8) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(8) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(8) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(8) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Provider Setup | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Provider Setup" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends." />
+<meta property="og:description" content="Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/configuration-guide/provider-setup.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/configuration-guide/provider-setup.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Provider Setup" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends.","headline":"Provider Setup","url":"https://mirasoth.github.io/soothe/wiki/configuration-guide/provider-setup.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Provider Setup</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="provider-setup">
+  
+  
+    <a href="#provider-setup" class="anchor-heading" aria-labelledby="provider-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Provider Setup
+  
+  
+</h1>
+    
+
+<p>Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends — with the decision criteria the schema alone won’t tell you.</p>
+<h2 id="provider-selection-criteria">
+  
+  
+    <a href="#provider-selection-criteria" class="anchor-heading" aria-labelledby="provider-selection-criteria"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Provider Selection Criteria
+  
+  
+</h2>
+    
+
+<p>Soothe supports three <code class="language-plaintext highlighter-rouge">provider_type</code> values. The choice is driven by <strong>API compatibility</strong>, not brand:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th><code class="language-plaintext highlighter-rouge">provider_type</code></th>
+      <th>When to use</th>
+      <th>Key limitation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">openai</code></td>
+      <td>OpenAI itself, or any OpenAI-compatible endpoint (OpenRouter, vLLM, local oMLX/LMStudio)</td>
+      <td>None for official OpenAI; local endpoints auto-receive compatibility wrappers (see below)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">anthropic</code></td>
+      <td>Anthropic Claude API</td>
+      <td>Native Claude tool calling</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ollama</code></td>
+      <td>Local Ollama inference</td>
+      <td>Basic tool calling; depends on model support</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Custom <code class="language-plaintext highlighter-rouge">api_base_url</code> on <code class="language-plaintext highlighter-rouge">openai</code> providers.</strong> When the URL is not <code class="language-plaintext highlighter-rouge">https://api.openai.com</code>, Soothe automatically applies compatibility wrappers for local servers (oMLX, LMStudio, vLLM) that return structured JSON in <code class="language-plaintext highlighter-rouge">reasoning_content</code> or only accept string <code class="language-plaintext highlighter-rouge">tool_choice</code> values. Use <code class="language-plaintext highlighter-rouge">provider_type: openai</code> plus your local <code class="language-plaintext highlighter-rouge">api_base_url</code> — no separate provider type is required.</p>
+
+<p><strong>OpenAI-compatible cloud providers</strong> (Qwen, OpenRouter) all use <code class="language-plaintext highlighter-rouge">provider_type: openai</code> plus a custom <code class="language-plaintext highlighter-rouge">api_base_url</code> and an interpolated <code class="language-plaintext highlighter-rouge">api_key</code>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">providers</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">openai-custom</span>
+    <span class="na">provider_type</span><span class="pi">:</span> <span class="s">openai</span>
+    <span class="na">api_base_url</span><span class="pi">:</span> <span class="s">https://your-provider-endpoint/v1</span>
+    <span class="na">api_key</span><span class="pi">:</span> <span class="s">${OPENAI_API_KEY}</span>
+    <span class="na">models</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">qwen-max</span><span class="pi">]</span>
+</code></pre></div></div>
+
+<p>Self-hosted vLLM is identical — just point <code class="language-plaintext highlighter-rouge">api_base_url</code> at your server and set a dummy <code class="language-plaintext highlighter-rouge">api_key</code>.</p>
+<h2 id="model-routing-roles-not-models">
+  
+  
+    <a href="#model-routing-roles-not-models" class="anchor-heading" aria-labelledby="model-routing-roles-not-models"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Model Routing: Roles, Not Models
+  
+  
+</h2>
+    
+
+<p>Soothe never asks for a model by name at runtime. It asks for a <strong>role</strong>, and the router maps roles to <code class="language-plaintext highlighter-rouge">provider:model</code> pairs. This indirection is the whole point: swap models without touching agent code.</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">router_profiles</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">default</span>
+    <span class="na">router</span><span class="pi">:</span>
+      <span class="na">default</span><span class="pi">:</span> <span class="s">openai:gpt-4o-mini</span>
+      <span class="na">think</span><span class="pi">:</span> <span class="s">openai:o3-mini</span>
+<span class="na">active_router_profile</span><span class="pi">:</span> <span class="s">default</span>
+<span class="na">embedding_profile</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">model_role</span><span class="pi">:</span> <span class="s">openai:text-embedding-3-small</span>
+    <span class="na">embedding_dims</span><span class="pi">:</span> <span class="m">1536</span>
+</code></pre></div></div>
+
+<p>Chat/image roles live under <code class="language-plaintext highlighter-rouge">router_profiles[].router</code> (<code class="language-plaintext highlighter-rouge">default</code>, <code class="language-plaintext highlighter-rouge">think</code>, <code class="language-plaintext highlighter-rouge">fast</code>, <code class="language-plaintext highlighter-rouge">image</code>, <code class="language-plaintext highlighter-rouge">ocr</code>), while embedding is configured once in <code class="language-plaintext highlighter-rouge">embedding_profile</code>.</p>
+
+<p>The five roles and their typical cost/quality profile:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Role</th>
+      <th>Used for</th>
+      <th>Cheap model OK?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">default</code></td>
+      <td>CoreAgent reasoning, failure analysis</td>
+      <td>Yes — it runs most often</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">fast</code></td>
+      <td>Classification, subagents, memory</td>
+      <td>Yes — latency-sensitive</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">think</code></td>
+      <td>Planning, consensus validation</td>
+      <td>No — quality matters</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">image</code></td>
+      <td>Vision tasks</td>
+      <td>Must be vision-capable</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">embedding_profile.model_role</code></td>
+      <td>Vector search, semantic memory</td>
+      <td>Must match <code class="language-plaintext highlighter-rouge">embedding_profile.embedding_dims</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Fallback rule:</strong> unset chat/image/ocr roles inherit <code class="language-plaintext highlighter-rouge">default</code>. So you can start with only <code class="language-plaintext highlighter-rouge">default</code> configured and add <code class="language-plaintext highlighter-rouge">think</code>/<code class="language-plaintext highlighter-rouge">image</code> as needed. But beware: if <code class="language-plaintext highlighter-rouge">default</code> is your most expensive model, leaving <code class="language-plaintext highlighter-rouge">fast</code> unset makes every cheap operation expensive.</p>
+
+<p><strong>Cost strategy:</strong> set <code class="language-plaintext highlighter-rouge">default</code> and <code class="language-plaintext highlighter-rouge">fast</code> to a cheap model, reserve <code class="language-plaintext highlighter-rouge">think</code> for a strong one. The local+cloud hybrid pushes this further — local model for <code class="language-plaintext highlighter-rouge">default</code>/<code class="language-plaintext highlighter-rouge">fast</code>, cloud only for <code class="language-plaintext highlighter-rouge">think</code>/<code class="language-plaintext highlighter-rouge">image</code> (e.g. <code class="language-plaintext highlighter-rouge">default: ollama:llama3.1:8b</code>, <code class="language-plaintext highlighter-rouge">think: openai:o3-mini</code>).</p>
+<h2 id="embeddings">
+  
+  
+    <a href="#embeddings" class="anchor-heading" aria-labelledby="embeddings"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Embeddings
+  
+  
+</h2>
+    
+
+<p><code class="language-plaintext highlighter-rouge">embedding_profile.model_role</code> and <code class="language-plaintext highlighter-rouge">embedding_profile.embedding_dims</code> are coupled — the dimension <em>must</em> match the model’s output vector size or inserts fail silently or noisily.</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Dimensions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>OpenAI <code class="language-plaintext highlighter-rouge">text-embedding-3-small</code></td>
+      <td>1536</td>
+    </tr>
+    <tr>
+      <td>OpenAI <code class="language-plaintext highlighter-rouge">text-embedding-3-large</code></td>
+      <td>3072</td>
+    </tr>
+    <tr>
+      <td>Qwen <code class="language-plaintext highlighter-rouge">text-embedding-v3</code></td>
+      <td>1024</td>
+    </tr>
+    <tr>
+      <td>Ollama <code class="language-plaintext highlighter-rouge">nomic-embed-text</code></td>
+      <td>768</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Mistake to avoid:</strong> changing <code class="language-plaintext highlighter-rouge">embedding_profile.model_role</code> without updating <code class="language-plaintext highlighter-rouge">embedding_profile.embedding_dims</code> (or vice versa) corrupts the vector store — existing vectors have the old dimensionality and queries fail. When migrating, drop and re-index the collection.</p>
+<h2 id="vector-stores">
+  
+  
+    <a href="#vector-stores" class="anchor-heading" aria-labelledby="vector-stores"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Vector Stores
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Backend</th>
+      <th>When</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">sqlite_vec</code> (default)</td>
+      <td>Dev, single-user, &lt;100k vectors</td>
+      <td>Zero deps, file-based under <code class="language-plaintext highlighter-rouge">~/.soothe/data/databases/vectors.db</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">pgvector</code></td>
+      <td>Production, shared with Postgres persistence</td>
+      <td><code class="language-plaintext highlighter-rouge">hnsw</code> for speed, <code class="language-plaintext highlighter-rouge">ivfflat</code> for huge static sets</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">weaviate</code></td>
+      <td>Managed vector DB decoupled from Postgres</td>
+      <td>Cloud or self-hosted</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">in_memory</code></td>
+      <td>Tests, ephemeral sessions</td>
+      <td>Lost on restart</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>The router format is <code class="language-plaintext highlighter-rouge">provider_name:collection_name</code>. Unset roles fall back to <code class="language-plaintext highlighter-rouge">default</code> — same pattern as the model router. If you use pgvector, Soothe can auto-resolve the vectors database from <code class="language-plaintext highlighter-rouge">persistence.postgres_base_dsn</code> (RFC-802) when no explicit <code class="language-plaintext highlighter-rouge">dsn</code> is set.</p>
+<h2 id="persistence-backends">
+  
+  
+    <a href="#persistence-backends" class="anchor-heading" aria-labelledby="persistence-backends"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Persistence Backends
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Backend</th>
+      <th>When</th>
+      <th>Concurrency</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">sqlite</code> (default)</td>
+      <td>Dev, testing, single-process</td>
+      <td>WAL mode helps, but writers still serialize</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">postgresql</code></td>
+      <td>Production, parallel autonomous goals, multi-worker</td>
+      <td>Pool-based, handles concurrent writers</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>RFC-802 multi-database architecture:</strong> when <code class="language-plaintext highlighter-rouge">postgres_base_dsn</code> is set, Soothe splits state across four databases (checkpoints, metadata, vectors, memory) for lifecycle isolation and backup granularity. Define them in the <code class="language-plaintext highlighter-rouge">postgres_databases</code> map. If <code class="language-plaintext highlighter-rouge">postgres_base_dsn</code> is unset, it falls back to a single <code class="language-plaintext highlighter-rouge">soothe_postgres_dsn</code> database. The multi-database layout is strongly recommended for production — it lets you back up/restore components independently.</p>
+
+<p><strong>Pool sizing (from source docstrings):</strong></p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">persistence.postgres.pool_min_size</code> (default 4): warm connections kept ready.</li>
+  <li><code class="language-plaintext highlighter-rouge">persistence.postgres.checkpoints_pool_size</code> (default 32): LangGraph + StrangeLoop checkpoints pool. In thread-pool mode it’s a daemon-level singleton shared across threads; in worker-pool mode each worker gets its own (so <code class="language-plaintext highlighter-rouge">workers × pool_size</code> total connections — lower it).</li>
+  <li><code class="language-plaintext highlighter-rouge">persistence.postgres.metadata_pool_size</code> / <code class="language-plaintext highlighter-rouge">vectors_pool_size</code> (default 16): metadata and pgvector pools, same sharing semantics.</li>
+  <li>Idle/lifetime/acquire: <code class="language-plaintext highlighter-rouge">pool_max_idle_seconds</code>, <code class="language-plaintext highlighter-rouge">pool_max_lifetime_seconds</code>, <code class="language-plaintext highlighter-rouge">pool_acquire_timeout_seconds</code> under <code class="language-plaintext highlighter-rouge">persistence.postgres</code>.</li>
+</ul>
+
+<p>Rule of thumb: for thread-pool mode keep defaults; for worker-pool mode divide by your worker count to avoid exhausting Postgres <code class="language-plaintext highlighter-rouge">max_connections</code>.</p>
+<h2 id="rate-limits--timeouts">
+  
+  
+    <a href="#rate-limits--timeouts" class="anchor-heading" aria-labelledby="rate-limits--timeouts"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Rate Limits &amp; Timeouts
+  
+  
+</h2>
+    
+
+<p>Provider APIs have their own limits; Soothe’s <code class="language-plaintext highlighter-rouge">agent.middleware.llm_rate_limit</code> (in <code class="language-plaintext highlighter-rouge">nano.yml</code>) keeps you under them with retry/backoff. Packaged defaults size for concurrent Autopilot + CLI (<code class="language-plaintext highlighter-rouge">concurrent_limit: 4</code>, <code class="language-plaintext highlighter-rouge">global_concurrent_limit: 18</code>, <code class="language-plaintext highlighter-rouge">rpm_limit: 180</code>); lower them if your provider tier is tighter. Set <code class="language-plaintext highlighter-rouge">rpm_limit</code> / <code class="language-plaintext highlighter-rouge">concurrent_limit</code> on that block; <code class="language-plaintext highlighter-rouge">global_concurrent_limit</code> caps process-wide in-flight calls (<code class="language-plaintext highlighter-rouge">0</code> = unlimited) and is shared by Autopilot workers and CLI StrangeLoops. <code class="language-plaintext highlighter-rouge">retry_on_timeout</code> and <code class="language-plaintext highlighter-rouge">retry_on_rate_limit</code> default to <code class="language-plaintext highlighter-rouge">true</code>.</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Provider</th>
+      <th>Typical RPM</th>
+      <th>Concurrency</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>OpenAI</td>
+      <td>500 (tier 2+)</td>
+      <td>10–100</td>
+    </tr>
+    <tr>
+      <td>Anthropic</td>
+      <td>60</td>
+      <td>5–10</td>
+    </tr>
+    <tr>
+      <td>OpenAI-compatible</td>
+      <td>Varies</td>
+      <td>Varies</td>
+    </tr>
+    <tr>
+      <td>Ollama (local)</td>
+      <td>Unlimited</td>
+      <td>GPU-bound</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Set <code class="language-plaintext highlighter-rouge">rpm_limit</code> <em>below</em> your tier’s ceiling. On 429, Soothe retries with exponential backoff (base 2s, max 60s) and respects <code class="language-plaintext highlighter-rouge">Retry-After</code> headers. On timeout, it escalates the timeout by <code class="language-plaintext highlighter-rouge">timeout_retry_multiplier</code> (1.2×) up to <code class="language-plaintext highlighter-rouge">call_timeout_max_seconds</code>. These defaults (600s base, 10 retries) are tuned for robust step execution — lower them only if you’re confident your provider is fast.</p>
+<h2 id="secret-management">
+  
+  
+    <a href="#secret-management" class="anchor-heading" aria-labelledby="secret-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Secret Management
+  
+  
+</h2>
+    
+
+<p><strong>Always interpolate, never hardcode.</strong> Use <code class="language-plaintext highlighter-rouge">api_key: ${OPENAI_API_KEY}</code> — a literal key (<code class="language-plaintext highlighter-rouge">sk-proj-xxx</code>) leaks into version control and is the single most common security mistake. For Docker, use <code class="language-plaintext highlighter-rouge">secrets:</code> in compose or env files. For Kubernetes, mount <code class="language-plaintext highlighter-rouge">Secret</code> resources as env vars. See <a href="/soothe/wiki/configuration-guide/environment-variables.html">Environment Variables</a> for the full interpolation guide.</p>
+<h2 id="verifying-your-setup">
+  
+  
+    <a href="#verifying-your-setup" class="anchor-heading" aria-labelledby="verifying-your-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Verifying Your Setup
+  
+  
+</h2>
+    
+
+<p>Run <code class="language-plaintext highlighter-rouge">soothed doctor</code> to validate config and connectivity, <code class="language-plaintext highlighter-rouge">soothe --debug "test"</code> to print the resolved config and model routing, and <code class="language-plaintext highlighter-rouge">soothe --model openai:gpt-4o "test"</code> to override a role for one run. Validate YAML syntax before debugging Soothe: <code class="language-plaintext highlighter-rouge">python -c "import yaml; yaml.safe_load(open('nano.yml'))"</code>.</p>
+<h2 id="troubleshooting-guide">
+  
+  
+    <a href="#troubleshooting-guide" class="anchor-heading" aria-labelledby="troubleshooting-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Troubleshooting Guide
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Symptom</th>
+      <th>Likely cause</th>
+      <th>Fix</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Provider 'xxx' not found</code></td>
+      <td>Provider <code class="language-plaintext highlighter-rouge">name</code> in <code class="language-plaintext highlighter-rouge">providers[]</code> doesn’t match the router’s prefix</td>
+      <td>Ensure <code class="language-plaintext highlighter-rouge">router.default: &lt;name&gt;:&lt;model&gt;</code> uses the exact <code class="language-plaintext highlighter-rouge">name</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Invalid API key</code></td>
+      <td>Env var unset or wrong format</td>
+      <td><code class="language-plaintext highlighter-rouge">echo $OPENAI_API_KEY</code>; verify key prefix matches provider</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Rate limit exceeded</code></td>
+      <td><code class="language-plaintext highlighter-rouge">rpm_limit</code> above provider tier, or too much concurrency</td>
+      <td>Lower <code class="language-plaintext highlighter-rouge">rpm_limit</code> and <code class="language-plaintext highlighter-rouge">concurrent_limit</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Timeout waiting for LLM response</code></td>
+      <td>Provider slow or down</td>
+      <td>Raise <code class="language-plaintext highlighter-rouge">call_timeout_seconds</code>; check provider status</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Model 'xxx' not available</code></td>
+      <td>Model not listed in <code class="language-plaintext highlighter-rouge">providers[].models</code> or misspelled</td>
+      <td>Add it to the <code class="language-plaintext highlighter-rouge">models</code> list; check provider’s model catalog</td>
+    </tr>
+    <tr>
+      <td>Empty tool calls on local server</td>
+      <td>Missing <code class="language-plaintext highlighter-rouge">api_base_url</code> or wrapper not applied</td>
+      <td>Ensure <code class="language-plaintext highlighter-rouge">provider_type: openai</code> with explicit local <code class="language-plaintext highlighter-rouge">api_base_url</code>; restart daemon after config change</td>
+    </tr>
+    <tr>
+      <td>Vector insert errors</td>
+      <td><code class="language-plaintext highlighter-rouge">embedding_profile.embedding_dims</code> ≠ model output</td>
+      <td>Align the two; re-index existing collections</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="see-also">
+  
+  
+    <a href="#see-also" class="anchor-heading" aria-labelledby="see-also"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> See Also
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/configuration-guide/yaml-reference.html">YAML Reference</a> — full field schema</li>
+  <li><a href="/soothe/wiki/configuration-guide/environment-variables.html">Environment Variables</a> — <code class="language-plaintext highlighter-rouge">${VAR}</code> interpolation and <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> mapping</li>
+  <li><a href="/soothe/wiki/configuration-guide/common-patterns.html">Common Patterns</a> — multi-provider and hybrid routing recipes</li>
+  <li>Source: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/config/models.py</code> (<code class="language-plaintext highlighter-rouge">ModelProviderConfig</code>, <code class="language-plaintext highlighter-rouge">PersistenceConfig</code>, <code class="language-plaintext highlighter-rouge">VectorStoreProviderConfig</code>)</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

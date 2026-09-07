@@ -1,0 +1,917 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li:not(:nth-child(2)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(5) > ul > li:nth-child(2) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(5) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(5) > ul > li:nth-child(2) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(5) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(5) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Daemon Server API | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Daemon Server API" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The soothe_daemon package — a long-running background server hosting SootheRunner instances with multi-transport communication." />
+<meta property="og:description" content="The soothe_daemon package — a long-running background server hosting SootheRunner instances with multi-transport communication." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/api-reference/daemon-api.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/api-reference/daemon-api.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Daemon Server API" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"The soothe_daemon package — a long-running background server hosting SootheRunner instances with multi-transport communication.","headline":"Daemon Server API","url":"https://mirasoth.github.io/soothe/wiki/api-reference/daemon-api.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/api-reference/">API Reference</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Daemon Server API</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="daemon-server-soothe_daemon">
+  
+  
+    <a href="#daemon-server-soothe_daemon" class="anchor-heading" aria-labelledby="daemon-server-soothe_daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Server (<code class="language-plaintext highlighter-rouge">soothe_daemon</code>)
+  
+  
+</h1>
+    
+
+<p>The <code class="language-plaintext highlighter-rouge">soothe_daemon</code> package is the SootheDaemon tier of the Soothe architecture — a long-running background server that hosts <code class="language-plaintext highlighter-rouge">SootheRunner</code> instances, manages multi-transport communication, and coordinates goal dispatch. It is the bridge between clients (CLI, SDK, messaging platforms) and the agent runtime.</p>
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/</code>
+<strong>Package</strong>: <code class="language-plaintext highlighter-rouge">soothe-daemon</code> (note the hyphen) · <strong>Python</strong>: <code class="language-plaintext highlighter-rouge">&gt;=3.11</code> · <strong>Stability</strong>: ⚠️ Alpha</p>
+</blockquote><hr />
+<h2 id="server-lifecycle">
+  
+  
+    <a href="#server-lifecycle" class="anchor-heading" aria-labelledby="server-lifecycle"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Server Lifecycle
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/core.py</code></p>
+</blockquote>
+<h3 id="soothedaemon">
+  
+  
+    <a href="#soothedaemon" class="anchor-heading" aria-labelledby="soothedaemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> SootheDaemon
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">SootheDaemon</code> is the main server class. It owns the <code class="language-plaintext highlighter-rouge">SootheRunner</code>, the <code class="language-plaintext highlighter-rouge">ChannelManager</code>, the <code class="language-plaintext highlighter-rouge">EventBus</code>, the <code class="language-plaintext highlighter-rouge">ClientSessionManager</code>, and all background services (autopilot, cron, memory profiler).</p>
+
+<p>The daemon follows a strict startup sequence:</p>
+
+<ol>
+  <li><strong>Config load</strong> — <code class="language-plaintext highlighter-rouge">SootheConfig</code> (agent core, <code class="language-plaintext highlighter-rouge">nano.yml</code>) + <code class="language-plaintext highlighter-rouge">SootheDaemonConfig</code> (transports, worker pool, <code class="language-plaintext highlighter-rouge">daemon.yml</code>) are loaded separately. The <code class="language-plaintext highlighter-rouge">.env</code> file is loaded <em>before</em> any langchain imports so provider keys are available at import time.</li>
+  <li><strong>PID lock</strong> — <code class="language-plaintext highlighter-rouge">acquire_pid_lock()</code> writes <code class="language-plaintext highlighter-rouge">${SOOTHE_HOME}/soothe.pid</code> to enforce single-instance. This is a file-based lock, not just a PID file — concurrent daemons on the same home directory will fail to start.</li>
+  <li><strong>Channel init</strong> — <code class="language-plaintext highlighter-rouge">ChannelManager</code> initializes all enabled channels from the registry.</li>
+  <li><strong>Ready state</strong> — The daemon transitions through <code class="language-plaintext highlighter-rouge">starting</code> → <code class="language-plaintext highlighter-rouge">warming</code> → <code class="language-plaintext highlighter-rouge">ready</code>. Clients connecting during <code class="language-plaintext highlighter-rouge">starting</code>/<code class="language-plaintext highlighter-rouge">warming</code> are held with a bounded wait (RFC-450); the daemon does not re-push <code class="language-plaintext highlighter-rouge">daemon_ready</code> on transition, so clients must re-request status.</li>
+</ol>
+<h3 id="minimal-startup">
+  
+  
+    <a href="#minimal-startup" class="anchor-heading" aria-labelledby="minimal-startup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Minimal Startup
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe_daemon.bootstrap</span> <span class="kn">import</span> <span class="n">run_daemon</span>
+
+<span class="n">run_daemon</span><span class="p">(</span><span class="n">config_path</span><span class="o">=</span><span class="s">"config/nano.yml"</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 id="key-lifecycle-gotchas">
+  
+  
+    <a href="#key-lifecycle-gotchas" class="anchor-heading" aria-labelledby="key-lifecycle-gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key Lifecycle Gotchas
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Detached mode</strong> — When <code class="language-plaintext highlighter-rouge">detached=True</code>, SIGINT shutdown handling is disabled. This is for daemonized background processes where the parent manages lifecycle.</li>
+  <li><strong>Heartbeat</strong> — The daemon broadcasts a heartbeat every 5 seconds (<code class="language-plaintext highlighter-rouge">_HEARTBEAT_INTERVAL_S</code>) to all connected clients.</li>
+  <li><strong>Cleanup timeout</strong> — On <code class="language-plaintext highlighter-rouge">stop()</code>, the daemon waits up to 8 seconds (<code class="language-plaintext highlighter-rouge">_STOP_TIMEOUT_S</code>) for graceful shutdown, then 3 seconds (<code class="language-plaintext highlighter-rouge">_CLEANUP_TIMEOUT_S</code>) for channel cleanup.</li>
+</ul><hr />
+<h2 id="bootstrap--process-management">
+  
+  
+    <a href="#bootstrap--process-management" class="anchor-heading" aria-labelledby="bootstrap--process-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Bootstrap &amp; Process Management
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/bootstrap/</code></p>
+</blockquote>
+
+<p><code class="language-plaintext highlighter-rouge">run_daemon()</code> is the canonical entrypoint. It accepts both <code class="language-plaintext highlighter-rouge">SootheConfig</code> and <code class="language-plaintext highlighter-rouge">SootheDaemonConfig</code> objects (or paths to their YAML files), constructs a <code class="language-plaintext highlighter-rouge">SootheDaemon</code>, and blocks on <code class="language-plaintext highlighter-rouge">serve_forever()</code>.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">pid_path()</code> function returns the PID file location (<code class="language-plaintext highlighter-rouge">${SOOTHE_HOME}/soothe.pid</code> by default). CLI commands like <code class="language-plaintext highlighter-rouge">soothed status</code> and <code class="language-plaintext highlighter-rouge">soothed stop</code> use this file for process discovery.</p>
+<h3 id="two-config-files">
+  
+  
+    <a href="#two-config-files" class="anchor-heading" aria-labelledby="two-config-files"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Two Config Files
+  
+  
+</h3>
+    
+
+<p>A common confusion: the daemon uses <strong>two separate config files</strong>:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Config Class</th>
+      <th>Controls</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">nano.yml</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SootheConfig</code></td>
+      <td>Agent core — providers, models, protocols, tools, <code class="language-plaintext highlighter-rouge">agent.autopilot.goal_deadline_seconds</code> (default 14d)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">daemon.yml</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SootheDaemonConfig</code></td>
+      <td>Server — transports, thread/worker pools, <code class="language-plaintext highlighter-rouge">request_timeout_seconds</code> (default 14d), channels, TLS</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>The agent config can be shared across daemon and non-daemon (embedded) deployments. The daemon config is server-specific.</p>
+<h3 id="stream-termination-ordering">
+  
+  
+    <a href="#stream-termination-ordering" class="anchor-heading" aria-labelledby="stream-termination-ordering"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Stream termination ordering
+  
+  
+</h3>
+    
+
+<p>Loop subscribers must finalize UI on <strong><code class="language-plaintext highlighter-rouge">stream_terminal=true</code></strong> content frames and <strong><code class="language-plaintext highlighter-rouge">soothe.stream.end</code></strong> (<code class="language-plaintext highlighter-rouge">scope=turn</code>), not on <code class="language-plaintext highlighter-rouge">chunk_position=last</code> or <code class="language-plaintext highlighter-rouge">status: idle</code> alone. See <a href="../../specs/RFC-614-unified-streaming-messaging.md#stream-termination-ig-556">RFC-614 stream termination</a> for the full wire contract. Clients send <code class="language-plaintext highlighter-rouge">notification</code> / <code class="language-plaintext highlighter-rouge">delivery_ack</code> after terminal frames are applied.</p>
+
+<p>Loop-scoped frames carry <strong><code class="language-plaintext highlighter-rouge">turn_id</code></strong> (<code class="language-plaintext highlighter-rouge">{loop_id}:{generation}</code>) and monotonic <strong><code class="language-plaintext highlighter-rouge">seq</code></strong>. Long-lived <code class="language-plaintext highlighter-rouge">loop_events</code> subscriptions stay open across goals; turn end is <code class="language-plaintext highlighter-rouge">stream.end</code> + <code class="language-plaintext highlighter-rouge">idle</code> (not per-goal subscription <code class="language-plaintext highlighter-rouge">complete</code>). Clients should ignore frames with a mismatched <code class="language-plaintext highlighter-rouge">turn_id</code> or <code class="language-plaintext highlighter-rouge">seq</code> at/below the prior turn’s end seq.</p><hr />
+<h2 id="channel-architecture">
+  
+  
+    <a href="#channel-architecture" class="anchor-heading" aria-labelledby="channel-architecture"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Channel Architecture
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/channel_manager.py</code>, <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/channels/</code></p>
+</blockquote>
+<h3 id="channelmanager">
+  
+  
+    <a href="#channelmanager" class="anchor-heading" aria-labelledby="channelmanager"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> ChannelManager
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">ChannelManager</code> (RFC-620) is the coordination hub for all transports. It:</p>
+
+<ol>
+  <li>Initializes enabled channels from configuration via the channel registry</li>
+  <li>Routes inbound messages to <code class="language-plaintext highlighter-rouge">EventBus</code> loop topics</li>
+  <li>Subscribes to loop topics, translates events, dispatches outbound messages</li>
+  <li>Handles streaming: coalesces deltas, buffers for non-streaming channels</li>
+  <li>Applies retry policy on send failures (exponential backoff: 1s, 2s, 4s)</li>
+</ol>
+
+<p>The manager supports <code class="language-plaintext highlighter-rouge">broadcast()</code> (all clients, with optional exclusion) and <code class="language-plaintext highlighter-rouge">send_to_client()</code> (targeted delivery).</p>
+<h3 id="channel-base-class">
+  
+  
+    <a href="#channel-base-class" class="anchor-heading" aria-labelledby="channel-base-class"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Channel Base Class
+  
+  
+</h3>
+    
+
+<p>All channels extend <code class="language-plaintext highlighter-rouge">Channel</code> (ABC) with capability flags:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Flag</th>
+      <th>Meaning</th>
+      <th style="text-align: center">WebSocket</th>
+      <th style="text-align: center">Telegram</th>
+      <th style="text-align: center">Slack</th>
+      <th style="text-align: center">Discord</th>
+      <th style="text-align: center">Feishu</th>
+      <th style="text-align: center">Matrix</th>
+      <th style="text-align: center">Mochat</th>
+      <th style="text-align: center">Email</th>
+      <th style="text-align: center">DingTalk</th>
+      <th style="text-align: center">Signal</th>
+      <th style="text-align: center">WhatsApp</th>
+      <th style="text-align: center">WeChat</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">supports_inbound</code></td>
+      <td>Can receive messages</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">supports_outbound</code></td>
+      <td>Can send messages</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">supports_streaming</code></td>
+      <td>Incremental deltas</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">✅</td>
+      <td style="text-align: center">❌</td>
+      <td style="text-align: center">❌</td>
+      <td style="text-align: center">❌</td>
+      <td style="text-align: center">❌</td>
+      <td style="text-align: center">❌</td>
+      <td style="text-align: center">❌</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Streaming channels receive <code class="language-plaintext highlighter-rouge">send_delta()</code> and <code class="language-plaintext highlighter-rouge">send_reasoning_delta()</code> calls; non-streaming channels receive buffered complete messages. This is why a Telegram bot shows the full response at once while a WebSocket client sees token-by-token streaming.</p>
+
+<blockquote>
+  <p><strong>Mochat streaming</strong>: The Mochat channel (Socket.IO + HTTP polling fallback) is a non-streaming channel (<code class="language-plaintext highlighter-rouge">supports_streaming</code> defaults to <code class="language-plaintext highlighter-rouge">False</code>). The ChannelManager buffers the complete response and delivers it via a single <code class="language-plaintext highlighter-rouge">send()</code> call. This is consistent with Mochat’s REST-style message-send API (<code class="language-plaintext highlighter-rouge">/api/claw/sessions/send</code>, <code class="language-plaintext highlighter-rouge">/api/claw/groups/panels/send</code>), which does not support incremental patching. If a future Mochat API revision adds edit/patch semantics, the channel can flip <code class="language-plaintext highlighter-rouge">supports_streaming = True</code> and override <code class="language-plaintext highlighter-rouge">send_delta()</code>.</p>
+</blockquote>
+<h3 id="websocket-channel">
+  
+  
+    <a href="#websocket-channel" class="anchor-heading" aria-labelledby="websocket-channel"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> WebSocket Channel
+  
+  
+</h3>
+    
+
+<p>The primary transport. Runs a FastAPI/uvicorn server with WebSocket endpoint. Supports multiple concurrent clients, TLS, CORS, and configurable max frame size (default 10 MiB). Also hosts command handlers for autopilot, cron, and memory profiling.</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">transport</span><span class="pi">:</span>
+  <span class="na">websocket</span><span class="pi">:</span>
+    <span class="na">host</span><span class="pi">:</span> <span class="s2">"</span><span class="s">127.0.0.1"</span>
+    <span class="na">port</span><span class="pi">:</span> <span class="m">8765</span>
+    <span class="na">max_frame_size</span><span class="pi">:</span> <span class="m">10485760</span>  <span class="c1"># 10 MiB — match SDK client's setting</span>
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Gotcha</strong>: The SDK client’s <code class="language-plaintext highlighter-rouge">max_frame_size</code> must be ≥ the daemon’s. The <code class="language-plaintext highlighter-rouge">websockets</code> library defaults to 1 MiB, which silently closes the connection (code 1009) when the daemon streams larger JSON events.</p>
+</blockquote>
+<h3 id="platform-channels-15">
+  
+  
+    <a href="#platform-channels-15" class="anchor-heading" aria-labelledby="platform-channels-15"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Platform Channels (15)
+  
+  
+</h3>
+    
+
+<p>Each platform channel is a self-contained plugin following the same <code class="language-plaintext highlighter-rouge">Channel</code> pattern. They are configured under the top-level <code class="language-plaintext highlighter-rouge">channels:</code> section:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Channel</th>
+      <th>Module</th>
+      <th>Platform</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Telegram</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.telegram</code></td>
+      <td>Telegram Bot API</td>
+    </tr>
+    <tr>
+      <td>Slack</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.slack</code></td>
+      <td>Slack Socket Mode</td>
+    </tr>
+    <tr>
+      <td>Discord</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.discord</code></td>
+      <td>Discord Bot API</td>
+    </tr>
+    <tr>
+      <td>Feishu/Lark</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.feishu</code></td>
+      <td>Feishu WebSocket</td>
+    </tr>
+    <tr>
+      <td>Matrix</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.matrix</code></td>
+      <td>Matrix (Element)</td>
+    </tr>
+    <tr>
+      <td>WhatsApp</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.whatsapp</code></td>
+      <td>Node.js bridge</td>
+    </tr>
+    <tr>
+      <td>Signal</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.signal</code></td>
+      <td>signal-cli JSON-RPC</td>
+    </tr>
+    <tr>
+      <td>Email</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.email</code></td>
+      <td>IMAP/SMTP</td>
+    </tr>
+    <tr>
+      <td>MS Teams</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.msteams</code></td>
+      <td>Microsoft Teams</td>
+    </tr>
+    <tr>
+      <td>WeChat</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.weixin</code></td>
+      <td>Personal WeChat</td>
+    </tr>
+    <tr>
+      <td>WeCom</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.wecom</code></td>
+      <td>Enterprise WeChat</td>
+    </tr>
+    <tr>
+      <td>DingTalk</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.dingtalk</code></td>
+      <td>DingTalk</td>
+    </tr>
+    <tr>
+      <td>QQ</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.qq</code></td>
+      <td>QQ</td>
+    </tr>
+    <tr>
+      <td>Mochat</td>
+      <td><code class="language-plaintext highlighter-rouge">channels.mochat</code></td>
+      <td>Mochat (Socket.IO)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Channels are lazily imported — the <code class="language-plaintext highlighter-rouge">soothe_daemon</code> <code class="language-plaintext highlighter-rouge">__init__.py</code> uses <code class="language-plaintext highlighter-rouge">__getattr__</code> lazy loading to avoid the 5+ second import cost of channels/nio/crypto at package load time.</p><hr />
+<h2 id="session-management">
+  
+  
+    <a href="#session-management" class="anchor-heading" aria-labelledby="session-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Session Management
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/session.py</code></p>
+</blockquote>
+
+<p><code class="language-plaintext highlighter-rouge">ClientSessionManager</code> creates and tracks <code class="language-plaintext highlighter-rouge">ClientSession</code> objects, each holding a client’s <code class="language-plaintext highlighter-rouge">client_id</code>, current <code class="language-plaintext highlighter-rouge">loop_id</code>, <code class="language-plaintext highlighter-rouge">thread_id</code>, <code class="language-plaintext highlighter-rouge">workspace</code>, and an <code class="language-plaintext highlighter-rouge">asyncio.Queue</code> for event streaming.</p>
+
+<p>Key design details:</p>
+<ul>
+  <li><strong>Event queue with backpressure</strong> — Each client gets a bounded queue (default 10,000 events). If the consumer is too slow, events are dropped with a log throttle (one drop-log per 5 seconds per client).</li>
+  <li><strong>Priority-aware draining</strong> — During drain settle, the manager peeks the queue for HIGH/CRITICAL priority events and gives them extra settle time (0.15s margin, IG-436).</li>
+  <li><strong>Sender filtering</strong> — Events originating from a client are not echoed back to that same client (prevents feedback loops), with drop logging throttled to avoid spam.</li>
+</ul><hr />
+<h2 id="rpc-commands">
+  
+  
+    <a href="#rpc-commands" class="anchor-heading" aria-labelledby="rpc-commands"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> RPC Commands
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/commands.py</code></p>
+</blockquote>
+
+<p>The daemon accepts structured RPC commands over WebSocket (RFC-454). Each request has <code class="language-plaintext highlighter-rouge">type: "command_request"</code>, a <code class="language-plaintext highlighter-rouge">command</code> name, optional <code class="language-plaintext highlighter-rouge">params</code>, a <code class="language-plaintext highlighter-rouge">loop_id</code>, and a <code class="language-plaintext highlighter-rouge">request_id</code> for correlation.</p>
+<h3 id="available-commands">
+  
+  
+    <a href="#available-commands" class="anchor-heading" aria-labelledby="available-commands"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Available Commands
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Command</th>
+      <th>Actions</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/memory</code></td>
+      <td><code class="language-plaintext highlighter-rouge">clear</code>, <code class="language-plaintext highlighter-rouge">recall</code>, <code class="language-plaintext highlighter-rouge">remember</code></td>
+      <td>Manage agent memory for the loop</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/policy</code></td>
+      <td><code class="language-plaintext highlighter-rouge">check</code>, <code class="language-plaintext highlighter-rouge">list</code></td>
+      <td>Inspect active permissions</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/thread</code></td>
+      <td><code class="language-plaintext highlighter-rouge">create</code>, <code class="language-plaintext highlighter-rouge">list</code>, <code class="language-plaintext highlighter-rouge">show</code>, <code class="language-plaintext highlighter-rouge">delete</code></td>
+      <td>Thread lifecycle management</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/history</code></td>
+      <td>—</td>
+      <td>Fetch conversation history (with limit + metadata flag)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/clear</code></td>
+      <td>—</td>
+      <td>Clear current conversation context</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/cancel</code></td>
+      <td>—</td>
+      <td>Cancel active execution</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/exit</code></td>
+      <td>—</td>
+      <td>Shut down the daemon</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="command-binding">
+  
+  
+    <a href="#command-binding" class="anchor-heading" aria-labelledby="command-binding"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Command Binding
+  
+  
+</h3>
+    
+
+<p>A critical implementation detail: commands arrive with a <code class="language-plaintext highlighter-rouge">loop_id</code> (the StrangeLoop subscription scope), but handlers need a <code class="language-plaintext highlighter-rouge">checkpoint_thread_id</code> (the LangGraph persistence key). The handler calls <code class="language-plaintext highlighter-rouge">bind_execution_thread_for_loop()</code> to resolve the loop to its thread. If the runner already has <code class="language-plaintext highlighter-rouge">current_thread_id</code> set, it’s used directly. This binding is why <code class="language-plaintext highlighter-rouge">/thread</code> and <code class="language-plaintext highlighter-rouge">/memory</code> commands work correctly even when multiple loops share a workspace.</p><hr />
+<h2 id="health-checks">
+  
+  
+    <a href="#health-checks" class="anchor-heading" aria-labelledby="health-checks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Health Checks
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/health/</code></p>
+</blockquote>
+
+<p><code class="language-plaintext highlighter-rouge">HealthChecker</code> is invoked by the <code class="language-plaintext highlighter-rouge">soothed doctor</code> CLI command. It runs categorized checks and returns a <code class="language-plaintext highlighter-rouge">HealthReport</code> with overall status (<code class="language-plaintext highlighter-rouge">healthy</code> / <code class="language-plaintext highlighter-rouge">degraded</code> / <code class="language-plaintext highlighter-rouge">unhealthy</code>) and per-component detail.</p>
+<h3 id="check-categories">
+  
+  
+    <a href="#check-categories" class="anchor-heading" aria-labelledby="check-categories"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Check Categories
+  
+  
+</h3>
+    
+
+<p>Default vitals (progressive text diagnosis):</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Category</th>
+      <th>Source</th>
+      <th>What it validates</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">configuration</code></td>
+      <td>daemon <code class="language-plaintext highlighter-rouge">config_check</code></td>
+      <td>Config file validity, env resolution, default model</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tool_deps</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>Host binaries (<code class="language-plaintext highlighter-rouge">rg</code>, <code class="language-plaintext highlighter-rouge">fd</code>, <code class="language-plaintext highlighter-rouge">git</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">persistence</code></td>
+      <td>daemon <code class="language-plaintext highlighter-rouge">persistence/health_check</code></td>
+      <td>SQLite home <strong>or</strong> PostgreSQL when <code class="language-plaintext highlighter-rouge">default_backend=postgresql</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">providers</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>Credentials for configured providers (<code class="language-plaintext highlighter-rouge">--live-llm</code> for invoke)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">observability</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>Langfuse package/credentials/health when enabled</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">host</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe.diagnose</code></td>
+      <td>Cron / skillify / autopilot / StrangeLoop import + config</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">daemon</code></td>
+      <td>daemon <code class="language-plaintext highlighter-rouge">daemon_check</code></td>
+      <td>Process, WebSocket, readiness (<code class="language-plaintext highlighter-rouge">--require-running</code> to fail offline)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Deep / optional (<code class="language-plaintext highlighter-rouge">soothed doctor --deep</code> or explicit <code class="language-plaintext highlighter-rouge">--category</code>):</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Category</th>
+      <th>Source</th>
+      <th>What it validates</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">protocols</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>Protocol backend health</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">vector_stores</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>Vector DB connectivity + dimension match</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">mcp_servers</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>MCP server reachability</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">models</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe_nano.diagnose</code></td>
+      <td>Router <code class="language-plaintext highlighter-rouge">embedding</code> role</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">external_apis</code></td>
+      <td>daemon <code class="language-plaintext highlighter-rouge">external_apis_check</code></td>
+      <td>Config/env-gated optional SaaS reachability</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>CLI: <code class="language-plaintext highlighter-rouge">soothed doctor</code> (vitals + progressive), <code class="language-plaintext highlighter-rouge">--deep</code>, <code class="language-plaintext highlighter-rouge">--live-llm</code>, <code class="language-plaintext highlighter-rouge">--require-running</code>,
+<code class="language-plaintext highlighter-rouge">--format json|markdown</code>, <code class="language-plaintext highlighter-rouge">--category</code> / <code class="language-plaintext highlighter-rouge">--exclude</code>.
+—</p>
+<h2 id="daemon-configuration">
+  
+  
+    <a href="#daemon-configuration" class="anchor-heading" aria-labelledby="daemon-configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Configuration
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/config/models.py</code></p>
+</blockquote>
+
+<p><code class="language-plaintext highlighter-rouge">SootheDaemonConfig</code> is separate from <code class="language-plaintext highlighter-rouge">SootheConfig</code>. It holds transport settings (WebSocket host/port/TLS), channel configs, worker pool sizing, and distributed runner settings. The default config path is resolved via <code class="language-plaintext highlighter-rouge">default_daemon_config_path()</code>.</p>
+
+<p><code class="language-plaintext highlighter-rouge">WebSocketConfig</code> fields worth noting:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">cors_origins</code> defaults to <code class="language-plaintext highlighter-rouge">["http://localhost:*", "http://127.0.0.1:*"]</code> — browser clients must match</li>
+  <li><code class="language-plaintext highlighter-rouge">tls_enabled</code> / <code class="language-plaintext highlighter-rouge">tls_cert</code> / <code class="language-plaintext highlighter-rouge">tls_key</code> for secure WebSocket (<code class="language-plaintext highlighter-rouge">wss://</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">max_frame_size</code> must be coordinated with SDK clients (see gotcha above)</li>
+</ul><hr />
+<h2 id="see-also">
+  
+  
+    <a href="#see-also" class="anchor-heading" aria-labelledby="see-also"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> See Also
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/api-reference/core-api.html">Core API</a> — CoreAgent and SootheRunner</li>
+  <li><a href="/soothe/wiki/api-reference/sdk-api.html">SDK API</a> — WebSocket client for connecting to this daemon</li>
+  <li><a href="/soothe/wiki/daemon-management.html">Daemon Management Guide</a> — Operational lifecycle</li>
+  <li><a href="/soothe/wiki/multi-transport.html">Multi-Transport Communication</a> — Channel architecture deep-dive</li>
+  <li><a href="../../specs/RFC-302-daemon-communication.md">RFC-302 Daemon Communication</a> — Specification</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

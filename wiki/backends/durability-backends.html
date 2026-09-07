@@ -1,0 +1,611 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(2)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(9) > ul > li:nth-child(2) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(9) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(9) > ul > li:nth-child(2) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(9) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(9) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Durability Backends | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Durability Backends" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Thread lifecycle and state management via DurabilityProtocol, the foundation of crash-recovery and durable execution." />
+<meta property="og:description" content="Thread lifecycle and state management via DurabilityProtocol, the foundation of crash-recovery and durable execution." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/backends/durability-backends.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/backends/durability-backends.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Durability Backends" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Thread lifecycle and state management via DurabilityProtocol, the foundation of crash-recovery and durable execution.","headline":"Durability Backends","url":"https://mirasoth.github.io/soothe/wiki/backends/durability-backends.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/backends/">Backends</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Durability Backends</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="durability-backends">
+  
+  
+    <a href="#durability-backends" class="anchor-heading" aria-labelledby="durability-backends"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Durability Backends
+  
+  
+</h1>
+    
+
+<p>Thread lifecycle and state management via <code class="language-plaintext highlighter-rouge">DurabilityProtocol</code>. Durability backends persist thread metadata, track status transitions (active → suspended → archived), and maintain a thread index for fast listing. They are the foundation of Soothe’s crash-recovery and durable execution model.</p><hr />
+<h2 id="what-durability-backends-do">
+  
+  
+    <a href="#what-durability-backends-do" class="anchor-heading" aria-labelledby="what-durability-backends-do"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What Durability Backends Do
+  
+  
+</h2>
+    
+
+<p>Durability backends manage the <em>lifecycle</em> of threads — not their execution state. They handle:</p>
+
+<ul>
+  <li><strong>Thread creation</strong>: Generates a thread ID, stores <code class="language-plaintext highlighter-rouge">ThreadInfo</code> with metadata (tags, plan summary, priority, policy profile), and adds the thread to an index for fast listing.</li>
+  <li><strong>Status transitions</strong>: <code class="language-plaintext highlighter-rouge">suspend</code> pauses a thread (persisting its state for later resumption); <code class="language-plaintext highlighter-rouge">resume</code> reactivates it; <code class="language-plaintext highlighter-rouge">archive</code> marks it complete (and triggers memory consolidation).</li>
+  <li><strong>Thread listing</strong>: Iterates the thread index and applies filters (status, tags, creation time range).</li>
+  <li><strong>Metadata updates</strong>: Merges new metadata into existing thread records.</li>
+</ul>
+
+<p>All durability backends inherit from <code class="language-plaintext highlighter-rouge">BasePersistStoreDurability</code>, which delegates storage to an <code class="language-plaintext highlighter-rouge">AsyncPersistStore</code> instance. The backend classes themselves are thin wrappers — the only difference is <em>which persist store they use</em>.</p>
+
+<p>Source: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/backends/durability/base.py</code></p><hr />
+<h2 id="backend-comparison">
+  
+  
+    <a href="#backend-comparison" class="anchor-heading" aria-labelledby="backend-comparison"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backend Comparison
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>SQLiteDurability</th>
+      <th>PostgreSQLDurability</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Storage engine</td>
+      <td>SQLite (file-based)</td>
+      <td>PostgreSQL (JSONB)</td>
+    </tr>
+    <tr>
+      <td>Concurrent writes</td>
+      <td>❌ Single writer (serialized via lock)</td>
+      <td>✅ Connection pool</td>
+    </tr>
+    <tr>
+      <td>Connection pooling</td>
+      <td>Reader pool (WAL mode)</td>
+      <td>✅ (psycopg_pool, default 10)</td>
+    </tr>
+    <tr>
+      <td>Setup complexity</td>
+      <td>Low — zero external dependencies</td>
+      <td>Medium — requires PostgreSQL + psycopg</td>
+    </tr>
+    <tr>
+      <td>Production readiness</td>
+      <td>⚠️ Local/dev, single-process</td>
+      <td>✅ Multi-process, scalable</td>
+    </tr>
+    <tr>
+      <td>Namespace isolation</td>
+      <td>✅ (key prefix)</td>
+      <td>✅ (key prefix + JSONB)</td>
+    </tr>
+    <tr>
+      <td>Default DB path</td>
+      <td><code class="language-plaintext highlighter-rouge">$SOOTHE_DATA_DIR/metadata.db</code></td>
+      <td>Configured via DSN</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Both backends serialize <code class="language-plaintext highlighter-rouge">ThreadInfo</code> as JSON. The difference is purely in the underlying storage engine’s concurrency and scalability characteristics.</p><hr />
+<h2 id="available-backends">
+  
+  
+    <a href="#available-backends" class="anchor-heading" aria-labelledby="available-backends"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Available Backends
+  
+  
+</h2>
+    
+<h3 id="sqlitedurability">
+  
+  
+    <a href="#sqlitedurability" class="anchor-heading" aria-labelledby="sqlitedurability"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> SQLiteDurability
+  
+  
+</h3>
+    
+
+<p>Local persistence using SQLite. The default backend for development and single-process deployments.</p>
+
+<p><strong>Key characteristics</strong>:</p>
+<ul>
+  <li>Wraps <code class="language-plaintext highlighter-rouge">SQLitePersistStore</code> with a <code class="language-plaintext highlighter-rouge">durability</code> namespace, isolating thread records from other data in the same database.</li>
+  <li>Uses WAL mode for concurrent reads with a single serialized writer (asyncio.Lock ensures write consistency).</li>
+  <li>Defaults to <code class="language-plaintext highlighter-rouge">$SOOTHE_DATA_DIR/metadata.db</code> — deliberately separate from LangGraph checkpoints for clarity.</li>
+  <li>Reader pool (default 5 connections) enables parallel reads across concurrent loops.</li>
+</ul>
+
+<p><strong>When to choose</strong>: Local development, single-process production, or any scenario where external database dependencies are undesirable.</p>
+
+<p><strong>Minimal config</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">protocols</span><span class="pi">:</span>
+  <span class="na">durability</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">backend</span><span class="pi">:</span> <span class="s">sqlite</span>
+    <span class="na">persist_dir</span><span class="pi">:</span> <span class="s">~/.soothe/durability</span>
+</code></pre></div></div>
+
+<p>Source: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/backends/durability/sqlite.py</code></p><hr />
+<h3 id="postgresqldurability">
+  
+  
+    <a href="#postgresqldurability" class="anchor-heading" aria-labelledby="postgresqldurability"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQLDurability
+  
+  
+</h3>
+    
+
+<p>Production-grade persistence using PostgreSQL with JSONB storage and connection pooling.</p>
+
+<p><strong>Key characteristics</strong>:</p>
+<ul>
+  <li>Requires a pre-configured <code class="language-plaintext highlighter-rouge">PostgreSQLPersistStore</code> instance (passed in at construction — no auto-creation of the store).</li>
+  <li>Leverages PostgreSQL’s native JSONB for efficient JSON querying and indexing.</li>
+  <li>Connection pool (default 10 connections) supports concurrent multi-process access.</li>
+  <li>Inherits all lifecycle logic from <code class="language-plaintext highlighter-rouge">BasePersistStoreDurability</code> — no behavior difference, only storage engine.</li>
+</ul>
+
+<p><strong>When to choose</strong>: Multi-process production deployments, horizontal scaling, or when you already run PostgreSQL for other Soothe backends (vector store, persistence).</p>
+
+<p><strong>Minimal config</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">protocols</span><span class="pi">:</span>
+  <span class="na">durability</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">backend</span><span class="pi">:</span> <span class="s">postgresql</span>
+    <span class="na">dsn</span><span class="pi">:</span> <span class="s">postgresql://localhost/soothe</span>
+    <span class="na">pool_size</span><span class="pi">:</span> <span class="m">10</span>
+</code></pre></div></div>
+
+<p>Source: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/backends/durability/postgresql.py</code></p><hr />
+<h2 id="thread-lifecycle">
+  
+  
+    <a href="#thread-lifecycle" class="anchor-heading" aria-labelledby="thread-lifecycle"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Lifecycle
+  
+  
+</h2>
+    
+
+<p>Thread status uses string literals, not an enum. Three durable statuses exist:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Status</th>
+      <th>Meaning</th>
+      <th>Trigger</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">active</code></td>
+      <td>Currently running or newly created</td>
+      <td><code class="language-plaintext highlighter-rouge">create_thread()</code> or <code class="language-plaintext highlighter-rouge">resume_thread()</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">suspended</code></td>
+      <td>Paused — state persisted for later resumption</td>
+      <td><code class="language-plaintext highlighter-rouge">suspend_thread()</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">archived</code></td>
+      <td>Completed — triggers memory consolidation</td>
+      <td><code class="language-plaintext highlighter-rouge">archive_thread()</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Key behavior</strong>: <code class="language-plaintext highlighter-rouge">resume_thread()</code> supports <strong>prefix matching</strong>. If the provided thread ID is a prefix matching one or more threads, the first match is resumed. This allows users to reference threads by short ID prefixes (e.g., <code class="language-plaintext highlighter-rouge">abc</code> instead of <code class="language-plaintext highlighter-rouge">abc123def456...</code>).</p>
+
+<p><strong>Archive triggers consolidation</strong>: When a thread is archived, the system consolidates its significant interactions into long-term memory. This is why <code class="language-plaintext highlighter-rouge">archive</code> is distinct from <code class="language-plaintext highlighter-rouge">suspend</code> — archiving is terminal.</p><hr />
+<h2 id="performance-characteristics">
+  
+  
+    <a href="#performance-characteristics" class="anchor-heading" aria-labelledby="performance-characteristics"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Performance Characteristics
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>SQLite</th>
+      <th>PostgreSQL</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">create_thread()</code></td>
+      <td>~10-20ms</td>
+      <td>~20-50ms</td>
+      <td>Pool overhead on PG</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">get_thread()</code></td>
+      <td>~5-10ms</td>
+      <td>~10-30ms</td>
+      <td>Network on PG</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">suspend/resume/archive</code></td>
+      <td>~10-20ms</td>
+      <td>~20-50ms</td>
+      <td>JSON serialization + save</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">list_threads()</code></td>
+      <td>~50-100ms</td>
+      <td>~50-200ms</td>
+      <td>Index scan, loads all threads</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">update_metadata()</code></td>
+      <td>~10-20ms</td>
+      <td>~20-50ms</td>
+      <td>Merge + save</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong><code class="language-plaintext highlighter-rouge">list_threads()</code> is the slowest operation</strong> because it loads every thread from the index and applies filters in Python. For large thread counts, consider filtering by status or tags to reduce the working set.</p><hr />
+<h2 id="production-gotchas">
+  
+  
+    <a href="#production-gotchas" class="anchor-heading" aria-labelledby="production-gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Production Gotchas
+  
+  
+</h2>
+    
+
+<ol>
+  <li>
+    <p><strong>SQLite single-writer bottleneck</strong>: WAL mode allows concurrent readers, but all writes are serialized through an asyncio.Lock. Under heavy write contention (many threads being created/suspended simultaneously), throughput is limited.</p>
+  </li>
+  <li>
+    <p><strong>PostgreSQL connection resilience</strong>: <code class="language-plaintext highlighter-rouge">PostgreSQLPersistStore</code> detects recoverable connection errors (<code class="language-plaintext highlighter-rouge">OperationalError</code>, <code class="language-plaintext highlighter-rouge">InterfaceError</code>, <code class="language-plaintext highlighter-rouge">AdminShutdown</code>, <code class="language-plaintext highlighter-rouge">ConnectionFailure</code>) and automatically resets the pool. Non-recoverable errors propagate immediately.</p>
+  </li>
+  <li>
+    <p><strong>Thread index consistency</strong>: The thread index is stored as a single key-value entry. If the process crashes mid-update, the index may be inconsistent with stored threads. The index is rebuilt from stored thread keys on demand.</p>
+  </li>
+  <li>
+    <p><strong>Namespace separation</strong>: SQLiteDurability uses the <code class="language-plaintext highlighter-rouge">durability</code> namespace by default, keeping thread records separate from other data (checkpoints, context) in the same SQLite database. PostgreSQL achieves the same via table-level or key-prefix isolation.</p>
+  </li>
+  <li>
+    <p><strong>No built-in TTL or cleanup</strong>: Archived threads persist indefinitely. Implement external cleanup if thread accumulation is a concern.</p>
+  </li>
+</ol><hr />
+<h2 id="integration-with-sootherunner">
+  
+  
+    <a href="#integration-with-sootherunner" class="anchor-heading" aria-labelledby="integration-with-sootherunner"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Integration with SootheRunner
+  
+  
+</h2>
+    
+
+<p>The runner uses durability backends in two phases:</p>
+
+<ul>
+  <li><strong>Pre-stream</strong>: Creates a new thread (if no <code class="language-plaintext highlighter-rouge">thread_id</code> given) or resumes an existing one.</li>
+  <li><strong>Post-stream</strong>: Suspends the thread if paused, or archives it if complete.</li>
+</ul>
+
+<p>This means every Soothe execution touches the durability backend at least twice. Backend choice directly impacts per-run latency.</p><hr />
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/protocols/durability.html">DurabilityProtocol</a></strong> — Protocol interface definition</li>
+  <li><strong><a href="/soothe/wiki/backends/">Backends Overview</a></strong> — Backend layer introduction</li>
+  <li><strong><a href="/soothe/wiki/backends/persistence-backends.html">Persistence Backends</a></strong> — The PersistStore layer durability builds on</li>
+  <li><strong><a href="/soothe/wiki/backends/memory-backends.html">Memory Backends</a></strong> — Triggered on thread archival</li>
+  <li><strong><a href="/soothe/wiki/thread-management.html">Thread Management</a></strong> — Thread lifecycle details</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

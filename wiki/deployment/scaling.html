@@ -1,0 +1,972 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(12) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(12) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Scaling Strategies | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Scaling Strategies" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Guide for scaling Soothe deployments from single-node to large-scale production with Kubernetes and performance tuning." />
+<meta property="og:description" content="Guide for scaling Soothe deployments from single-node to large-scale production with Kubernetes and performance tuning." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/deployment/scaling.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/deployment/scaling.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Scaling Strategies" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Guide for scaling Soothe deployments from single-node to large-scale production with Kubernetes and performance tuning.","headline":"Scaling Strategies","url":"https://mirasoth.github.io/soothe/wiki/deployment/scaling.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/deployment/">Deployment</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Scaling Strategies</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="scaling-strategies">
+  
+  
+    <a href="#scaling-strategies" class="anchor-heading" aria-labelledby="scaling-strategies"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Scaling Strategies
+  
+  
+</h1>
+    
+
+<p>Guide for scaling Soothe deployments from single-node to large-scale production.</p>
+<h2 id="scaling-tiers">
+  
+  
+    <a href="#scaling-tiers" class="anchor-heading" aria-labelledby="scaling-tiers"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Scaling Tiers
+  
+  
+</h2>
+    
+<h3 id="tier-1-single-node-50-concurrent-threads">
+  
+  
+    <a href="#tier-1-single-node-50-concurrent-threads" class="anchor-heading" aria-labelledby="tier-1-single-node-50-concurrent-threads"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Tier 1: Single Node (&lt;50 concurrent threads)
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Architecture</strong>: Docker Compose, single PostgreSQL instance</li>
+  <li><strong>Limits</strong>: ~50 concurrent threads, ~10 parallel goals</li>
+  <li><strong>Reference</strong>: <a href="/soothe/wiki/deployment/production-setup.html">Production Setup</a></li>
+</ul>
+<h3 id="tier-2-multi-node-200-concurrent-threads">
+  
+  
+    <a href="#tier-2-multi-node-200-concurrent-threads" class="anchor-heading" aria-labelledby="tier-2-multi-node-200-concurrent-threads"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Tier 2: Multi-Node (&lt;200 concurrent threads)
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Architecture</strong>: Load balancer + multiple daemon nodes + PostgreSQL replicas</li>
+  <li><strong>Limits</strong>: ~200 concurrent threads, ~30 parallel goals</li>
+  <li><strong>See below</strong>: Multi-node scaling section</li>
+</ul>
+<h3 id="tier-3-large-scale-1000-concurrent-threads">
+  
+  
+    <a href="#tier-3-large-scale-1000-concurrent-threads" class="anchor-heading" aria-labelledby="tier-3-large-scale-1000-concurrent-threads"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Tier 3: Large Scale (&lt;1000 concurrent threads)
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Architecture</strong>: Kubernetes + PostgreSQL cluster + Redis coordination</li>
+  <li><strong>Limits</strong>: ~1000 concurrent threads, ~100 parallel goals</li>
+  <li><strong>See below</strong>: Kubernetes scaling section</li>
+</ul>
+<h2 id="horizontal-scaling-multi-node-deployment">
+  
+  
+    <a href="#horizontal-scaling-multi-node-deployment" class="anchor-heading" aria-labelledby="horizontal-scaling-multi-node-deployment"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Horizontal Scaling: Multi-Node Deployment
+  
+  
+</h2>
+    
+<h3 id="architecture">
+  
+  
+    <a href="#architecture" class="anchor-heading" aria-labelledby="architecture"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Architecture
+  
+  
+</h3>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌──────────────┐
+│ Load Balancer│ (nginx/HAProxy)
+└──────┬───────┘
+       │ Round-robin routing
+       ├─→ ┌──────────────┐
+       │   │ Soothe Node 1│
+       │   └──────┬───────┘
+       │          │ PostgreSQL primary
+       ├─→ ┌──────────────┐
+       │   │ Soothe Node 2│
+       │   └──────┬───────┘
+       │          │
+       └─────→ ┌──────────────┐
+               │ PostgreSQL   │
+               │ Primary +    │
+               │ Replicas     │
+               └──────────────┘
+</code></pre></div></div>
+<h3 id="load-balancer-configuration-nginx">
+  
+  
+    <a href="#load-balancer-configuration-nginx" class="anchor-heading" aria-labelledby="load-balancer-configuration-nginx"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Load Balancer Configuration (nginx)
+  
+  
+</h3>
+    
+
+<p><strong>Upstream configuration</strong>:</p>
+<div class="language-nginx highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">upstream</span> <span class="s">soothe_daemons</span> <span class="p">{</span>
+    <span class="kn">least_conn</span><span class="p">;</span>  <span class="c1"># Route to least busy node</span>
+    <span class="kn">server</span> <span class="nf">soothe-node1</span><span class="p">:</span><span class="mi">8765</span> <span class="s">weight=1</span><span class="p">;</span>
+    <span class="kn">server</span> <span class="nf">soothe-node2</span><span class="p">:</span><span class="mi">8765</span> <span class="s">weight=1</span><span class="p">;</span>
+    <span class="kn">server</span> <span class="nf">soothe-node3</span><span class="p">:</span><span class="mi">8765</span> <span class="s">weight=1</span><span class="p">;</span>
+    
+    <span class="kn">health_check</span> <span class="s">interval=10s</span> <span class="s">fails=3</span> <span class="s">passes=2</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="k">server</span> <span class="p">{</span>
+    <span class="kn">listen</span> <span class="mi">443</span> <span class="s">ssl</span><span class="p">;</span>
+    <span class="kn">location</span> <span class="n">/ws</span> <span class="p">{</span>
+        <span class="kn">proxy_pass</span> <span class="s">http://soothe_daemons</span><span class="p">;</span>
+        <span class="kn">proxy_http_version</span> <span class="mi">1</span><span class="s">.1</span><span class="p">;</span>
+        <span class="kn">proxy_set_header</span> <span class="s">Upgrade</span> <span class="nv">$http_upgrade</span><span class="p">;</span>
+        <span class="kn">proxy_set_header</span> <span class="s">Connection</span> <span class="s">"upgrade"</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<h3 id="postgresql-scaling">
+  
+  
+    <a href="#postgresql-scaling" class="anchor-heading" aria-labelledby="postgresql-scaling"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQL Scaling
+  
+  
+</h3>
+    
+
+<p><strong>Primary-replica setup</strong>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># docker-compose.yml (PostgreSQL cluster)</span>
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">postgres-primary</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">pgvector:pg17</span>
+    <span class="na">environment</span><span class="pi">:</span>
+      <span class="na">POSTGRES_USER</span><span class="pi">:</span> <span class="s">postgres</span>
+      <span class="na">POSTGRES_PASSWORD</span><span class="pi">:</span> <span class="s">${POSTGRES_PASSWORD}</span>
+    <span class="na">command</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">postgres"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">-c"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">max_connections=300"</span><span class="pi">]</span>
+    
+  <span class="na">postgres-replica1</span><span class="pi">:</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">pgvector:pg17</span>
+    <span class="na">environment</span><span class="pi">:</span>
+      <span class="na">POSTGRES_USER</span><span class="pi">:</span> <span class="s">postgres</span>
+      <span class="na">POSTGRES_PASSWORD</span><span class="pi">:</span> <span class="s">${POSTGRES_PASSWORD}</span>
+    <span class="na">command</span><span class="pi">:</span> <span class="pi">|</span>
+      <span class="s">postgres</span>
+      <span class="s">-c primary_conninfo='host=postgres-primary port=5432 user=postgres password=${POSTGRES_PASSWORD}'</span>
+      <span class="s">-c standby_mode=on</span>
+</code></pre></div></div>
+
+<p><strong>Connection pooling</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">postgres</span><span class="pi">:</span>
+    <span class="na">pool_min_size</span><span class="pi">:</span> <span class="m">16</span>
+    <span class="na">checkpoints_pool_size</span><span class="pi">:</span> <span class="m">48</span>
+    <span class="na">metadata_pool_size</span><span class="pi">:</span> <span class="m">48</span>
+    <span class="na">vectors_pool_size</span><span class="pi">:</span> <span class="m">48</span>
+</code></pre></div></div>
+<h3 id="daemon-node-configuration">
+  
+  
+    <a href="#daemon-node-configuration" class="anchor-heading" aria-labelledby="daemon-node-configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Node Configuration
+  
+  
+</h3>
+    
+
+<p>Each node needs unique workspace mounts:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Node 1: workspace mapping</span>
+<span class="na">workspace_mount</span><span class="pi">:</span>
+  <span class="na">host_root</span><span class="pi">:</span> <span class="s">/mnt/shared/workspace</span>
+  <span class="na">container_root</span><span class="pi">:</span> <span class="s">/var/lib/soothe/workspaces</span>
+
+<span class="c1"># Node 2: same shared workspace</span>
+<span class="na">workspace_mount</span><span class="pi">:</span>
+  <span class="na">host_root</span><span class="pi">:</span> <span class="s">/mnt/shared/workspace</span>
+  <span class="na">container_root</span><span class="pi">:</span> <span class="s">/var/lib/soothe/workspaces</span>
+</code></pre></div></div>
+
+<p><strong>Concurrency tuning</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">autonomous</span><span class="pi">:</span>
+    <span class="na">max_parallel_goals</span><span class="pi">:</span> <span class="m">10</span>  <span class="c1"># Per-node limit</span>
+    <span class="na">max_loops</span><span class="pi">:</span> <span class="m">8</span>            <span class="c1"># Worker pool size</span>
+    
+  <span class="na">loop</span><span class="pi">:</span>
+    <span class="na">concurrency</span><span class="pi">:</span>
+      <span class="na">max_parallel_tools</span><span class="pi">:</span> <span class="m">30</span>
+    <span class="na">llm_rate_limit</span><span class="pi">:</span>
+      <span class="na">concurrent_limit</span><span class="pi">:</span> <span class="m">20</span>
+</code></pre></div></div>
+<h2 id="kubernetes-deployment">
+  
+  
+    <a href="#kubernetes-deployment" class="anchor-heading" aria-labelledby="kubernetes-deployment"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Kubernetes Deployment
+  
+  
+</h2>
+    
+<h3 id="namespace-and-secrets">
+  
+  
+    <a href="#namespace-and-secrets" class="anchor-heading" aria-labelledby="namespace-and-secrets"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Namespace and Secrets
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Namespace</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-production</span>
+<span class="nn">---</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Secret</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-secrets</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">soothe-production</span>
+<span class="na">type</span><span class="pi">:</span> <span class="s">Opaque</span>
+<span class="na">data</span><span class="pi">:</span>
+  <span class="na">openai-api-key</span><span class="pi">:</span> <span class="s">&lt;base64&gt;</span>
+  <span class="na">postgres-password</span><span class="pi">:</span> <span class="s">&lt;base64&gt;</span>
+</code></pre></div></div>
+<h3 id="postgresql-statefulset">
+  
+  
+    <a href="#postgresql-statefulset" class="anchor-heading" aria-labelledby="postgresql-statefulset"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQL StatefulSet
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">StatefulSet</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-postgres</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">soothe-production</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">serviceName</span><span class="pi">:</span> <span class="s">soothe-postgres</span>
+  <span class="na">replicas</span><span class="pi">:</span> <span class="m">3</span>  <span class="c1"># Primary + 2 replicas</span>
+  <span class="na">selector</span><span class="pi">:</span>
+    <span class="na">matchLabels</span><span class="pi">:</span>
+      <span class="na">app</span><span class="pi">:</span> <span class="s">soothe-postgres</span>
+  <span class="na">template</span><span class="pi">:</span>
+    <span class="na">metadata</span><span class="pi">:</span>
+      <span class="na">labels</span><span class="pi">:</span>
+        <span class="na">app</span><span class="pi">:</span> <span class="s">soothe-postgres</span>
+    <span class="na">spec</span><span class="pi">:</span>
+      <span class="na">containers</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">postgres</span>
+        <span class="na">image</span><span class="pi">:</span> <span class="s">pgvector:pg17</span>
+        <span class="na">env</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">POSTGRES_PASSWORD</span>
+          <span class="na">valueFrom</span><span class="pi">:</span>
+            <span class="na">secretKeyRef</span><span class="pi">:</span>
+              <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-secrets</span>
+              <span class="na">key</span><span class="pi">:</span> <span class="s">postgres-password</span>
+        <span class="na">ports</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">containerPort</span><span class="pi">:</span> <span class="m">5432</span>
+        <span class="na">volumeMounts</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">postgres-data</span>
+          <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/var/lib/postgresql/data</span>
+  <span class="na">volumeClaimTemplates</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">metadata</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">postgres-data</span>
+    <span class="na">spec</span><span class="pi">:</span>
+      <span class="na">accessModes</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">ReadWriteOnce"</span><span class="pi">]</span>
+      <span class="na">resources</span><span class="pi">:</span>
+        <span class="na">requests</span><span class="pi">:</span>
+          <span class="na">storage</span><span class="pi">:</span> <span class="s">100Gi</span>
+</code></pre></div></div>
+<h3 id="soothe-daemon-deployment">
+  
+  
+    <a href="#soothe-daemon-deployment" class="anchor-heading" aria-labelledby="soothe-daemon-deployment"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Soothe Daemon Deployment
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Deployment</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-daemon</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">soothe-production</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">replicas</span><span class="pi">:</span> <span class="m">3</span>
+  <span class="na">selector</span><span class="pi">:</span>
+    <span class="na">matchLabels</span><span class="pi">:</span>
+      <span class="na">app</span><span class="pi">:</span> <span class="s">soothe-daemon</span>
+  <span class="na">template</span><span class="pi">:</span>
+    <span class="na">metadata</span><span class="pi">:</span>
+      <span class="na">labels</span><span class="pi">:</span>
+        <span class="na">app</span><span class="pi">:</span> <span class="s">soothe-daemon</span>
+    <span class="na">spec</span><span class="pi">:</span>
+      <span class="na">containers</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">soothed</span>
+        <span class="na">image</span><span class="pi">:</span> <span class="s">soothed:latest</span>
+        <span class="na">env</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">OPENAI_API_KEY</span>
+          <span class="na">valueFrom</span><span class="pi">:</span>
+            <span class="na">secretKeyRef</span><span class="pi">:</span>
+              <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-secrets</span>
+              <span class="na">key</span><span class="pi">:</span> <span class="s">openai-api-key</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">SOOTHE_POSTGRES_BASE_DSN</span>
+          <span class="na">value</span><span class="pi">:</span> <span class="s2">"</span><span class="s">postgresql://postgres:$(POSTGRES_PASSWORD)@soothe-postgres-0:5432"</span>
+        <span class="na">ports</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">containerPort</span><span class="pi">:</span> <span class="m">8765</span>
+        <span class="na">volumeMounts</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">workspace</span>
+          <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/var/lib/soothe/workspaces</span>
+        <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">config</span>
+          <span class="na">mountPath</span><span class="pi">:</span> <span class="s">/var/lib/soothe/config</span>
+      <span class="na">volumes</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">workspace</span>
+        <span class="na">persistentVolumeClaim</span><span class="pi">:</span>
+          <span class="na">claimName</span><span class="pi">:</span> <span class="s">workspace-pvc</span>
+      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">config</span>
+        <span class="na">configMap</span><span class="pi">:</span>
+          <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-config</span>
+</code></pre></div></div>
+<h3 id="horizontal-pod-autoscaler">
+  
+  
+    <a href="#horizontal-pod-autoscaler" class="anchor-heading" aria-labelledby="horizontal-pod-autoscaler"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Horizontal Pod Autoscaler
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">autoscaling/v2</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">HorizontalPodAutoscaler</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-daemon-hpa</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">soothe-production</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">scaleTargetRef</span><span class="pi">:</span>
+    <span class="na">apiVersion</span><span class="pi">:</span> <span class="s">apps/v1</span>
+    <span class="na">kind</span><span class="pi">:</span> <span class="s">Deployment</span>
+    <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-daemon</span>
+  <span class="na">minReplicas</span><span class="pi">:</span> <span class="m">2</span>
+  <span class="na">maxReplicas</span><span class="pi">:</span> <span class="m">10</span>
+  <span class="na">metrics</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Resource</span>
+    <span class="na">resource</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">cpu</span>
+      <span class="na">target</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">Utilization</span>
+        <span class="na">averageUtilization</span><span class="pi">:</span> <span class="m">70</span>
+  <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">Resource</span>
+    <span class="na">resource</span><span class="pi">:</span>
+      <span class="na">name</span><span class="pi">:</span> <span class="s">memory</span>
+      <span class="na">target</span><span class="pi">:</span>
+        <span class="na">type</span><span class="pi">:</span> <span class="s">Utilization</span>
+        <span class="na">averageUtilization</span><span class="pi">:</span> <span class="m">80</span>
+</code></pre></div></div>
+<h3 id="service-and-ingress">
+  
+  
+    <a href="#service-and-ingress" class="anchor-heading" aria-labelledby="service-and-ingress"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Service and Ingress
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">apiVersion</span><span class="pi">:</span> <span class="s">v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Service</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-daemon-service</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">soothe-production</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">selector</span><span class="pi">:</span>
+    <span class="na">app</span><span class="pi">:</span> <span class="s">soothe-daemon</span>
+  <span class="na">ports</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">port</span><span class="pi">:</span> <span class="m">8765</span>
+    <span class="na">targetPort</span><span class="pi">:</span> <span class="m">8765</span>
+<span class="nn">---</span>
+<span class="na">apiVersion</span><span class="pi">:</span> <span class="s">networking.k8s.io/v1</span>
+<span class="na">kind</span><span class="pi">:</span> <span class="s">Ingress</span>
+<span class="na">metadata</span><span class="pi">:</span>
+  <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-ingress</span>
+  <span class="na">namespace</span><span class="pi">:</span> <span class="s">soothe-production</span>
+  <span class="na">annotations</span><span class="pi">:</span>
+    <span class="na">nginx.ingress.kubernetes.io/rewrite-target</span><span class="pi">:</span> <span class="s">/</span>
+<span class="na">spec</span><span class="pi">:</span>
+  <span class="na">tls</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">hosts</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="s">soothe.your-domain.com</span>
+    <span class="na">secretName</span><span class="pi">:</span> <span class="s">soothe-tls</span>
+  <span class="na">rules</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">host</span><span class="pi">:</span> <span class="s">soothe.your-domain.com</span>
+    <span class="na">http</span><span class="pi">:</span>
+      <span class="na">paths</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">path</span><span class="pi">:</span> <span class="s">/ws</span>
+        <span class="na">pathType</span><span class="pi">:</span> <span class="s">Prefix</span>
+        <span class="na">backend</span><span class="pi">:</span>
+          <span class="na">service</span><span class="pi">:</span>
+            <span class="na">name</span><span class="pi">:</span> <span class="s">soothe-daemon-service</span>
+            <span class="na">port</span><span class="pi">:</span>
+              <span class="na">number</span><span class="pi">:</span> <span class="m">8765</span>
+</code></pre></div></div>
+<h2 id="performance-tuning">
+  
+  
+    <a href="#performance-tuning" class="anchor-heading" aria-labelledby="performance-tuning"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Performance Tuning
+  
+  
+</h2>
+    
+<h3 id="postgresql-optimization">
+  
+  
+    <a href="#postgresql-optimization" class="anchor-heading" aria-labelledby="postgresql-optimization"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQL Optimization
+  
+  
+</h3>
+    
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- PostgreSQL configuration</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">max_connections</span> <span class="o">=</span> <span class="mi">300</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">shared_buffers</span> <span class="o">=</span> <span class="s1">'1GB'</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">work_mem</span> <span class="o">=</span> <span class="s1">'64MB'</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">effective_cache_size</span> <span class="o">=</span> <span class="s1">'3GB'</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">random_page_cost</span> <span class="o">=</span> <span class="mi">1</span><span class="p">.</span><span class="mi">1</span><span class="p">;</span>  <span class="c1">-- For SSDs</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">effective_io_concurrency</span> <span class="o">=</span> <span class="mi">200</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>pgvector optimization</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- HNSW index for fast vector search</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="k">ON</span> <span class="n">soothe_embeddings</span> <span class="k">USING</span> <span class="n">hnsw</span> <span class="p">(</span><span class="n">embedding</span> <span class="n">vector_cosine_ops</span><span class="p">)</span>
+<span class="k">WITH</span> <span class="p">(</span><span class="n">m</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span> <span class="n">ef_construction</span> <span class="o">=</span> <span class="mi">64</span><span class="p">);</span>
+
+<span class="c1">-- IVFFlat for larger datasets</span>
+<span class="k">CREATE</span> <span class="k">INDEX</span> <span class="k">ON</span> <span class="n">soothe_embeddings</span> <span class="k">USING</span> <span class="n">ivfflat</span> <span class="p">(</span><span class="n">embedding</span> <span class="n">vector_cosine_ops</span><span class="p">)</span>
+<span class="k">WITH</span> <span class="p">(</span><span class="n">lists</span> <span class="o">=</span> <span class="mi">100</span><span class="p">);</span>
+</code></pre></div></div>
+<h3 id="daemon-pool-sizing">
+  
+  
+    <a href="#daemon-pool-sizing" class="anchor-heading" aria-labelledby="daemon-pool-sizing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Pool Sizing
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">postgres</span><span class="pi">:</span>
+    <span class="na">pool_min_size</span><span class="pi">:</span> <span class="m">16</span>              <span class="c1"># Warm connections</span>
+    <span class="na">checkpoints_pool_size</span><span class="pi">:</span> <span class="m">48</span>      <span class="c1"># LangGraph + StrangeLoop checkpoints</span>
+    <span class="na">metadata_pool_size</span><span class="pi">:</span> <span class="m">24</span>
+    <span class="na">vectors_pool_size</span><span class="pi">:</span> <span class="m">24</span>
+  
+<span class="na">agent</span><span class="pi">:</span>
+  <span class="na">autonomous</span><span class="pi">:</span>
+    <span class="na">max_loops</span><span class="pi">:</span> <span class="m">8</span>              <span class="c1"># Worker pool per node</span>
+    <span class="na">max_parallel_goals</span><span class="pi">:</span> <span class="m">10</span>    <span class="c1"># Concurrent goal execution</span>
+    
+  <span class="na">loop</span><span class="pi">:</span>
+    <span class="na">concurrency</span><span class="pi">:</span>
+      <span class="na">max_parallel_tools</span><span class="pi">:</span> <span class="m">30</span>  <span class="c1"># Tool call parallelism</span>
+    <span class="na">llm_rate_limit</span><span class="pi">:</span>
+      <span class="na">concurrent_limit</span><span class="pi">:</span> <span class="m">20</span>    <span class="c1"># LLM API concurrency</span>
+      <span class="na">rpm_limit</span><span class="pi">:</span> <span class="m">500</span>          <span class="c1"># Requests per minute</span>
+</code></pre></div></div>
+
+<p><strong>Pool sizing formula</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">persistence.postgres.pool_min_size</code>: 4 × number of nodes</li>
+  <li><code class="language-plaintext highlighter-rouge">persistence.postgres.checkpoints_pool_size</code>: 24 × number of nodes</li>
+  <li><code class="language-plaintext highlighter-rouge">max_loops</code>: CPU cores × 2</li>
+  <li><code class="language-plaintext highlighter-rouge">max_parallel_goals</code>: max_loops ÷ 2</li>
+</ul>
+<h3 id="llm-rate-limiting">
+  
+  
+    <a href="#llm-rate-limiting" class="anchor-heading" aria-labelledby="llm-rate-limiting"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> LLM Rate Limiting
+  
+  
+</h3>
+    
+
+<p><strong>Provider-specific limits</strong>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">loop</span><span class="pi">:</span>
+    <span class="na">llm_rate_limit</span><span class="pi">:</span>
+      <span class="na">rpm_limit</span><span class="pi">:</span> <span class="m">500</span>              <span class="c1"># OpenAI limit</span>
+      <span class="na">concurrent_limit</span><span class="pi">:</span> <span class="m">20</span>        <span class="c1"># Max concurrent API calls</span>
+      
+      <span class="c1"># Adaptive timeouts for rate limit handling</span>
+      <span class="na">call_timeout_seconds</span><span class="pi">:</span> <span class="m">600</span>
+      <span class="na">retry_on_timeout</span><span class="pi">:</span> <span class="no">true</span>
+      <span class="na">max_timeout_retries</span><span class="pi">:</span> <span class="m">10</span>
+</code></pre></div></div>
+
+<p><strong>Provider rate limits</strong> (reference):</p>
+<ul>
+  <li>OpenAI: 500 RPM (Tier 1), 5000 RPM (Tier 2)</li>
+  <li>Anthropic: 1000 RPM default</li>
+  <li>DashScope: 60 RPM (free), 600 RPM (paid)</li>
+</ul>
+<h2 id="capacity-planning">
+  
+  
+    <a href="#capacity-planning" class="anchor-heading" aria-labelledby="capacity-planning"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Capacity Planning
+  
+  
+</h2>
+    
+<h3 id="thread-capacity-estimation">
+  
+  
+    <a href="#thread-capacity-estimation" class="anchor-heading" aria-labelledby="thread-capacity-estimation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Capacity Estimation
+  
+  
+</h3>
+    
+
+<p><strong>Formula</strong>: Max concurrent threads = max_loops × max_parallel_goals × nodes</p>
+
+<p><strong>Example</strong>:</p>
+<ul>
+  <li>3 nodes × 8 loops × 10 parallel goals = 240 concurrent threads</li>
+</ul>
+
+<p><strong>Database capacity</strong>:</p>
+<ul>
+  <li>PostgreSQL: 300 max_connections recommended</li>
+  <li>Each thread: 2-3 database connections (checkpointer + metadata)</li>
+</ul>
+<h3 id="memory-estimation">
+  
+  
+    <a href="#memory-estimation" class="anchor-heading" aria-labelledby="memory-estimation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Memory Estimation
+  
+  
+</h3>
+    
+
+<p><strong>Per-thread memory</strong>: ~50 MB (StrangeLoop state + LLM context)</p>
+
+<p><strong>Total memory</strong>: Threads × 50 MB + Base daemon memory</p>
+
+<p><strong>Example</strong>:</p>
+<ul>
+  <li>100 threads × 50 MB = 5 GB</li>
+  <li>Base daemon: 500 MB</li>
+  <li>Total: 5.5 GB per node</li>
+</ul>
+
+<p><strong>Recommendation</strong>: 8 GB RAM per node for 100 threads</p>
+<h3 id="cpu-estimation">
+  
+  
+    <a href="#cpu-estimation" class="anchor-heading" aria-labelledby="cpu-estimation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> CPU Estimation
+  
+  
+</h3>
+    
+
+<p><strong>Per-thread CPU</strong>: 0.5-1.0 cores (LLM reasoning)</p>
+
+<p><strong>Total CPU</strong>: Threads × 0.5 cores</p>
+
+<p><strong>Example</strong>:</p>
+<ul>
+  <li>100 threads × 0.5 cores = 50 cores total</li>
+  <li>3 nodes: 17 cores per node</li>
+</ul>
+
+<p><strong>Recommendation</strong>: 8-16 cores per node</p>
+<h3 id="storage-estimation">
+  
+  
+    <a href="#storage-estimation" class="anchor-heading" aria-labelledby="storage-estimation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Storage Estimation
+  
+  
+</h3>
+    
+
+<p><strong>Thread storage</strong>: ~1-5 MB per thread (checkpoints + metadata)</p>
+
+<p><strong>Vector storage</strong>: Embedding size × vectors</p>
+
+<p><strong>Example</strong> (1000 threads, 1 year retention):</p>
+<ul>
+  <li>Threads: 1000 × 5 MB = 5 GB</li>
+  <li>Checkpoints: 1000 × 10 MB = 10 GB</li>
+  <li>Vectors: 100K vectors × 1536 dims × 4 bytes = 600 MB</li>
+</ul>
+
+<p><strong>Recommendation</strong>: 100 GB PostgreSQL storage, expandable</p>
+<h2 id="scaling-triggers">
+  
+  
+    <a href="#scaling-triggers" class="anchor-heading" aria-labelledby="scaling-triggers"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Scaling Triggers
+  
+  
+</h2>
+    
+<h3 id="when-to-scale-up">
+  
+  
+    <a href="#when-to-scale-up" class="anchor-heading" aria-labelledby="when-to-scale-up"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> When to Scale Up
+  
+  
+</h3>
+    
+
+<p><strong>Indicators</strong>:</p>
+<ul>
+  <li>CPU utilization &gt; 70% sustained</li>
+  <li>Memory utilization &gt; 80%</li>
+  <li>PostgreSQL connection pool exhausted</li>
+  <li>Thread queue depth &gt; 20</li>
+  <li>LLM rate limit errors frequent</li>
+</ul>
+
+<p><strong>Actions</strong>:</p>
+<ol>
+  <li>Add daemon nodes (+1-2)</li>
+  <li>Increase PostgreSQL replicas</li>
+  <li>Tune pool sizes</li>
+  <li>Optimize queries</li>
+</ol>
+<h3 id="when-to-scale-down">
+  
+  
+    <a href="#when-to-scale-down" class="anchor-heading" aria-labelledby="when-to-scale-down"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> When to Scale Down
+  
+  
+</h3>
+    
+
+<p><strong>Indicators</strong>:</p>
+<ul>
+  <li>CPU utilization &lt; 30% sustained</li>
+  <li>Memory utilization &lt; 40%</li>
+  <li>Thread queue depth &lt; 5</li>
+  <li>Low concurrent thread count</li>
+</ul>
+
+<p><strong>Actions</strong>:</p>
+<ol>
+  <li>Remove daemon nodes (-1)</li>
+  <li>Reduce pool sizes</li>
+  <li>Consolidate PostgreSQL replicas</li>
+</ol>
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/deployment/production-setup.html">Production Setup</a> - Single-node deployment</li>
+  <li><a href="/soothe/wiki/deployment/monitoring.html">Monitoring Guide</a> - Performance monitoring</li>
+  <li><a href="/soothe/wiki/deployment/security.html">Security Hardening</a> - Secure scaling</li>
+  <li><a href="/soothe/wiki/deployment/backup-recovery.html">Backup Recovery</a> - Database backup strategies</li>
+</ul><hr />
+
+<p><strong>Need scaling help?</strong> See <a href="/soothe/wiki/troubleshooting-guide/">Troubleshooting</a> or calculate capacity with formulas above.</p>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

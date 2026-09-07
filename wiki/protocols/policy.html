@@ -1,0 +1,653 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(11) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(11) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>PolicyProtocol | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="PolicyProtocol" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Permission-based access control protocol for security boundaries and least-privilege delegation." />
+<meta property="og:description" content="Permission-based access control protocol for security boundaries and least-privilege delegation." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/protocols/policy.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/protocols/policy.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="PolicyProtocol" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Permission-based access control protocol for security boundaries and least-privilege delegation.","headline":"PolicyProtocol","url":"https://mirasoth.github.io/soothe/wiki/protocols/policy.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/protocols/">Protocols</a></li>
+    <li class="breadcrumb-nav-list-item"><span>PolicyProtocol</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="policyprotocol">
+  
+  
+    <a href="#policyprotocol" class="anchor-heading" aria-labelledby="policyprotocol"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PolicyProtocol
+  
+  
+</h1>
+    
+
+<p><strong>RFC</strong>: 305 (Protocol Specifications series)
+<strong>Location</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/protocols/policy.py</code> (re-exported from <code class="language-plaintext highlighter-rouge">packages/soothe-sdk/src/soothe_sdk/protocols/policy.py</code>)
+<strong>Status</strong>: Implemented</p>
+<h2 id="what-policyprotocol-is">
+  
+  
+    <a href="#what-policyprotocol-is" class="anchor-heading" aria-labelledby="what-policyprotocol-is"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What PolicyProtocol Is
+  
+  
+</h2>
+    
+
+<p>PolicyProtocol defines the interface for <strong>permission-based access control</strong> in Soothe. It implements the least-privilege delegation principle (RFC-000 Principle 7): before any action — a tool call, a subagent spawn, an MCP connection — the runtime asks PolicyProtocol “is this permitted?” and proceeds only on an <code class="language-plaintext highlighter-rouge">allow</code> verdict.</p>
+
+<p>The protocol is defined in the SDK package (<code class="language-plaintext highlighter-rouge">soothe_sdk</code>) for reusability and re-exported from the main <code class="language-plaintext highlighter-rouge">soothe</code> package for backwards compatibility.</p>
+<h2 id="why-it-exists">
+  
+  
+    <a href="#why-it-exists" class="anchor-heading" aria-labelledby="why-it-exists"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why It Exists
+  
+  
+</h2>
+    
+
+<p>Agent systems that execute shell commands, write files, and spawn subagents need guardrails. Without a centralized permission system, security checks scatter across tool implementations, becoming inconsistent and hard to audit. PolicyProtocol centralizes:</p>
+
+<ul>
+  <li><strong>Permission enforcement</strong> — a single chokepoint for all action checks</li>
+  <li><strong>Least-privilege delegation</strong> — subagents inherit <em>narrower</em> permissions than their parent</li>
+  <li><strong>Structured permissions</strong> — category + action + scope granularity, not opaque strings</li>
+  <li><strong>Profile-based configuration</strong> — named profiles (<code class="language-plaintext highlighter-rouge">readonly</code>, <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">privileged</code>) that users select</li>
+  <li><strong>Approval workflow</strong> — <code class="language-plaintext highlighter-rouge">allow</code> / <code class="language-plaintext highlighter-rouge">deny</code> / <code class="language-plaintext highlighter-rouge">need_approval</code> verdicts enable interactive confirmation</li>
+</ul>
+<h2 id="key-operations">
+  
+  
+    <a href="#key-operations" class="anchor-heading" aria-labelledby="key-operations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key Operations
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">check(action, context) → PolicyDecision</code></strong> — evaluate whether an action is permitted under the current context. Returns a verdict (<code class="language-plaintext highlighter-rouge">allow</code> / <code class="language-plaintext highlighter-rouge">deny</code> / <code class="language-plaintext highlighter-rouge">need_approval</code>) with a human-readable reason and the matched permission (if allowed).</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">narrow_for_child(parent_permissions, child_name) → PermissionSet</code></strong> — compute a narrowed permission set for a child subagent. Children can never exceed parent permissions (intersection semantics).</li>
+</ul>
+<h2 id="the-permission-model">
+  
+  
+    <a href="#the-permission-model" class="anchor-heading" aria-labelledby="the-permission-model"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Permission Model
+  
+  
+</h2>
+    
+<h3 id="structured-permissions">
+  
+  
+    <a href="#structured-permissions" class="anchor-heading" aria-labelledby="structured-permissions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Structured Permissions
+  
+  
+</h3>
+    
+
+<p>Permissions are three-part: <code class="language-plaintext highlighter-rouge">Permission(category, action, scope)</code>.</p>
+
+<ul>
+  <li><strong>Category</strong>: <code class="language-plaintext highlighter-rouge">fs</code> (filesystem), <code class="language-plaintext highlighter-rouge">shell</code>, <code class="language-plaintext highlighter-rouge">net</code> (network), <code class="language-plaintext highlighter-rouge">mcp</code> (MCP servers), <code class="language-plaintext highlighter-rouge">subagent</code></li>
+  <li><strong>Action</strong>: <code class="language-plaintext highlighter-rouge">read</code>, <code class="language-plaintext highlighter-rouge">write</code>, <code class="language-plaintext highlighter-rouge">execute</code>, <code class="language-plaintext highlighter-rouge">connect</code>, <code class="language-plaintext highlighter-rouge">spawn</code></li>
+  <li><strong>Scope</strong>: <code class="language-plaintext highlighter-rouge">*</code> (all), glob patterns (<code class="language-plaintext highlighter-rouge">/tmp/**</code>), specific names (<code class="language-plaintext highlighter-rouge">ls</code>), or exclusion (<code class="language-plaintext highlighter-rouge">!rm</code>)</li>
+</ul>
+
+<p>This structure is clearer than flat strings (<code class="language-plaintext highlighter-rouge">fs_read_tmp</code>) and enables grouping, glob matching, and deny semantics.</p>
+<h3 id="scope-patterns">
+  
+  
+    <a href="#scope-patterns" class="anchor-heading" aria-labelledby="scope-patterns"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Scope Patterns
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Pattern</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">*</code></td>
+      <td>All items in the category</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/project/**</code></td>
+      <td>Glob — any path under /project</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ls</code></td>
+      <td>Specific item (exact match)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">!rm</code></td>
+      <td>Exclusion — anything <em>except</em> <code class="language-plaintext highlighter-rouge">rm</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Exclusion patterns (<code class="language-plaintext highlighter-rouge">!</code>) are how deny semantics work: grant <code class="language-plaintext highlighter-rouge">shell:execute:*</code> and <code class="language-plaintext highlighter-rouge">shell:execute:!rm</code> together means “all commands except <code class="language-plaintext highlighter-rouge">rm</code>.”</p>
+<h3 id="permissionset">
+  
+  
+    <a href="#permissionset" class="anchor-heading" aria-labelledby="permissionset"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PermissionSet
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">PermissionSet</code> is an immutable collection of <code class="language-plaintext highlighter-rouge">Permission</code> grants with scope-aware matching. <code class="language-plaintext highlighter-rouge">contains(requested)</code> returns <code class="language-plaintext highlighter-rouge">True</code> if <em>any</em> granted permission covers the request. <code class="language-plaintext highlighter-rouge">narrow(allowed)</code> returns a subset for child delegation (set intersection).</p>
+<h3 id="policydecision">
+  
+  
+    <a href="#policydecision" class="anchor-heading" aria-labelledby="policydecision"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PolicyDecision
+  
+  
+</h3>
+    
+
+<p>The verdict has three states:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">allow</code></strong> — proceed; includes the matched permission and reason</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">deny</code></strong> — block; includes the reason</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">need_approval</code></strong> — pause for user confirmation; the action would be permitted <em>if approved</em></li>
+</ul>
+
+<p>The <code class="language-plaintext highlighter-rouge">need_approval</code> flow enables interactive security: dangerous operations (e.g., <code class="language-plaintext highlighter-rouge">rm -rf</code>) can be configured as approvable rather than hard-denied, letting users make case-by-case decisions.</p>
+<h2 id="permission-narrowing">
+  
+  
+    <a href="#permission-narrowing" class="anchor-heading" aria-labelledby="permission-narrowing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Permission Narrowing
+  
+  
+</h2>
+    
+
+<p>The least-privilege principle in action:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Parent (depth=0, profile=standard):
+  → PermissionSet: [fs:read:*, shell:execute:*, ...]
+
+Child Subagent (depth=1):
+  → Narrowed to allowed subset (intersection)
+  → Cannot exceed parent permissions
+
+Grandchild Subagent (depth=2):
+  → Further narrowed
+  → Delegation depth tracked for auditing
+</code></pre></div></div>
+
+<p>Children get an <em>intersection</em> of the parent’s permissions and the allowed set. This is a one-way ratchet: permissions only narrow, never expand. Delegation depth is tracked for audit trails.</p>
+<h2 id="profile-based-configuration">
+  
+  
+    <a href="#profile-based-configuration" class="anchor-heading" aria-labelledby="profile-based-configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Profile-Based Configuration
+  
+  
+</h2>
+    
+
+<p>Profiles are named bundles of permissions:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">readonly</code></strong> — <code class="language-plaintext highlighter-rouge">fs:read:*</code>, <code class="language-plaintext highlighter-rouge">shell:execute:ls</code>, <code class="language-plaintext highlighter-rouge">shell:execute:cat</code>. No modifications.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">standard</code></strong> — <code class="language-plaintext highlighter-rouge">fs:read:*</code>, <code class="language-plaintext highlighter-rouge">fs:write:/tmp/**</code>, <code class="language-plaintext highlighter-rouge">shell:execute:*</code> except <code class="language-plaintext highlighter-rouge">rm</code>, <code class="language-plaintext highlighter-rouge">mcp:connect:*</code>, <code class="language-plaintext highlighter-rouge">subagent:spawn:*</code>. Standard development access.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">privileged</code></strong> — <code class="language-plaintext highlighter-rouge">*:*:*</code>. Full access (dangerous).</li>
+</ul>
+
+<p>Profiles also carry <code class="language-plaintext highlighter-rouge">approvable</code> (permissions that can be interactively approved) and <code class="language-plaintext highlighter-rouge">deny_rules</code> (explicit denies that override grants). <code class="language-plaintext highlighter-rouge">PolicyProfile</code> bundles these into a named, reusable configuration.</p>
+<h2 id="backend-configdrivenpolicy">
+  
+  
+    <a href="#backend-configdrivenpolicy" class="anchor-heading" aria-labelledby="backend-configdrivenpolicy"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backend: ConfigDrivenPolicy
+  
+  
+</h2>
+    
+
+<p>The current implementation, driven by YAML configuration. Features:</p>
+
+<ul>
+  <li>YAML-based profile definitions (see <code class="language-plaintext highlighter-rouge">config/templates/nano.yml</code>)</li>
+  <li>Permission inheritance and narrowing for subagents</li>
+  <li>Approval workflow support</li>
+  <li>Delegation depth tracking</li>
+</ul>
+
+<p>Resolved via <code class="language-plaintext highlighter-rouge">resolve_policy(config)</code> → returns a <code class="language-plaintext highlighter-rouge">PolicyProtocol</code> instance.</p>
+<h2 id="integration-points">
+  
+  
+    <a href="#integration-points" class="anchor-heading" aria-labelledby="integration-points"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Integration Points
+  
+  
+</h2>
+    
+<h3 id="policy--enforcement-middleware">
+  
+  
+    <a href="#policy--enforcement-middleware" class="anchor-heading" aria-labelledby="policy--enforcement-middleware"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Policy ↔ Enforcement Middleware
+  
+  
+</h3>
+    
+
+<p>Policy decisions are enforced via <code class="language-plaintext highlighter-rouge">PolicyEnforcementMiddleware</code>, which intercepts tool calls and subagent spawns:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Before each action:
+  1. Create ActionRequest from the operation
+  2. Call policy.check(request, context)
+  3. allow → proceed
+  4. deny → raise PermissionError
+  5. need_approval → pause for user input
+</code></pre></div></div>
+<h3 id="policy--durability">
+  
+  
+    <a href="#policy--durability" class="anchor-heading" aria-labelledby="policy--durability"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Policy ↔ Durability
+  
+  
+</h3>
+    
+
+<p>Threads carry a <code class="language-plaintext highlighter-rouge">policy_profile</code> in their <code class="language-plaintext highlighter-rouge">ThreadMetadata</code>. A thread created with <code class="language-plaintext highlighter-rouge">policy_profile="readonly"</code> enforces read-only permissions for its entire lifetime. The profile is set at creation and applies to all operations within the thread. See <a href="/soothe/wiki/protocols/durability.html">durability.md</a>.</p>
+<h3 id="policy--subagent-delegation">
+  
+  
+    <a href="#policy--subagent-delegation" class="anchor-heading" aria-labelledby="policy--subagent-delegation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Policy ↔ Subagent Delegation
+  
+  
+</h3>
+    
+
+<p>When a subagent is spawned, the runtime calls <code class="language-plaintext highlighter-rouge">narrow_for_child()</code> to compute the child’s permission set. The child receives a <code class="language-plaintext highlighter-rouge">PolicyContext</code> with the narrowed permissions and an incremented delegation depth. The child’s own <code class="language-plaintext highlighter-rouge">check()</code> calls use this narrowed set — it physically cannot perform actions outside its scope.</p>
+<h3 id="policy--operationsecurity">
+  
+  
+    <a href="#policy--operationsecurity" class="anchor-heading" aria-labelledby="policy--operationsecurity"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Policy ↔ OperationSecurity
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">OperationSecurityProtocol</code> (see <a href="/soothe/wiki/protocols/loop-protocols.html">loop-protocols.md</a>) normalizes concrete operations into security requests and can delegate to <code class="language-plaintext highlighter-rouge">PolicyProtocol</code> for permission matching. Policy is the decision engine; operation security is the operation-aware wrapper.</p>
+<h2 id="design-rationale">
+  
+  
+    <a href="#design-rationale" class="anchor-heading" aria-labelledby="design-rationale"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Design Rationale
+  
+  
+</h2>
+    
+<h3 id="why-structured-permissions">
+  
+  
+    <a href="#why-structured-permissions" class="anchor-heading" aria-labelledby="why-structured-permissions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why Structured Permissions?
+  
+  
+</h3>
+    
+
+<p>Flat string permissions (<code class="language-plaintext highlighter-rouge">fs_read_tmp</code>) lack granularity and are hard to match. The category/action/scope split enables:</p>
+<ul>
+  <li>Grouping by category (all <code class="language-plaintext highlighter-rouge">fs</code> permissions)</li>
+  <li>Glob scope matching (<code class="language-plaintext highlighter-rouge">/tmp/**</code> covers <code class="language-plaintext highlighter-rouge">/tmp/a/b/c</code>)</li>
+  <li>Exclusion semantics (<code class="language-plaintext highlighter-rouge">!rm</code> for deny)</li>
+  <li>Clear audit trails (which grant matched which request)</li>
+</ul>
+<h3 id="why-permission-narrowing">
+  
+  
+    <a href="#why-permission-narrowing" class="anchor-heading" aria-labelledby="why-permission-narrowing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why Permission Narrowing?
+  
+  
+</h3>
+    
+
+<p>The least-privilege principle (RFC-000 Principle 7) demands that delegated agents can’t exceed their delegator’s power. Intersection semantics guarantee this: a child’s permissions are always a subset of the parent’s. Delegation depth tracking provides audit visibility into how far down the chain a permission propagated.</p>
+<h3 id="why-profile-based">
+  
+  
+    <a href="#why-profile-based" class="anchor-heading" aria-labelledby="why-profile-based"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why Profile-Based?
+  
+  
+</h3>
+    
+
+<p>Named profiles (<code class="language-plaintext highlighter-rouge">readonly</code>, <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">privileged</code>) are far more intuitive than raw permission lists. Users select a profile by name; they don’t construct permission sets manually. Profiles are reusable across threads and deployments, making security configuration consistent and reviewable.</p>
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Deny rules override grants</strong> — a <code class="language-plaintext highlighter-rouge">deny_rules</code> entry in a profile takes precedence over any matching grant, even if the grant is broader. Always check deny rules when debugging unexpected denials.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">need_approval</code> blocks execution</strong> — if no approval mechanism is wired up, <code class="language-plaintext highlighter-rouge">need_approval</code> effectively becomes a deny. Ensure the enforcement middleware handles the approval flow.</li>
+  <li><strong>Narrowing is intersection, not union</strong> — <code class="language-plaintext highlighter-rouge">narrow(allowed)</code> returns <code class="language-plaintext highlighter-rouge">parent ∩ allowed</code>, not <code class="language-plaintext highlighter-rouge">parent ∪ allowed</code>. If <code class="language-plaintext highlighter-rouge">allowed</code> contains permissions the parent doesn’t have, those are silently dropped.</li>
+  <li><strong>Exclusion scope is per-permission</strong> — <code class="language-plaintext highlighter-rouge">shell:execute:!rm</code> only denies <code class="language-plaintext highlighter-rouge">rm</code>. You still need <code class="language-plaintext highlighter-rouge">shell:execute:*</code> (or specific allows) for other commands to work.</li>
+  <li><strong>Profiles are defined in SDK</strong> — the <code class="language-plaintext highlighter-rouge">PolicyProtocol</code> and its data models live in <code class="language-plaintext highlighter-rouge">soothe_sdk.protocols.policy</code>. The <code class="language-plaintext highlighter-rouge">soothe.protocols.policy</code> module re-exports them. Import from either; the SDK path is canonical.</li>
+</ul>
+<h2 id="specification-reference">
+  
+  
+    <a href="#specification-reference" class="anchor-heading" aria-labelledby="specification-reference"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Specification Reference
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>RFC-305</strong>: Policy Protocol Architecture</li>
+  <li><strong>RFC-102</strong>: Security Filesystem Policy</li>
+  <li><strong>RFC-000</strong>: System Conceptual Design (Principle 7: least-privilege)</li>
+</ul>
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong><a href="/soothe/wiki/backends/policy-backends.html">Policy Backends</a></strong> — Backend implementations</li>
+  <li><a href="/soothe/wiki/protocols/loop-protocols.html">Loop Protocols</a> — <code class="language-plaintext highlighter-rouge">OperationSecurityProtocol</code> wraps policy</li>
+  <li><a href="/soothe/wiki/protocols/durability.html">Durability Protocol</a> — <code class="language-plaintext highlighter-rouge">policy_profile</code> in thread metadata</li>
+  <li><a href="/soothe/wiki/protocols/execution-protocols.html">Execution Protocols</a> — enforcement during runs</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

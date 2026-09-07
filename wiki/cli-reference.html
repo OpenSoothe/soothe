@@ -1,0 +1,1243 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(1)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(2) > ul > li:nth-child(1) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(2) > ul > li:nth-child(1) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(1) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>CLI Reference | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="CLI Reference" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Complete command-line interface documentation for Soothe." />
+<meta property="og:description" content="Complete command-line interface documentation for Soothe." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/cli-reference.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/cli-reference.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="CLI Reference" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Complete command-line interface documentation for Soothe.","headline":"CLI Reference","url":"https://mirasoth.github.io/soothe/wiki/cli-reference.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/user-guides/">User Guides</a></li>
+    <li class="breadcrumb-nav-list-item"><span>CLI Reference</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="cli-reference">
+  
+  
+    <a href="#cli-reference" class="anchor-heading" aria-labelledby="cli-reference"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> CLI Reference
+  
+  
+</h1>
+    
+
+<p>Complete command-line interface documentation for Soothe.</p>
+<h2 id="command-structure">
+  
+  
+    <a href="#command-structure" class="anchor-heading" aria-labelledby="command-structure"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Command Structure
+  
+  
+</h2>
+    
+
+<p>All Soothe commands follow a consistent 2-level nested pattern:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe &lt;subcommand&gt; &lt;action&gt; [options]
+</code></pre></div></div>
+
+<p><strong>Benefits</strong>:</p>
+<ul>
+  <li>Explicit actions - no ambiguity about what will happen</li>
+  <li>Better discoverability - all actions visible in <code class="language-plaintext highlighter-rouge">--help</code></li>
+  <li>Consistent pattern across all commands</li>
+  <li>Industry standard (matches git, docker, kubectl)</li>
+</ul>
+<h2 id="main-entry-points">
+  
+  
+    <a href="#main-entry-points" class="anchor-heading" aria-labelledby="main-entry-points"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Main Entry Points
+  
+  
+</h2>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Interactive TUI mode (default)</span>
+soothe
+
+<span class="c"># Headless single-prompt mode</span>
+soothe <span class="nt">-p</span> <span class="s2">"Analyze the data"</span>
+
+<span class="c"># Use custom config</span>
+soothe <span class="nt">--config</span> custom.yml
+
+<span class="c"># Headless mode with JSONL output</span>
+soothe <span class="nt">-p</span> <span class="s2">"Analyze data"</span> <span class="nt">--format</span> jsonl
+
+<span class="c"># Set progress verbosity</span>
+soothe <span class="nt">-p</span> <span class="s2">"Complex task"</span> <span class="nt">--verbosity</span> debug
+</code></pre></div></div>
+<h2 id="thread-management">
+  
+  
+    <a href="#thread-management" class="anchor-heading" aria-labelledby="thread-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Management
+  
+  
+</h2>
+    
+
+<p>Manage conversation threads with explicit actions.</p>
+<h3 id="soothe-loop-list">
+  
+  
+    <a href="#soothe-loop-list" class="anchor-heading" aria-labelledby="soothe-loop-list"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop list
+  
+  
+</h3>
+    
+
+<p>List all conversation threads.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop list [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--status &lt;status&gt;</code> - Filter by status (active, archived)</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># List all threads</span>
+soothe loop list
+
+<span class="c"># Filter by status</span>
+soothe loop list <span class="nt">--status</span> active
+soothe loop list <span class="nt">--status</span> archived
+</code></pre></div></div>
+<h3 id="soothe-loop-show">
+  
+  
+    <a href="#soothe-loop-show" class="anchor-heading" aria-labelledby="soothe-loop-show"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop show
+  
+  
+</h3>
+    
+
+<p>Show detailed loop information including status, branches, and checkpoint anchors.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop show &lt;loop-id&gt; [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--verbose, -v</code> - Show detailed branch analysis</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe loop show loop_abc123
+soothe loop show loop_abc123 <span class="nt">--verbose</span>
+</code></pre></div></div>
+<h3 id="soothe-loop-continue">
+  
+  
+    <a href="#soothe-loop-continue" class="anchor-heading" aria-labelledby="soothe-loop-continue"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop continue
+  
+  
+</h3>
+    
+
+<p>Continue a conversation thread in the TUI.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop continue [thread-id] [options]</code></p>
+
+<p><strong>Arguments</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">thread-id</code> - Optional. Thread ID to continue. Omit to continue last active thread.</li>
+</ul>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--new</code> - Create a new thread instead of continuing</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Requirements</strong>:</p>
+<ul>
+  <li>Requires a running daemon. Start daemon with <code class="language-plaintext highlighter-rouge">soothed start</code> first.</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Start daemon first</span>
+soothed start
+
+<span class="c"># Continue specific thread</span>
+soothe loop <span class="k">continue </span>abc123
+
+<span class="c"># Start a new thread</span>
+soothe loop <span class="k">continue</span> <span class="nt">--new</span>
+
+<span class="c"># Continue last active thread</span>
+soothe loop <span class="k">continue</span>
+</code></pre></div></div>
+<h3 id="soothe-loop-archive">
+  
+  
+    <a href="#soothe-loop-archive" class="anchor-heading" aria-labelledby="soothe-loop-archive"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop archive
+  
+  
+</h3>
+    
+
+<p>Archive a thread.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop archive &lt;thread-id&gt; [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe loop archive abc123
+</code></pre></div></div>
+<h3 id="soothe-loop-delete">
+  
+  
+    <a href="#soothe-loop-delete" class="anchor-heading" aria-labelledby="soothe-loop-delete"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop delete
+  
+  
+</h3>
+    
+
+<p>Permanently delete a thread.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop delete &lt;thread-id&gt; [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--yes, -y</code> - Skip confirmation prompt</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Delete with confirmation</span>
+soothe loop delete abc123
+
+<span class="c"># Delete without confirmation</span>
+soothe loop delete abc123 <span class="nt">--yes</span>
+</code></pre></div></div>
+<h3 id="soothe-loop-stats">
+  
+  
+    <a href="#soothe-loop-stats" class="anchor-heading" aria-labelledby="soothe-loop-stats"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop stats
+  
+  
+</h3>
+    
+
+<p>Show thread execution statistics.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop stats &lt;thread-id&gt; [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe loop stats abc123
+</code></pre></div></div>
+<h3 id="soothe-loop-tag">
+  
+  
+    <a href="#soothe-loop-tag" class="anchor-heading" aria-labelledby="soothe-loop-tag"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe loop tag
+  
+  
+</h3>
+    
+
+<p>Add or remove tags from a thread.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe loop tag &lt;thread-id&gt; &lt;tags...&gt; [options]</code></p>
+
+<p><strong>Arguments</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">thread-id</code> - Thread ID</li>
+  <li><code class="language-plaintext highlighter-rouge">tags</code> - One or more tags to add/remove</li>
+</ul>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--remove</code> - Remove tags instead of adding</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Add tags</span>
+soothe loop tag abc123 research analysis
+
+<span class="c"># Remove tags</span>
+soothe loop tag abc123 research <span class="nt">--remove</span>
+</code></pre></div></div>
+<h2 id="status-commands">
+  
+  
+    <a href="#status-commands" class="anchor-heading" aria-labelledby="status-commands"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Status Commands
+  
+  
+</h2>
+    
+
+<p>Client-side status checks that query the running daemon over WebSocket and
+render a unified table. (For the fast local <code class="language-plaintext highlighter-rouge">soothed status</code> check that does
+no RPC, see <a href="#soothed-status">Daemon Management</a>.)</p>
+<h3 id="soothe-status">
+  
+  
+    <a href="#soothe-status" class="anchor-heading" aria-labelledby="soothe-status"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe status
+  
+  
+</h3>
+    
+
+<p>Show overall daemon and connection status (the default when no subcommand is
+given).</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe status [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--json</code> - Output as JSON.</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file.</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Default: unified table</span>
+soothe status
+
+<span class="c"># JSON output</span>
+soothe status <span class="nt">--json</span>
+</code></pre></div></div>
+
+<p><strong>Output</strong> (running daemon):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>                          Soothe Status
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Section   ┃ Setting           ┃ Value                       ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Connection│ WebSocket URL      │ ws://127.0.0.1:8765         │
+│           │ Soothe Home        │ /home/user/.soothe          │
+│ Daemon    │ Status             │ Running                     │
+│           │ PID                │ 12345                       │
+│           │ Started            │ 2026-07-28T08:46:22+00:00   │
+│           │ Active Threads     │ 3                           │
+│           │ Daemon Version     │ 0.7.0                       │
+│           │ Core Version        │ 0.7.0                       │
+│           │ Readiness          │ ready                       │
+└───────────┴────────────────────┴──────────────────────────────┘
+</code></pre></div></div>
+
+<p>The <strong>Started</strong> row is the daemon process start time (ISO-8601 UTC timestamp,
+captured when the daemon enters the running state). In JSON output it is the
+<code class="language-plaintext highlighter-rouge">started_at</code> field under <code class="language-plaintext highlighter-rouge">daemon</code>; it is <code class="language-plaintext highlighter-rouge">null</code> until the daemon has started
+successfully and is omitted from the table when the daemon is not live.</p>
+<h3 id="soothe-status-daemon">
+  
+  
+    <a href="#soothe-status-daemon" class="anchor-heading" aria-labelledby="soothe-status-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe status daemon
+  
+  
+</h3>
+    
+
+<p>Check daemon status from the client side. Validates that the daemon is running
+and responsive over WebSocket.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe status daemon [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--json</code> - Output as JSON.</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file.</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe status daemon
+soothe status daemon <span class="nt">--json</span>
+</code></pre></div></div>
+
+<p>JSON output includes: <code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">websocket_url</code>, <code class="language-plaintext highlighter-rouge">running</code>, <code class="language-plaintext highlighter-rouge">port_live</code>,
+<code class="language-plaintext highlighter-rouge">active_threads</code>, <code class="language-plaintext highlighter-rouge">daemon_pid</code>, <code class="language-plaintext highlighter-rouge">started_at</code>, <code class="language-plaintext highlighter-rouge">daemon_version</code>,
+<code class="language-plaintext highlighter-rouge">core_version</code>, <code class="language-plaintext highlighter-rouge">readiness_state</code>, and <code class="language-plaintext highlighter-rouge">readiness_message</code> (when present).</p>
+<h3 id="soothe-status-connection">
+  
+  
+    <a href="#soothe-status-connection" class="anchor-heading" aria-labelledby="soothe-status-connection"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe status connection
+  
+  
+</h3>
+    
+
+<p>Check client-daemon connection settings (WebSocket URL, Soothe Home). Does
+not require the daemon to be running.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe status connection [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--json</code> - Output as JSON.</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe status connection
+soothe status connection <span class="nt">--json</span>
+</code></pre></div></div>
+<h2 id="configuration-management">
+  
+  
+    <a href="#configuration-management" class="anchor-heading" aria-labelledby="configuration-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration Management
+  
+  
+</h2>
+    
+<h3 id="soothe-config-reload">
+  
+  
+    <a href="#soothe-config-reload" class="anchor-heading" aria-labelledby="soothe-config-reload"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe config reload
+  
+  
+</h3>
+    
+
+<p>Reload configuration from disk without restarting the daemon.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe config reload [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Reload default config</span>
+soothe config reload
+
+<span class="c"># Reload custom config</span>
+soothe config reload <span class="nt">--config</span> custom.yml
+</code></pre></div></div>
+<h2 id="cron-management">
+  
+  
+    <a href="#cron-management" class="anchor-heading" aria-labelledby="cron-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Cron Management
+  
+  
+</h2>
+    
+
+<p>Manage scheduled cron jobs via natural language. Requires a running daemon
+(<code class="language-plaintext highlighter-rouge">soothed start</code>). Cron jobs are daemon-side; the CLI sends commands over
+WebSocket.</p>
+<h3 id="soothe-cron-add">
+  
+  
+    <a href="#soothe-cron-add" class="anchor-heading" aria-labelledby="soothe-cron-add"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe cron add
+  
+  
+</h3>
+    
+
+<p>Add a scheduled cron job via natural language.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe cron add &lt;text&gt; [options]</code></p>
+
+<p><strong>Arguments</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">text</code> - Natural language schedule and task (e.g. “every day at 9am check
+for updates”)</li>
+</ul>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--priority, -p &lt;n&gt;</code> - Job priority (0–100)</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe cron add <span class="s2">"every weekday at 8am summarize overnight logs"</span>
+soothe cron add <span class="s2">"daily standup at 9am"</span> <span class="nt">--priority</span> 80
+</code></pre></div></div>
+<h3 id="soothe-cron-list">
+  
+  
+    <a href="#soothe-cron-list" class="anchor-heading" aria-labelledby="soothe-cron-list"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe cron list
+  
+  
+</h3>
+    
+
+<p>List all scheduled cron jobs.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe cron list</code></p>
+<h3 id="soothe-cron-show">
+  
+  
+    <a href="#soothe-cron-show" class="anchor-heading" aria-labelledby="soothe-cron-show"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe cron show
+  
+  
+</h3>
+    
+
+<p>Show details for a specific cron job.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe cron show &lt;job-id&gt;</code></p>
+<h3 id="soothe-cron-cancel">
+  
+  
+    <a href="#soothe-cron-cancel" class="anchor-heading" aria-labelledby="soothe-cron-cancel"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe cron cancel
+  
+  
+</h3>
+    
+
+<p>Cancel a scheduled cron job.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe cron cancel &lt;job-id&gt;</code></p>
+<h2 id="daemon-management">
+  
+  
+    <a href="#daemon-management" class="anchor-heading" aria-labelledby="daemon-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Management
+  
+  
+</h2>
+    
+
+<p>Manage the Soothe daemon process.</p>
+<h3 id="soothed-setup">
+  
+  
+    <a href="#soothed-setup" class="anchor-heading" aria-labelledby="soothed-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothed setup
+  
+  
+</h3>
+    
+
+<p>Scaffold <code class="language-plaintext highlighter-rouge">nano.yml</code> / <code class="language-plaintext highlighter-rouge">soothe.yml</code> / <code class="language-plaintext highlighter-rouge">daemon.yml</code> from packaged templates and configure an LLM provider (endpoint, API key, default model).</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothed setup [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config-dir &lt;path&gt;</code> - Target config directory (default: <code class="language-plaintext highlighter-rouge">$SOOTHE_HOME/config</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">--yes</code> / <code class="language-plaintext highlighter-rouge">-y</code> - Non-interactive: scaffold only; merge provider from env keys if present</li>
+  <li><code class="language-plaintext highlighter-rouge">--force</code> - Overwrite existing YAML files with packaged templates</li>
+  <li><code class="language-plaintext highlighter-rouge">--skip-provider</code> - Skip the interactive provider wizard</li>
+  <li><code class="language-plaintext highlighter-rouge">--skip-doctor</code> - Skip the post-setup provider health check</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Interactive first-time setup</span>
+soothed setup
+
+<span class="c"># CI / scripts</span>
+<span class="nb">export </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...
+soothed setup <span class="nt">--yes</span>
+</code></pre></div></div>
+<h3 id="soothed-start">
+  
+  
+    <a href="#soothed-start" class="anchor-heading" aria-labelledby="soothed-start"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothed start
+  
+  
+</h3>
+    
+
+<p>Start the Soothe daemon.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothed start [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--foreground</code> - Run in foreground (don’t daemonize)</li>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Start daemon in background</span>
+soothed start
+
+<span class="c"># Start in foreground</span>
+soothed start <span class="nt">--foreground</span>
+</code></pre></div></div>
+
+<p><strong>Output</strong> (background):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Starting daemon...
+Daemon started successfully (PID: 12345, ws://127.0.0.1:8765)
+</code></pre></div></div>
+<h3 id="soothed-stop">
+  
+  
+    <a href="#soothed-stop" class="anchor-heading" aria-labelledby="soothed-stop"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothed stop
+  
+  
+</h3>
+    
+
+<p>Stop the running Soothe daemon.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothed stop</code></p>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed stop
+</code></pre></div></div>
+<h3 id="soothed-status">
+  
+  
+    <a href="#soothed-status" class="anchor-heading" aria-labelledby="soothed-status"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothed status
+  
+  
+</h3>
+    
+
+<p>Fast local daemon status check (no daemon imports, no RPC). Reads the PID
+file and probes the WebSocket port directly.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothed status</code></p>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed status
+</code></pre></div></div>
+
+<p><strong>Output</strong> (running):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Daemon status: running
+PID: 12345
+WebSocket: ws://127.0.0.1:8765
+</code></pre></div></div>
+
+<p>When the daemon is not running it prints <code class="language-plaintext highlighter-rouge">Daemon status: stopped</code>; if the PID
+file is missing but the port is live it prints
+<code class="language-plaintext highlighter-rouge">Daemon status: running (orphan — PID file missing)</code>.</p>
+
+<blockquote>
+  <p>For a richer status view (PID, start time, active threads, versions,
+readiness), use <code class="language-plaintext highlighter-rouge">soothe status</code> — see <a href="#status-commands">Status commands</a>.</p>
+</blockquote>
+<h3 id="soothed-restart">
+  
+  
+    <a href="#soothed-restart" class="anchor-heading" aria-labelledby="soothed-restart"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothed restart
+  
+  
+</h3>
+    
+
+<p>Restart the Soothe daemon.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothed restart [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Use custom configuration file</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed restart
+</code></pre></div></div>
+<h2 id="autopilot-mode">
+  
+  
+    <a href="#autopilot-mode" class="anchor-heading" aria-labelledby="autopilot-mode"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Autopilot Mode
+  
+  
+</h2>
+    
+
+<p>Run tasks in autonomous mode without user interaction. Submit tasks to the
+daemon’s autopilot scheduler and manage goals/jobs. Requires a running daemon
+(<code class="language-plaintext highlighter-rouge">soothed start</code>). Alias: <code class="language-plaintext highlighter-rouge">soothe ap ...</code>.</p>
+<h3 id="soothe-autopilot-submit">
+  
+  
+    <a href="#soothe-autopilot-submit" class="anchor-heading" aria-labelledby="soothe-autopilot-submit"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot submit
+  
+  
+</h3>
+    
+
+<p>Submit a task for asynchronous autonomous execution.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot submit [task] [options]</code></p>
+
+<p><strong>Arguments</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">task</code> - Task description (omit to use <code class="language-plaintext highlighter-rouge">--file</code> or <code class="language-plaintext highlighter-rouge">GOAL.md</code> in cwd; <code class="language-plaintext highlighter-rouge">-</code> for stdin)</li>
+</ul>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--file, -f &lt;path&gt;</code> - Read task from a file (default: <code class="language-plaintext highlighter-rouge">GOAL.md</code> when task omitted)</li>
+  <li><code class="language-plaintext highlighter-rouge">--priority, -p &lt;n&gt;</code> - Goal priority (0–100, default: 50)</li>
+  <li><code class="language-plaintext highlighter-rouge">--workspace, -w &lt;dir&gt;</code> - Workspace directory (default: cwd)</li>
+  <li><code class="language-plaintext highlighter-rouge">--rail &lt;id&gt;</code> - LoopRail id (e.g. <code class="language-plaintext highlighter-rouge">feature-dev</code>, <code class="language-plaintext highlighter-rouge">greenfield-system</code>, <code class="language-plaintext highlighter-rouge">spike</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">--wait</code> - Wait until the goal completes (synchronous)</li>
+</ul>
+
+<p><strong>Examples</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe autopilot submit <span class="s2">"Refactor the auth module and add tests"</span>
+soothe ap submit <span class="nt">--file</span> goal.md <span class="nt">--rail</span> feature-dev
+soothe autopilot submit <span class="s2">"Run benchmarks"</span> <span class="nt">--wait</span>
+</code></pre></div></div>
+<h3 id="soothe-autopilot-status">
+  
+  
+    <a href="#soothe-autopilot-status" class="anchor-heading" aria-labelledby="soothe-autopilot-status"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot status
+  
+  
+</h3>
+    
+
+<p>Show autopilot state and job summary.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot status</code></p>
+<h3 id="soothe-autopilot-jobs">
+  
+  
+    <a href="#soothe-autopilot-jobs" class="anchor-heading" aria-labelledby="soothe-autopilot-jobs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot jobs
+  
+  
+</h3>
+    
+
+<p>List all autopilot jobs.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot jobs</code></p>
+<h3 id="soothe-autopilot-goals">
+  
+  
+    <a href="#soothe-autopilot-goals" class="anchor-heading" aria-labelledby="soothe-autopilot-goals"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot goals
+  
+  
+</h3>
+    
+
+<p>List all autopilot goals.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot goals</code></p>
+<h3 id="soothe-autopilot-job">
+  
+  
+    <a href="#soothe-autopilot-job" class="anchor-heading" aria-labelledby="soothe-autopilot-job"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot job
+  
+  
+</h3>
+    
+
+<p>Show job details and goal DAG for a specific job.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot job &lt;job-id&gt;</code></p>
+<h3 id="soothe-autopilot-goal">
+  
+  
+    <a href="#soothe-autopilot-goal" class="anchor-heading" aria-labelledby="soothe-autopilot-goal"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot goal
+  
+  
+</h3>
+    
+
+<p>Show details for a specific goal.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot goal &lt;goal-id&gt;</code></p>
+<h3 id="soothe-autopilot-stop">
+  
+  
+    <a href="#soothe-autopilot-stop" class="anchor-heading" aria-labelledby="soothe-autopilot-stop"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot stop
+  
+  
+</h3>
+    
+
+<p>Stop a goal, a job subtree, or all open goals. Specify exactly one of:
+<code class="language-plaintext highlighter-rouge">goal-id</code>, <code class="language-plaintext highlighter-rouge">--all</code>, or <code class="language-plaintext highlighter-rouge">--job &lt;id&gt;</code>.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot stop [goal-id] [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--all</code> - Stop all open goals</li>
+  <li><code class="language-plaintext highlighter-rouge">--job &lt;job-id&gt;</code> - Stop a job and its descendants</li>
+</ul>
+<h3 id="soothe-autopilot-resume">
+  
+  
+    <a href="#soothe-autopilot-resume" class="anchor-heading" aria-labelledby="soothe-autopilot-resume"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot resume
+  
+  
+</h3>
+    
+
+<p>Resume a suspended or blocked goal.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot resume &lt;goal-id&gt;</code></p>
+<h3 id="soothe-autopilot-guide">
+  
+  
+    <a href="#soothe-autopilot-guide" class="anchor-heading" aria-labelledby="soothe-autopilot-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> soothe autopilot guide
+  
+  
+</h3>
+    
+
+<p>Absorb operator guidance into ContextEngine for the next dispatch. Does not
+create or inject goals.</p>
+
+<p><strong>Usage</strong>: <code class="language-plaintext highlighter-rouge">soothe autopilot guide &lt;job-id&gt; &lt;text&gt; [options]</code></p>
+
+<p><strong>Options</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--goal, -g &lt;goal-id&gt;</code> - Optional goal under the job (default: job-wide scope)</li>
+</ul>
+<h2 id="global-options">
+  
+  
+    <a href="#global-options" class="anchor-heading" aria-labelledby="global-options"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Global Options
+  
+  
+</h2>
+    
+
+<p>These options apply to all commands:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config &lt;file&gt;</code> - Path to YAML configuration file</li>
+  <li><code class="language-plaintext highlighter-rouge">--help, -h</code> - Show help message</li>
+  <li><code class="language-plaintext highlighter-rouge">--version</code> - Show version information</li>
+</ul>
+<h2 id="common-patterns">
+  
+  
+    <a href="#common-patterns" class="anchor-heading" aria-labelledby="common-patterns"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Common Patterns
+  
+  
+</h2>
+    
+<h3 id="quick-analysis">
+  
+  
+    <a href="#quick-analysis" class="anchor-heading" aria-labelledby="quick-analysis"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Quick Analysis
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe <span class="nt">-p</span> <span class="s2">"Analyze the performance bottlenecks in this codebase"</span>
+</code></pre></div></div>
+<h3 id="autonomous-optimization">
+  
+  
+    <a href="#autonomous-optimization" class="anchor-heading" aria-labelledby="autonomous-optimization"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Autonomous Optimization
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe autopilot submit <span class="s2">"Optimize the database queries"</span>
+</code></pre></div></div>
+<h3 id="resume-previous-work">
+  
+  
+    <a href="#resume-previous-work" class="anchor-heading" aria-labelledby="resume-previous-work"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Resume Previous Work
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># List threads</span>
+soothe loop list
+
+<span class="c"># Continue specific thread</span>
+soothe loop <span class="k">continue </span>abc123
+
+<span class="c"># Continue last active thread</span>
+soothe loop <span class="k">continue</span>
+</code></pre></div></div>
+<h3 id="background-processing">
+  
+  
+    <a href="#background-processing" class="anchor-heading" aria-labelledby="background-processing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Background Processing
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Start daemon</span>
+soothed start
+
+<span class="c"># Run in detached mode</span>
+soothe <span class="nt">-p</span> <span class="s2">"Long running task"</span> &amp;
+
+<span class="c"># Check status later</span>
+soothed status
+</code></pre></div></div>
+<h3 id="thread-management-1">
+  
+  
+    <a href="#thread-management-1" class="anchor-heading" aria-labelledby="thread-management-1"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Management
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># List active threads</span>
+soothe loop list <span class="nt">--status</span> active
+
+<span class="c"># Export thread for backup</span>
+soothe loop show abc123 <span class="nt">--output</span> backup.json
+
+<span class="c"># Tag thread for organization</span>
+soothe loop tag abc123 research important
+</code></pre></div></div>
+<h2 id="migration-from-old-syntax">
+  
+  
+    <a href="#migration-from-old-syntax" class="anchor-heading" aria-labelledby="migration-from-old-syntax"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Migration from Old Syntax
+  
+  
+</h2>
+    
+
+<p>If you were using the old flat command syntax, here’s how to migrate:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Old Command</th>
+      <th>New Command</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread -l</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread &lt;id&gt;</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop show &lt;id&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread -c &lt;id&gt;</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop continue &lt;id&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread -a &lt;id&gt;</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop archive &lt;id&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread -d &lt;id&gt;</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop delete &lt;id&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe thread -e &lt;id&gt;</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe loop show &lt;id&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe config</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe config reload</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe autopilot "task"</code></td>
+      <td><code class="language-plaintext highlighter-rouge">soothe autopilot submit "task"</code></td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="related-guides">
+  
+  
+    <a href="#related-guides" class="anchor-heading" aria-labelledby="related-guides"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Guides
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="getting-started.md">Getting Started</a> - Basic installation and usage</li>
+  <li><a href="/soothe/wiki/tui-guide.html">TUI Guide</a> - Interactive terminal interface</li>
+  <li><a href="/soothe/wiki/configuration/">Configuration Guide</a> - Customize Soothe’s behavior</li>
+  <li><a href="/soothe/wiki/thread-management.html">Thread Management</a> - Working with conversation threads</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

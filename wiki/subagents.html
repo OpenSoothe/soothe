@@ -1,0 +1,690 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(4)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(2) > ul > li:nth-child(4) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(2) > ul > li:nth-child(4) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(4) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Subagents | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Subagents" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Built-in specialized subagents: usage, configuration, and architecture." />
+<meta property="og:description" content="Built-in specialized subagents: usage, configuration, and architecture." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/subagents.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/subagents.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Subagents" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Built-in specialized subagents: usage, configuration, and architecture.","headline":"Subagents","url":"https://mirasoth.github.io/soothe/wiki/subagents.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/user-guides/">User Guides</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Subagents</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="subagents">
+  
+  
+    <a href="#subagents" class="anchor-heading" aria-labelledby="subagents"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Subagents
+  
+  
+</h1>
+    
+
+<p>Subagents are specialized autonomous agents that perform multi-step, stateful workflows. They extend Soothe’s capabilities beyond simple tool invocations, enabling complex operations like structured planning, deep research, and browser automation.</p>
+
+<p>Core Soothe ships five built-in subagents: <strong>planner</strong>, <strong>deep_research</strong>, <strong>academic_research</strong>, <strong>browser_use</strong>, and <strong>veritas</strong>. Semantic skill discovery uses the daemon-shared <strong>Skillify</strong> service via the <code class="language-plaintext highlighter-rouge">search_skills</code> tool (see <code class="language-plaintext highlighter-rouge">skillify</code> in config). Additional optional delegated agents (e.g. <strong>weaver</strong>) are maintained in the external <strong><code class="language-plaintext highlighter-rouge">soothe-plugins</code></strong> package.</p>
+
+<blockquote>
+  <p>Source: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/subagents/</code></p>
+</blockquote><hr />
+<h2 id="overview">
+  
+  
+    <a href="#overview" class="anchor-heading" aria-labelledby="overview"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Overview
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Subagent</th>
+      <th>Slash Command</th>
+      <th>Best For</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Deep Research</td>
+      <td><code class="language-plaintext highlighter-rouge">/deep_research &lt;query&gt;</code></td>
+      <td>Public web research, comparisons, how-tos</td>
+    </tr>
+    <tr>
+      <td>Academic Research</td>
+      <td><code class="language-plaintext highlighter-rouge">/academic_research &lt;query&gt;</code></td>
+      <td>Papers, literature reviews, citations</td>
+    </tr>
+    <tr>
+      <td>Planner</td>
+      <td><code class="language-plaintext highlighter-rouge">/plan</code> or <code class="language-plaintext highlighter-rouge">/plan &lt;prompt&gt;</code></td>
+      <td>Plan-mode routing</td>
+    </tr>
+    <tr>
+      <td>Browser Use</td>
+      <td><code class="language-plaintext highlighter-rouge">/browser_use &lt;url&gt;</code></td>
+      <td>Browser automation and web interaction</td>
+    </tr>
+    <tr>
+      <td>Veritas</td>
+      <td>(auto-invoked)</td>
+      <td>Clarification auto-answerer in autonomous mode</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Semantic skill search is <strong>not</strong> a subagent — use the <code class="language-plaintext highlighter-rouge">search_skills</code> tool or ask the agent to search deferred skills. Configure via top-level <code class="language-plaintext highlighter-rouge">skillify:</code> (see <a href="/soothe/wiki/configuration-guide/yaml-reference.html">YAML reference</a>).</p>
+
+<p><strong>Local codebase analysis</strong> uses the main agent’s file tools (<code class="language-plaintext highlighter-rouge">read_file</code>, <code class="language-plaintext highlighter-rouge">grep</code>, <code class="language-plaintext highlighter-rouge">glob</code>) — not the research subagents.</p><hr />
+<h2 id="subagent-vs-tool">
+  
+  
+    <a href="#subagent-vs-tool" class="anchor-heading" aria-labelledby="subagent-vs-tool"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Subagent vs Tool
+  
+  
+</h2>
+    
+
+<p>The distinction is architectural. Tools are stateless, single-shot, and immediate. Subagents are stateful, multi-step, and long-running. A subagent uses the LLM to decide <em>which</em> tool to call <em>next</em>, based on what it has learned so far.</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Dimension</th>
+      <th>Tool</th>
+      <th>Subagent</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>LLM calls</td>
+      <td>Zero or one</td>
+      <td>Multiple, orchestrated</td>
+    </tr>
+    <tr>
+      <td>State</td>
+      <td>Stateless</td>
+      <td>Stateful (accumulates findings)</td>
+    </tr>
+    <tr>
+      <td>Duration</td>
+      <td>Milliseconds to seconds</td>
+      <td>Seconds to minutes</td>
+    </tr>
+    <tr>
+      <td>Output</td>
+      <td>Direct result</td>
+      <td>Structured report</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Use a subagent when the <em>path</em> to the answer is unknown and must be discovered iteratively.</p><hr />
+<h2 id="architecture-pattern">
+  
+  
+    <a href="#architecture-pattern" class="anchor-heading" aria-labelledby="architecture-pattern"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Architecture Pattern
+  
+  
+</h2>
+    
+
+<p>All subagents follow a consistent pattern (RFC-600/601): a <code class="language-plaintext highlighter-rouge">@plugin</code> + <code class="language-plaintext highlighter-rouge">@subagent</code> decorated factory function that returns a compiled LangGraph <code class="language-plaintext highlighter-rouge">StateGraph</code>. The graph has a typed state schema, LLM-driven nodes, tool nodes, conditional edges for flow control, and a structured output schema.</p>
+
+<p>The critical contract: <strong>state must include <code class="language-plaintext highlighter-rouge">messages: Annotated[list, add_messages]</code></strong> and the final node must return a single <code class="language-plaintext highlighter-rouge">AIMessage</code>. This is the <code class="language-plaintext highlighter-rouge">CompiledSubAgent</code> contract that allows subagents to be invoked by the main agent’s <code class="language-plaintext highlighter-rouge">task</code> tool.</p><hr />
+<h2 id="deep-research-deep_research">
+  
+  
+    <a href="#deep-research-deep_research" class="anchor-heading" aria-labelledby="deep-research-deep_research"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Deep Research (<code class="language-plaintext highlighter-rouge">deep_research</code>)
+  
+  
+</h2>
+    
+
+<p>Iterative <strong>public web</strong> research: plan → search → crawl top URLs → summarize → reflect → adaptive report.</p>
+
+<p><strong>Capabilities</strong>:</p>
+<ul>
+  <li>Web search (wizsearch / configured engines)</li>
+  <li>Crawl-on-discovery for top result URLs (shared <code class="language-plaintext highlighter-rouge">url_crawl</code> toolkit)</li>
+  <li>Adaptive report sections (comparison, how-to, landscape, …)</li>
+  <li>Mandatory <strong>Scope</strong> banner (web sources only; no local repo files)</li>
+</ul>
+
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/deep_research Compare vector databases <span class="k">for </span>RAG workloads
+/deep_research What are the latest LangGraph checkpoint patterns?
+</code></pre></div></div>
+
+<p><strong>Effort levels</strong> (default: <code class="language-plaintext highlighter-rouge">normal</code>):</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Level</th>
+      <th>Reflection loops</th>
+      <th>Crawl per search</th>
+      <th>Use when</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">normal</code></td>
+      <td>2</td>
+      <td>top 3 URLs</td>
+      <td>Faster lookup</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">thorough</code></td>
+      <td>4</td>
+      <td>top 5 URLs</td>
+      <td>Deeper investigation</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Set in config (<code class="language-plaintext highlighter-rouge">effort: thorough</code>) or in the task description (<code class="language-plaintext highlighter-rouge">effort: thorough</code> on the first line).</p>
+
+<p><strong>Report delivery</strong> (<code class="language-plaintext highlighter-rouge">save_reports</code>, default <code class="language-plaintext highlighter-rouge">false</code>):</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Value</th>
+      <th>Behavior</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">false</code></td>
+      <td>Full report returned inline as the subagent answer (no file write)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">true</code></td>
+      <td>Full markdown saved under <code class="language-plaintext highlighter-rouge">.soothe/agents/deep_research/</code>; answer is a short summary plus the file path</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">subagents</span><span class="pi">:</span>
+  <span class="na">deep_research</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">config</span><span class="pi">:</span>
+      <span class="na">effort</span><span class="pi">:</span> <span class="s">normal</span>       <span class="c1"># normal | thorough</span>
+      <span class="na">save_reports</span><span class="pi">:</span> <span class="no">false</span>  <span class="c1"># false: full report inline; true: save to file + short summary</span>
+</code></pre></div></div>
+
+<p>For academic papers and literature reviews, use <strong><code class="language-plaintext highlighter-rouge">academic_research</code></strong> instead.</p><hr />
+<h2 id="academic-research-academic_research">
+  
+  
+    <a href="#academic-research-academic_research" class="anchor-heading" aria-labelledby="academic-research-academic_research"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Academic Research (<code class="language-plaintext highlighter-rouge">academic_research</code>)
+  
+  
+</h2>
+    
+
+<p>Iterative <strong>academic literature</strong> research via DeepXiv search, with the same crawl-on-discovery and adaptive report pattern.</p>
+
+<p><strong>Capabilities</strong>:</p>
+<ul>
+  <li>Academic paper / preprint search (DeepXiv)</li>
+  <li>URL crawl for paper pages (shared <code class="language-plaintext highlighter-rouge">url_crawl</code> toolkit)</li>
+  <li>Academic report scenarios (literature review, paper comparison, method survey, …)</li>
+  <li>Mandatory <strong>Scope</strong> banner (academic sources only; no local repo files)</li>
+</ul>
+
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/academic_research Literature review on retrieval-augmented generation 2024-2026
+/academic_research Compare BERT vs modern embedding models <span class="k">for </span>code search
+</code></pre></div></div>
+
+<div class="table-wrapper"><table>
+  <tbody>
+    <tr>
+      <td><strong>Effort levels</strong>: same <code class="language-plaintext highlighter-rouge">normal</code></td>
+      <td><code class="language-plaintext highlighter-rouge">thorough</code> profiles as <code class="language-plaintext highlighter-rouge">deep_research</code>.</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Report delivery</strong>: same <code class="language-plaintext highlighter-rouge">save_reports</code> knob as <code class="language-plaintext highlighter-rouge">deep_research</code> (default <code class="language-plaintext highlighter-rouge">false</code> returns the report inline; set <code class="language-plaintext highlighter-rouge">true</code> to write under <code class="language-plaintext highlighter-rouge">.soothe/agents/academic_research/</code>).</p>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">subagents</span><span class="pi">:</span>
+  <span class="na">academic_research</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">config</span><span class="pi">:</span>
+      <span class="na">effort</span><span class="pi">:</span> <span class="s">normal</span>
+      <span class="na">save_reports</span><span class="pi">:</span> <span class="no">false</span>
+</code></pre></div></div>
+
+<p>Requires DeepXiv credentials (<code class="language-plaintext highlighter-rouge">DEEPXIV_API_KEY</code> / <code class="language-plaintext highlighter-rouge">DEEPXIV_TOKEN</code>) when configured.</p><hr />
+<h2 id="browser-use-browser_use">
+  
+  
+    <a href="#browser-use-browser_use" class="anchor-heading" aria-labelledby="browser-use-browser_use"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Browser Use (<code class="language-plaintext highlighter-rouge">browser_use</code>)
+  
+  
+</h2>
+    
+
+<p>Browser automation specialist for web navigation and interaction (navigate, click, fill, extract, screenshot). Ships with base <code class="language-plaintext highlighter-rouge">soothe</code> dependencies but <code class="language-plaintext highlighter-rouge">on_load</code> verifies runtime deps.</p>
+
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/browser_use Navigate to https://example.com and extract the main heading
+</code></pre></div></div>
+
+<p><strong>Configuration</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">subagents</span><span class="pi">:</span>
+  <span class="na">browser_use</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+</code></pre></div></div><hr />
+<h2 id="veritas-veritas">
+  
+  
+    <a href="#veritas-veritas" class="anchor-heading" aria-labelledby="veritas-veritas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Veritas (<code class="language-plaintext highlighter-rouge">veritas</code>)
+  
+  
+</h2>
+    
+
+<p>Intent-grounded clarification auto-answerer for autonomous mode. Not a general-purpose subagent — it’s a <strong>single structured-output LLM call</strong> invoked by <code class="language-plaintext highlighter-rouge">AutoClarificationPolicy</code> when the StrangeLoop pauses on an <code class="language-plaintext highlighter-rouge">ask_user</code> interrupt. It produces a best-effort answer from the goal’s first-principles context.</p>
+
+<p>If veritas cannot answer with sufficient confidence, it sets <code class="language-plaintext highlighter-rouge">defer=True</code> and the loop transitions the goal to <code class="language-plaintext highlighter-rouge">awaiting_clarification</code> for out-of-band human resolution. This is the autonomous-mode safety valve: the system attempts self-resolution before blocking on human input.</p><hr />
+<h2 id="planner-planner">
+  
+  
+    <a href="#planner-planner" class="anchor-heading" aria-labelledby="planner-planner"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Planner (<code class="language-plaintext highlighter-rouge">planner</code>)
+  
+  
+</h2>
+    
+
+<p>Multi-round planning subagent: iteratively refines a markdown execution plan until the model declares it complete, then returns a single structured report. The design separates plan design from execution, giving the main agent a stable blueprint to follow.</p>
+
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/plan
+/plan Create a REST API with authentication and rate limiting
+</code></pre></div></div>
+
+<p><strong>Key design decisions</strong>:</p>
+<ul>
+  <li><strong>Agentic refinement loop</strong> — planning runs multiple refinement rounds until the model declares “done.”</li>
+  <li><strong>Configurable model role</strong> — the resolver uses <code class="language-plaintext highlighter-rouge">subagents.planner.model_role</code> (default <code class="language-plaintext highlighter-rouge">think</code>) for plan-design loops.</li>
+  <li><strong>Bounded cost</strong> — explicit cap on <code class="language-plaintext highlighter-rouge">max_plan_rounds</code> prevents runaway refinement loops.</li>
+  <li>Registered as <code class="language-plaintext highlighter-rouge">name="planner"</code>; triggers include <code class="language-plaintext highlighter-rouge">planner</code>, <code class="language-plaintext highlighter-rouge">decompose</code>, <code class="language-plaintext highlighter-rouge">roadmap</code>, <code class="language-plaintext highlighter-rouge">break down</code>.</li>
+</ul><hr />
+<h2 id="model-role-resolution">
+  
+  
+    <a href="#model-role-resolution" class="anchor-heading" aria-labelledby="model-role-resolution"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Model Role Resolution
+  
+  
+</h2>
+    
+
+<p>Subagents use specific model roles, not the main agent’s model. This is a cost optimization:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Subagent</th>
+      <th>Model Role</th>
+      <th>Config</th>
+      <th>Rationale</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>planner</td>
+      <td><code class="language-plaintext highlighter-rouge">think</code> (default)</td>
+      <td><code class="language-plaintext highlighter-rouge">model</code> or <code class="language-plaintext highlighter-rouge">model_role</code></td>
+      <td>Explicit <code class="language-plaintext highlighter-rouge">provider:model</code> wins over role</td>
+    </tr>
+    <tr>
+      <td>deep_research</td>
+      <td><code class="language-plaintext highlighter-rouge">fast</code></td>
+      <td><code class="language-plaintext highlighter-rouge">model</code> or router default</td>
+      <td>Optional explicit <code class="language-plaintext highlighter-rouge">provider:model</code> override</td>
+    </tr>
+    <tr>
+      <td>academic_research</td>
+      <td><code class="language-plaintext highlighter-rouge">fast</code></td>
+      <td><code class="language-plaintext highlighter-rouge">model</code> or router default</td>
+      <td>Same resolution as deep_research</td>
+    </tr>
+    <tr>
+      <td>browser_use</td>
+      <td><code class="language-plaintext highlighter-rouge">default</code></td>
+      <td><code class="language-plaintext highlighter-rouge">subagents.browser_use.model_role</code></td>
+      <td>Browser step planning uses the default model</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Built-in subagents ignore <code class="language-plaintext highlighter-rouge">subagents.&lt;name&gt;.model_role</code> when <code class="language-plaintext highlighter-rouge">model</code> (explicit <code class="language-plaintext highlighter-rouge">provider:model</code>) is set. Use <code class="language-plaintext highlighter-rouge">model_role</code> for router-based selection; use <code class="language-plaintext highlighter-rouge">model</code> to pin a specific provider/model.</p><hr />
+<h2 id="workspace-isolation">
+  
+  
+    <a href="#workspace-isolation" class="anchor-heading" aria-labelledby="workspace-isolation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Workspace Isolation
+  
+  
+</h2>
+    
+
+<p>Subagents inherit workspace boundaries from the invoking context. The resolver provides a static workspace (daemon workspace) as a fallback, but thread-level workspace is injected at runtime via <code class="language-plaintext highlighter-rouge">state.workspace</code>. This means subagent operations are always scoped — a subagent invoked in thread A cannot access thread B’s workspace.</p><hr />
+<h2 id="optional-plugin-subagents">
+  
+  
+    <a href="#optional-plugin-subagents" class="anchor-heading" aria-labelledby="optional-plugin-subagents"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Optional Plugin Subagents
+  
+  
+</h2>
+    
+
+<p>The <code class="language-plaintext highlighter-rouge">soothe-plugins</code> package provides additional delegate subagents (e.g. <strong>weaver</strong>, <strong>claude</strong>). Install <code class="language-plaintext highlighter-rouge">soothe-plugins</code> and follow its README for configuration.</p><hr />
+<h2 id="related-guides">
+  
+  
+    <a href="#related-guides" class="anchor-heading" aria-labelledby="related-guides"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Guides
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/tui-guide.html">TUI Guide</a> — Slash commands and routing</li>
+  <li><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a> — Subagent configuration</li>
+  <li><a href="/soothe/wiki/troubleshooting/">Troubleshooting</a> — Common subagent issues</li>
+  <li><a href="/soothe/wiki/capabilities/">Capabilities Overview</a> — Tools, MCP, and plugin system</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

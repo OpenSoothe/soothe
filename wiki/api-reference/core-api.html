@@ -1,0 +1,732 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li:not(:nth-child(1)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(5) > ul > li:nth-child(1) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(5) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(5) > ul > li:nth-child(1) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(5) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(5) > ul.nav-list > li.nav-list-item:nth-child(1) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Core Framework API | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Core Framework API" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="The soothe package — configuration model, protocol abstractions, agent construction pipeline, and execution runner." />
+<meta property="og:description" content="The soothe package — configuration model, protocol abstractions, agent construction pipeline, and execution runner." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/api-reference/core-api.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/api-reference/core-api.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Core Framework API" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"The soothe package — configuration model, protocol abstractions, agent construction pipeline, and execution runner.","headline":"Core Framework API","url":"https://mirasoth.github.io/soothe/wiki/api-reference/core-api.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/api-reference/">API Reference</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Core Framework API</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="core-framework-soothe">
+  
+  
+    <a href="#core-framework-soothe" class="anchor-heading" aria-labelledby="core-framework-soothe"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Core Framework (<code class="language-plaintext highlighter-rouge">soothe</code>)
+  
+  
+</h1>
+    
+
+<p>The <code class="language-plaintext highlighter-rouge">soothe</code> package is the heart of the system — it provides the configuration model, the protocol abstractions that define every pluggable capability, the agent construction pipeline, and the execution runner. The daemon and SDK packages build on top of this foundation.</p>
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/</code></p>
+</blockquote><hr />
+<h2 id="architectural-tiers">
+  
+  
+    <a href="#architectural-tiers" class="anchor-heading" aria-labelledby="architectural-tiers"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Architectural Tiers
+  
+  
+</h2>
+    
+
+<p>Soothe separates concerns into three tiers, each with a strict contract:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Tier</th>
+      <th>Responsibility</th>
+      <th>Key Class</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>CoreAgent</strong></td>
+      <td>Pure agent execution — tools, subagents, middleware, LangGraph runtime</td>
+      <td><code class="language-plaintext highlighter-rouge">CoreAgent</code></td>
+    </tr>
+    <tr>
+      <td><strong>SootheRunner</strong></td>
+      <td>Goal-driven orchestration — planning, strange-loop iteration, thread management</td>
+      <td><code class="language-plaintext highlighter-rouge">SootheRunner</code></td>
+    </tr>
+    <tr>
+      <td><strong>SootheDaemon</strong></td>
+      <td>Daemon infrastructure — IPC, multi-transport, background scheduling</td>
+      <td><code class="language-plaintext highlighter-rouge">SootheDaemon</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>CoreAgent knows nothing about goals or the daemon. SootheRunner wraps CoreAgent with protocol orchestration. SootheDaemon (documented in <a href="/soothe/wiki/api-reference/daemon-api.html">daemon-api.md</a>) hosts SootheRunner as a long-running server.</p>
+
+<p>This separation is intentional: <code class="language-plaintext highlighter-rouge">CoreAgent</code> can be used standalone for embedding in any async Python process, while <code class="language-plaintext highlighter-rouge">SootheRunner</code> adds the agentic loop and protocol pre/post-processing.</p><hr />
+<h2 id="configuration-system">
+  
+  
+    <a href="#configuration-system" class="anchor-heading" aria-labelledby="configuration-system"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration System
+  
+  
+</h2>
+    
+
+<p><code class="language-plaintext highlighter-rouge">SootheConfig</code> (<code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/config/settings.py</code>) is a Pydantic <code class="language-plaintext highlighter-rouge">BaseSettings</code> model that holds the entire agent configuration tree. It is the single entry point for all configuration — providers, models, agent behavior, protocols, persistence, observability, security, subagents, and MCP servers.</p>
+<h3 id="key-design-decisions">
+  
+  
+    <a href="#key-design-decisions" class="anchor-heading" aria-labelledby="key-design-decisions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key Design Decisions
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong>Environment variable interpolation</strong>: Every string value supports <code class="language-plaintext highlighter-rouge">${ENV_VAR}</code> syntax, recursively expanded across the entire config tree (not just leaf values). Unresolved placeholders are left intact rather than raising.</li>
+  <li><strong>Dual config source</strong>: Values can come from a YAML file (<code class="language-plaintext highlighter-rouge">from_yaml_file</code>) or environment variables with the <code class="language-plaintext highlighter-rouge">SOOTHE_</code> prefix. Nested fields use <code class="language-plaintext highlighter-rouge">__</code> as separator — e.g., <code class="language-plaintext highlighter-rouge">SOOTHE_PROVIDERS__OPENAI__API_KEY</code>.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">.env</code> loading happens before imports</strong>: The daemon bootstrap calls <code class="language-plaintext highlighter-rouge">bootstrap_dotenv()</code> before any langchain imports so provider API keys are visible at import time.</li>
+  <li><strong>Lazy LLM factory</strong>: The <code class="language-plaintext highlighter-rouge">_llm_factory</code> is lazily initialized to avoid paying provider import costs until a model is actually requested.</li>
+</ul>
+<h3 id="model-routing">
+  
+  
+    <a href="#model-routing" class="anchor-heading" aria-labelledby="model-routing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Model Routing
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">ModelRouter</code> maps <em>roles</em> (not tasks) to <code class="language-plaintext highlighter-rouge">provider:model</code> strings: <code class="language-plaintext highlighter-rouge">default</code>, <code class="language-plaintext highlighter-rouge">planner</code>, <code class="language-plaintext highlighter-rouge">subagent</code>, <code class="language-plaintext highlighter-rouge">embedding</code>, <code class="language-plaintext highlighter-rouge">classify</code>. This indirection lets you swap the planner model without touching agent code. The <code class="language-plaintext highlighter-rouge">resolve_model(role)</code> and <code class="language-plaintext highlighter-rouge">create_chat_model(role)</code> methods bridge config to LangChain <code class="language-plaintext highlighter-rouge">BaseChatModel</code> instances.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">propagate_env()</code> method exports resolved API keys into <code class="language-plaintext highlighter-rouge">os.environ</code> so downstream libraries (openai, anthropic SDKs) pick them up without explicit passing — important when MCP servers or subagents initialize their own clients.</p>
+<h3 id="minimal-config-example">
+  
+  
+    <a href="#minimal-config-example" class="anchor-heading" aria-labelledby="minimal-config-example"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Minimal Config Example
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">providers</span><span class="pi">:</span>
+  <span class="na">openai</span><span class="pi">:</span>
+    <span class="na">type</span><span class="pi">:</span> <span class="s">openai</span>
+    <span class="na">api_key</span><span class="pi">:</span> <span class="s">${OPENAI_API_KEY}</span>
+<span class="na">models</span><span class="pi">:</span>
+  <span class="na">default</span><span class="pi">:</span> <span class="s">openai:gpt-4o</span>
+  <span class="na">planner</span><span class="pi">:</span> <span class="s">openai:gpt-4o</span>
+  <span class="na">subagent</span><span class="pi">:</span> <span class="s">openai:gpt-4o-mini</span>
+</code></pre></div></div>
+
+<blockquote>
+  <p>Full field reference: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/config/models.py</code></p>
+</blockquote><hr />
+<h2 id="protocol-definitions">
+  
+  
+    <a href="#protocol-definitions" class="anchor-heading" aria-labelledby="protocol-definitions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Protocol Definitions
+  
+  
+</h2>
+    
+
+<p>Protocols are runtime-agnostic <code class="language-plaintext highlighter-rouge">typing.Protocol</code> interfaces that define <em>what</em> a capability does, decoupled from <em>how</em> it’s implemented. The core package defines them; backends implement them; the runner resolves which implementation to use based on config.</p>
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/protocols/</code></p>
+</blockquote>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Protocol</th>
+      <th>Purpose</th>
+      <th>RFC</th>
+      <th>Backends</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MemoryProtocol</code></td>
+      <td>Remember/recall agent memories with semantic search</td>
+      <td>RFC-303</td>
+      <td><code class="language-plaintext highlighter-rouge">MemUMemory</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DurabilityProtocol</code></td>
+      <td>Thread lifecycle: create, suspend, resume, archive, list</td>
+      <td>RFC-306</td>
+      <td><code class="language-plaintext highlighter-rouge">SQLiteDurability</code>, <code class="language-plaintext highlighter-rouge">PostgreSQLDurability</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PlannerProtocol</code></td>
+      <td>Goal decomposition into steps + completion assessment</td>
+      <td>RFC-304</td>
+      <td><code class="language-plaintext highlighter-rouge">LLMPlanner</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PolicyProtocol</code></td>
+      <td>Permission enforcement + child-agent permission narrowing</td>
+      <td>RFC-305</td>
+      <td><code class="language-plaintext highlighter-rouge">ConfigDrivenPolicy</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">VectorStoreProtocol</code></td>
+      <td>Vector add/search/delete with metadata filtering</td>
+      <td>RFC-303</td>
+      <td><code class="language-plaintext highlighter-rouge">PGVectorStore</code>, <code class="language-plaintext highlighter-rouge">SQLiteVecStore</code>, <code class="language-plaintext highlighter-rouge">WeaviateVectorStore</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AsyncPersistStore</code></td>
+      <td>Async key-value persistence (bytes values)</td>
+      <td>RFC-302</td>
+      <td><code class="language-plaintext highlighter-rouge">SQLitePersistStore</code>, <code class="language-plaintext highlighter-rouge">PostgreSQLPersistStore</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">IdentityProtocol</code></td>
+      <td>Token issuance, auth, external identity mapping</td>
+      <td>RFC-307</td>
+      <td>(re-exported from SDK)</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="why-protocols-not-abcs">
+  
+  
+    <a href="#why-protocols-not-abcs" class="anchor-heading" aria-labelledby="why-protocols-not-abcs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why Protocols, Not ABCs?
+  
+  
+</h3>
+    
+
+<p>The protocols use <code class="language-plaintext highlighter-rouge">typing.Protocol</code> (structural subtyping) rather than <code class="language-plaintext highlighter-rouge">abc.ABC</code> (nominal subtyping). This means a third-party class can satisfy a protocol <em>without</em> importing it — critical for plugin authors who want zero hard dependencies on the core package. The SDK re-exports the same protocol definitions so plugin authors can type-check against them without pulling in daemon code.</p>
+<h3 id="memory-api">
+  
+  
+    <a href="#memory-api" class="anchor-heading" aria-labelledby="memory-api"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Memory API
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">MemoryProtocol</code> provides four operations: <code class="language-plaintext highlighter-rouge">remember(item)</code> stores a <code class="language-plaintext highlighter-rouge">MemoryItem</code> and returns its ID; <code class="language-plaintext highlighter-rouge">recall(query, limit)</code> retrieves items by semantic relevance; <code class="language-plaintext highlighter-rouge">recall_by_tags(tags, limit)</code> retrieves items matching all specified tags (AND logic); <code class="language-plaintext highlighter-rouge">forget(item_id)</code> removes an item. Each <code class="language-plaintext highlighter-rouge">MemoryItem</code> carries <code class="language-plaintext highlighter-rouge">content</code>, <code class="language-plaintext highlighter-rouge">tags</code>, <code class="language-plaintext highlighter-rouge">importance</code> (0.0–1.0), and arbitrary <code class="language-plaintext highlighter-rouge">metadata</code>. Memory is explicitly populated — there is no auto-memorization.</p><hr />
+<h2 id="agent-construction">
+  
+  
+    <a href="#agent-construction" class="anchor-heading" aria-labelledby="agent-construction"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Agent Construction
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/coreagent/</code></p>
+</blockquote>
+<h3 id="coreagent">
+  
+  
+    <a href="#coreagent" class="anchor-heading" aria-labelledby="coreagent"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> CoreAgent
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">CoreAgent</code> is a thin typed wrapper around LangGraph’s <code class="language-plaintext highlighter-rouge">CompiledStateGraph</code>. It exposes protocol instances (memory, planner, policy) as typed properties and provides the <code class="language-plaintext highlighter-rouge">astream()</code> execution interface. It deliberately contains <strong>no goal infrastructure</strong> — that’s SootheRunner’s job.</p>
+
+<p>A key design detail: <code class="language-plaintext highlighter-rouge">CoreAgent</code> can hold a <em>twin</em> execute graph (<code class="language-plaintext highlighter-rouge">execute_graph</code>) compiled without a checkpointer, used for ephemeral execute-phase streaming (IG-477). This avoids checkpoint pollution from the StrangeLoop’s ACT phase.</p>
+<h3 id="agentbuilder--create_soothe_agent">
+  
+  
+    <a href="#agentbuilder--create_soothe_agent" class="anchor-heading" aria-labelledby="agentbuilder--create_soothe_agent"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> AgentBuilder &amp; create_soothe_agent()
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">AgentBuilder</code> encapsulates the complex construction pipeline: protocol resolution, middleware stack assembly, backend initialization, plugin loading, and MCP registry integration. The convenience function <code class="language-plaintext highlighter-rouge">create_soothe_agent()</code> is the standard entry point — it creates an <code class="language-plaintext highlighter-rouge">AgentBuilder</code>, resolves all protocols from config, and builds the agent.</p>
+
+<p>The middleware stack (assembled in <code class="language-plaintext highlighter-rouge">build_soothe_middleware_stack</code>) is ordered:</p>
+
+<ol>
+  <li><strong>PolicyMiddleware</strong> — safety enforcement (runs first, can block)</li>
+  <li><strong>SystemPromptMiddleware</strong> — dynamic prompt injection based on classification</li>
+  <li><strong>WorkspaceContextMiddleware</strong> — binds thread to a workspace path</li>
+  <li><strong>SubagentContextMiddleware</strong> — injects context briefing for delegation</li>
+</ol>
+<h3 id="minimal-agent-creation">
+  
+  
+    <a href="#minimal-agent-creation" class="anchor-heading" aria-labelledby="minimal-agent-creation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Minimal Agent Creation
+  
+  
+</h3>
+    
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">soothe.core.agent</span> <span class="kn">import</span> <span class="n">create_soothe_agent</span>
+<span class="kn">from</span> <span class="nn">soothe.config</span> <span class="kn">import</span> <span class="n">SootheConfig</span>
+
+<span class="n">agent</span> <span class="o">=</span> <span class="n">create_soothe_agent</span><span class="p">(</span><span class="n">SootheConfig</span><span class="p">.</span><span class="n">from_yaml_file</span><span class="p">(</span><span class="s">"nano.yml"</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>For custom protocol injection (e.g., a test-memory backend), use <code class="language-plaintext highlighter-rouge">AgentBuilder</code> directly with <code class="language-plaintext highlighter-rouge">.with_memory()</code>, <code class="language-plaintext highlighter-rouge">.with_policy()</code>, etc.</p><hr />
+<h2 id="agent-execution-sootherunner">
+  
+  
+    <a href="#agent-execution-sootherunner" class="anchor-heading" aria-labelledby="agent-execution-sootherunner"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Agent Execution (SootheRunner)
+  
+  
+</h2>
+    
+
+<blockquote>
+  <p><strong>Source</strong>: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/</code></p>
+</blockquote>
+<h3 id="sootherunner">
+  
+  
+    <a href="#sootherunner" class="anchor-heading" aria-labelledby="sootherunner"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> SootheRunner
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">SootheRunner</code> wraps <code class="language-plaintext highlighter-rouge">create_soothe_agent()</code> with protocol pre/post-processing and the agentic loop. It is decomposed into four mixins:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Mixin</th>
+      <th>Phase</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PhasesMixin</code></td>
+      <td>Pre-stream: thread binding, policy setup, memory recall, plan bootstrap</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">StrangeLoopMixin</code></td>
+      <td>The Reason→Act iterative loop (RFC-201, RFC-220)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">AutopilotWorkerMixin</code></td>
+      <td>Single-goal worker entry for daemon-dispatched goals (RFC-222)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CheckpointMixin</code></td>
+      <td>Progressive checkpointing, artifacts, reports (RFC-220)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>The runner’s <code class="language-plaintext highlighter-rouge">astream()</code> method yields <code class="language-plaintext highlighter-rouge">StreamChunk</code> objects — a normalized <code class="language-plaintext highlighter-rouge">(namespace, mode, data)</code> tuple that extends the raw LangGraph stream with <code class="language-plaintext highlighter-rouge">soothe.*</code> custom events for protocol observability. Namespaces include <code class="language-plaintext highlighter-rouge">assistant</code> (model output), <code class="language-plaintext highlighter-rouge">tool</code> (tool execution), and <code class="language-plaintext highlighter-rouge">soothe</code> (protocol-level events like memory recall or policy checks).</p>
+<h3 id="gotcha-thread-id-vs-loop-id">
+  
+  
+    <a href="#gotcha-thread-id-vs-loop-id" class="anchor-heading" aria-labelledby="gotcha-thread-id-vs-loop-id"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotcha: Thread ID vs Loop ID
+  
+  
+</h3>
+    
+
+<p>There are two distinct identifiers that are easy to confuse:</p>
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">thread_id</code></strong> — the LangGraph/durability checkpoint key (<code class="language-plaintext highlighter-rouge">configurable.thread_id</code>). This is what persists conversation state.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">loop_id</code></strong> — the StrangeLoop subscription scope for event streaming. A loop <em>contains</em> one or more threads.</li>
+</ul>
+
+<p>The daemon’s command handlers receive <code class="language-plaintext highlighter-rouge">loop_id</code> on the wire but internally bind it to a <code class="language-plaintext highlighter-rouge">checkpoint_thread_id</code> before executing. See <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/server/commands.py</code> for the binding logic.</p>
+<h3 id="gotcha-autopilot-is-daemon-owned">
+  
+  
+    <a href="#gotcha-autopilot-is-daemon-owned" class="anchor-heading" aria-labelledby="gotcha-autopilot-is-daemon-owned"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotcha: Autopilot is Daemon-Owned
+  
+  
+</h3>
+    
+
+<p>The legacy in-process autonomous multi-goal loop has been removed (RFC-222 Phase D). Autopilot goals are dispatched <em>by the daemon</em> and arrive through <code class="language-plaintext highlighter-rouge">LoopRunRequest.autopilot_job</code>, routing to the single-goal worker path. You cannot run autopilot from a bare <code class="language-plaintext highlighter-rouge">SootheRunner</code> — it requires the daemon’s goal dispatch infrastructure.</p><hr />
+<h2 id="backend-implementations">
+  
+  
+    <a href="#backend-implementations" class="anchor-heading" aria-labelledby="backend-implementations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backend Implementations
+  
+  
+</h2>
+    
+
+<p>Backends are concrete protocol implementations. They live in <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/backends/</code> and are resolved by <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/runner/resolver/</code>.</p>
+<h3 id="resolution-pattern">
+  
+  
+    <a href="#resolution-pattern" class="anchor-heading" aria-labelledby="resolution-pattern"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Resolution Pattern
+  
+  
+</h3>
+    
+
+<p>The resolver functions (<code class="language-plaintext highlighter-rouge">resolve_memory</code>, <code class="language-plaintext highlighter-rouge">resolve_durability</code>, <code class="language-plaintext highlighter-rouge">resolve_planner</code>, <code class="language-plaintext highlighter-rouge">resolve_policy</code>, <code class="language-plaintext highlighter-rouge">resolve_checkpointer</code>) read config flags and instantiate the appropriate backend. Each is a simple factory — if the protocol is disabled in config, it returns <code class="language-plaintext highlighter-rouge">None</code>. This means a missing backend dependency (e.g., <code class="language-plaintext highlighter-rouge">psycopg</code> not installed) only matters if you actually enable that backend.</p>
+<h3 id="backend-selection-guide">
+  
+  
+    <a href="#backend-selection-guide" class="anchor-heading" aria-labelledby="backend-selection-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backend Selection Guide
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Need</th>
+      <th>Backend</th>
+      <th>Config Flag</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Local dev / single user</td>
+      <td><code class="language-plaintext highlighter-rouge">SQLiteDurability</code> + <code class="language-plaintext highlighter-rouge">SQLitePersistStore</code></td>
+      <td><code class="language-plaintext highlighter-rouge">backend: sqlite</code></td>
+    </tr>
+    <tr>
+      <td>Production / multi-agent</td>
+      <td><code class="language-plaintext highlighter-rouge">PostgreSQLDurability</code> + <code class="language-plaintext highlighter-rouge">PostgreSQLPersistStore</code></td>
+      <td><code class="language-plaintext highlighter-rouge">backend: postgresql</code></td>
+    </tr>
+    <tr>
+      <td>Semantic memory</td>
+      <td><code class="language-plaintext highlighter-rouge">MemUMemory</code></td>
+      <td><code class="language-plaintext highlighter-rouge">memory.enabled: true</code></td>
+    </tr>
+    <tr>
+      <td>Vector search (local)</td>
+      <td><code class="language-plaintext highlighter-rouge">SQLiteVecStore</code></td>
+      <td><code class="language-plaintext highlighter-rouge">vector_store.default: sqlite_vec</code></td>
+    </tr>
+    <tr>
+      <td>Vector search (production)</td>
+      <td><code class="language-plaintext highlighter-rouge">PGVectorStore</code></td>
+      <td><code class="language-plaintext highlighter-rouge">vector_store.default: pgvector</code></td>
+    </tr>
+    <tr>
+      <td>Policy enforcement</td>
+      <td><code class="language-plaintext highlighter-rouge">ConfigDrivenPolicy</code></td>
+      <td><code class="language-plaintext highlighter-rouge">policy.enabled: true</code></td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="policy-profiles">
+  
+  
+    <a href="#policy-profiles" class="anchor-heading" aria-labelledby="policy-profiles"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Policy Profiles
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">ConfigDrivenPolicy</code> supports named profiles (<code class="language-plaintext highlighter-rouge">readonly</code>, <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">privileged</code>) with permission grants and <code class="language-plaintext highlighter-rouge">deny_by_default</code> toggles. The <code class="language-plaintext highlighter-rouge">narrow_for_child()</code> method is critical for subagent security — it derives a restricted permission set for a delegated subagent, ensuring a child agent never has <em>more</em> permissions than its parent.</p><hr />
+<h2 id="see-also">
+  
+  
+    <a href="#see-also" class="anchor-heading" aria-labelledby="see-also"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> See Also
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/api-reference/daemon-api.html">Daemon API</a> — SootheDaemon server infrastructure</li>
+  <li><a href="/soothe/wiki/api-reference/sdk-api.html">SDK API</a> — Client and plugin development</li>
+  <li><a href="/soothe/wiki/protocols/">Protocols Layer</a> — Protocol specifications</li>
+  <li><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a> — Full config reference</li>
+  <li><a href="../../specs/RFC-000-system-conceptual-design.md">RFC-000 System Design</a> — Architecture RFCs</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

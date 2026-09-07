@@ -1,0 +1,1038 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(2)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(8) > ul > li:nth-child(2) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(8) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(8) > ul > li:nth-child(2) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(8) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(8) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Environment Variables | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Environment Variables" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="How Soothe consumes environment variables — the distinct mechanisms, what works today, and secrets management." />
+<meta property="og:description" content="How Soothe consumes environment variables — the distinct mechanisms, what works today, and secrets management." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/configuration-guide/environment-variables.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/configuration-guide/environment-variables.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Environment Variables" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"How Soothe consumes environment variables — the distinct mechanisms, what works today, and secrets management.","headline":"Environment Variables","url":"https://mirasoth.github.io/soothe/wiki/configuration-guide/environment-variables.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Environment Variables</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="environment-variables">
+  
+  
+    <a href="#environment-variables" class="anchor-heading" aria-labelledby="environment-variables"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Environment Variables
+  
+  
+</h1>
+    
+
+<p>How Soothe consumes environment variables — the distinct mechanisms, what actually works today, and how to manage secrets safely.</p>
+<h2 id="five-mechanisms">
+  
+  
+    <a href="#five-mechanisms" class="anchor-heading" aria-labelledby="five-mechanisms"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Five Mechanisms
+  
+  
+</h2>
+    
+
+<p>Soothe reads the environment in several ways. Mixing them up is the most common config mistake:</p>
+
+<ol>
+  <li>
+    <p><strong>Zero-config provider keys</strong> — with no YAML and empty <code class="language-plaintext highlighter-rouge">providers</code>, Soothe synthesizes a provider from <code class="language-plaintext highlighter-rouge">OPENAI_API_KEY</code> / <code class="language-plaintext highlighter-rouge">OPENAI_BASE_URL</code> or <code class="language-plaintext highlighter-rouge">ANTHROPIC_API_KEY</code> (see <code class="language-plaintext highlighter-rouge">SootheConfig._bootstrap_providers_from_env</code>).</p>
+  </li>
+  <li>
+    <p><strong>Top-level <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> overrides</strong> — Pydantic <code class="language-plaintext highlighter-rouge">BaseSettings</code> with <code class="language-plaintext highlighter-rouge">env_prefix="SOOTHE_"</code> maps env vars onto <strong>top-level</strong> <code class="language-plaintext highlighter-rouge">SootheConfig</code> fields (<code class="language-plaintext highlighter-rouge">debug</code>, <code class="language-plaintext highlighter-rouge">active_router_profile</code>, etc.).</p>
+  </li>
+  <li>
+    <p><strong>JSON <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> blobs</strong> — list and nested-object fields (<code class="language-plaintext highlighter-rouge">providers</code>, <code class="language-plaintext highlighter-rouge">router_profiles</code>, <code class="language-plaintext highlighter-rouge">persistence</code>, <code class="language-plaintext highlighter-rouge">vector_stores</code>, …) must be passed as <strong>JSON strings</strong>. Dotted path env vars like <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_DEFAULT</code> or <code class="language-plaintext highlighter-rouge">SOOTHE_PERSISTENCE_POSTGRES_BASE_DSN</code> are <strong>not</strong> supported on <code class="language-plaintext highlighter-rouge">SootheConfig</code> (no <code class="language-plaintext highlighter-rouge">env_nested_delimiter</code>).</p>
+  </li>
+  <li>
+    <p><strong><code class="language-plaintext highlighter-rouge">${VAR}</code> interpolation in YAML</strong> — before Pydantic validation, <code class="language-plaintext highlighter-rouge">_expand_env_in_config</code> replaces <code class="language-plaintext highlighter-rouge">${VAR}</code> tokens in YAML strings. Use this for secrets inside structured config files.</p>
+  </li>
+  <li>
+    <p><strong><code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_*</code> (daemon server)</strong> — separate model (<code class="language-plaintext highlighter-rouge">SootheDaemonConfig</code>) with prefix <code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_</code> and nested delimiter <code class="language-plaintext highlighter-rouge">__</code> (e.g. <code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST</code>).</p>
+  </li>
+</ol>
+
+<p>They fail differently: an unset top-level <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> var falls back to YAML/defaults; an unresolved <code class="language-plaintext highlighter-rouge">${VAR}</code> in YAML stays literal and usually fails validation; a malformed JSON env var fails at startup with a Pydantic error.</p>
+<h2 id="zero-config-no-yaml">
+  
+  
+    <a href="#zero-config-no-yaml" class="anchor-heading" aria-labelledby="zero-config-no-yaml"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Zero-Config (No YAML)
+  
+  
+</h2>
+    
+
+<p>Minimum to run the agent core or daemon:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...
+soothed start <span class="nt">--foreground</span>   <span class="c"># or Docker — see [Quick Start](/soothe/wiki/getting-started/Quick-Start.html)</span>
+soothe <span class="s2">"hello"</span>
+</code></pre></div></div>
+
+<p>Bootstrap creates provider <code class="language-plaintext highlighter-rouge">openai</code> and applies the built-in <strong>default</strong> router profile (<code class="language-plaintext highlighter-rouge">openai:gpt-4o-mini</code>). Vector stores default to embedded <code class="language-plaintext highlighter-rouge">sqlite_vec</code>.</p>
+
+<p><strong>OpenAI-compatible endpoints</strong> (Qwen, OpenRouter, local vLLM):</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...
+<span class="nb">export </span><span class="nv">OPENAI_BASE_URL</span><span class="o">=</span><span class="s2">"https://your-provider-endpoint/v1"</span>
+<span class="nb">export </span><span class="nv">SOOTHE_ROUTER_PROFILES</span><span class="o">=</span><span class="s1">'[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_EMBEDDING_PROFILE</span><span class="o">=</span><span class="s1">'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'</span>
+</code></pre></div></div>
+
+<p>Provider bootstrap names the provider <code class="language-plaintext highlighter-rouge">openai</code>; router targets must use the <code class="language-plaintext highlighter-rouge">openai:</code> prefix (e.g. <code class="language-plaintext highlighter-rouge">openai:qwen3.7-plus</code>), unless you define a named provider via <code class="language-plaintext highlighter-rouge">SOOTHE_PROVIDERS</code> JSON.</p>
+
+<p><strong>Anthropic:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>sk-ant-...
+</code></pre></div></div>
+
+<p>To change the default model without YAML, set <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_PROFILES</code> (JSON) — see <a href="#router-overrides-env-only">Router overrides</a> below. <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_DEFAULT</code> does <strong>not</strong> work.</p>
+<h2 id="top-level-soothe_-agent-config">
+  
+  
+    <a href="#top-level-soothe_-agent-config" class="anchor-heading" aria-labelledby="top-level-soothe_-agent-config"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Top-Level <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> (Agent Config)
+  
+  
+</h2>
+    
+
+<p>These map directly and work as documented:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>YAML path</th>
+      <th>Env var</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">debug</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DEBUG</code></td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">active_router_profile</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_ACTIVE_ROUTER_PROFILE</code></td>
+      <td>Also read inside <code class="language-plaintext highlighter-rouge">_apply_active_router_profile</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tui_debug</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_TUI_DEBUG</code></td>
+      <td> </td>
+    </tr>
+  </tbody>
+</table></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_DEBUG</span><span class="o">=</span><span class="nb">true
+export </span><span class="nv">SOOTHE_ACTIVE_ROUTER_PROFILE</span><span class="o">=</span>production   <span class="c"># profile must exist in YAML or SOOTHE_ROUTER_PROFILES</span>
+</code></pre></div></div>
+
+<p><strong>Does not work via flat env vars:</strong> nested paths such as <code class="language-plaintext highlighter-rouge">router.default</code>, <code class="language-plaintext highlighter-rouge">agent.loop.max_iterations</code>, <code class="language-plaintext highlighter-rouge">persistence.postgres_base_dsn</code>, <code class="language-plaintext highlighter-rouge">observability.langfuse.enabled</code>. Use JSON blobs, YAML, or CLI flags instead.</p>
+<h2 id="json-soothe_-nested--list-fields">
+  
+  
+    <a href="#json-soothe_-nested--list-fields" class="anchor-heading" aria-labelledby="json-soothe_-nested--list-fields"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> JSON <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> (Nested / List Fields)
+  
+  
+</h2>
+    
+
+<p>Pydantic Settings accepts JSON for complex fields. Prefix is still <code class="language-plaintext highlighter-rouge">SOOTHE_</code>.</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Env var</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">providers</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_PROVIDERS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">'[{"name":"openai","api_key":"sk-..."}]'</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">router_profiles</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_PROFILES</code></td>
+      <td>See <a href="#router-overrides-env-only">Router overrides</a></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">embedding_profile</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_EMBEDDING_PROFILE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">persistence</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_PERSISTENCE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">'{"default_backend":"postgresql","postgres_base_dsn":"postgresql://..."}'</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">vector_stores</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_VECTOR_STORES</code></td>
+      <td><code class="language-plaintext highlighter-rouge">'[{"name":"pgvector","provider_type":"pgvector"}]'</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">vector_store_router</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_VECTOR_STORE_ROUTER</code></td>
+      <td><code class="language-plaintext highlighter-rouge">'{"default":"pgvector:soothe_default"}'</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_PERSISTENCE</span><span class="o">=</span><span class="s1">'{"default_backend":"postgresql","postgres_base_dsn":"postgresql://postgres:postgres@localhost:5432"}'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_VECTOR_STORES</span><span class="o">=</span><span class="s1">'[{"name":"pgvector","provider_type":"pgvector"}]'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_VECTOR_STORE_ROUTER</span><span class="o">=</span><span class="s1">'{"default":"pgvector:soothe_default"}'</span>
+</code></pre></div></div>
+
+<p>Quote carefully in shell and Compose — single quotes around the JSON are safest.</p>
+<h3 id="router-overrides-env-only">
+  
+  
+    <a href="#router-overrides-env-only" class="anchor-heading" aria-labelledby="router-overrides-env-only"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Router overrides (env-only)
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">router</code> on <code class="language-plaintext highlighter-rouge">SootheConfig</code> is <strong><code class="language-plaintext highlighter-rouge">init=False</code></strong>: it is computed from <code class="language-plaintext highlighter-rouge">router_profiles</code> + <code class="language-plaintext highlighter-rouge">active_router_profile</code>. Individual <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_*</code> role vars are not applied.</p>
+
+<p><strong>Replace the profile list (no YAML):</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># OpenAI-compatible via OPENAI_* bootstrap (provider name "openai")</span>
+<span class="nb">export </span><span class="nv">SOOTHE_ROUTER_PROFILES</span><span class="o">=</span><span class="s1">'[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_EMBEDDING_PROFILE</span><span class="o">=</span><span class="s1">'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'</span>
+</code></pre></div></div>
+
+<p>Generic OpenAI example:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_ROUTER_PROFILES</span><span class="o">=</span><span class="s1">'[{"name":"default","router":{"default":"openai:gpt-4o","think":"openai:gpt-4o"}}]'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_EMBEDDING_PROFILE</span><span class="o">=</span><span class="s1">'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'</span>
+</code></pre></div></div>
+
+<p><strong>Switch a named profile</strong> (profiles defined in YAML or via <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_PROFILES</code>):</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_ACTIVE_ROUTER_PROFILE</span><span class="o">=</span>production
+</code></pre></div></div>
+<h2 id="soothe_daemon_-daemon-server">
+  
+  
+    <a href="#soothe_daemon_-daemon-server" class="anchor-heading" aria-labelledby="soothe_daemon_-daemon-server"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> <code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_*</code> (Daemon Server)
+  
+  
+</h2>
+    
+
+<p>Daemon transport, concurrency, and paths use prefix <code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_</code> and nested delimiter <code class="language-plaintext highlighter-rouge">__</code>:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>YAML path (<code class="language-plaintext highlighter-rouge">daemon.yml</code>)</th>
+      <th>Env var</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">transports.websocket.host</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">thread_pool.request_timeout_seconds</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_THREAD_POOL__REQUEST_TIMEOUT_SECONDS</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">worker_pool.request_timeout_seconds</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_WORKER_POOL__REQUEST_TIMEOUT_SECONDS</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">soothe_config_path</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_SOOTHE_CONFIG_PATH</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory_profiling.enabled</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Agent config (<code class="language-plaintext highlighter-rouge">nano.yml</code>) nested autopilot deadline:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>YAML path</th>
+      <th>Env var</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.goal_deadline_seconds</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_AGENT__AUTOPILOT__GOAL_DEADLINE_SECONDS</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>The production Docker image sets <code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0</code>. WebSocket is the sole transport; HTTP REST was removed in 0.6.x.</p>
+
+<p>If <code class="language-plaintext highlighter-rouge">soothe_config_path</code> points to a missing file, the daemon loads agent defaults (zero-config bootstrap). Do <strong>not</strong> mount a config file when running env-only.</p>
+<h2 id="var-interpolation-yaml">
+  
+  
+    <a href="#var-interpolation-yaml" class="anchor-heading" aria-labelledby="var-interpolation-yaml"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> <code class="language-plaintext highlighter-rouge">${VAR}</code> Interpolation (YAML)
+  
+  
+</h2>
+    
+
+<p>Write placeholders in YAML; Soothe resolves them at load time:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">providers</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">openai</span>
+    <span class="na">api_key</span><span class="pi">:</span> <span class="s">${OPENAI_API_KEY}</span>
+<span class="na">persistence</span><span class="pi">:</span>
+  <span class="na">postgres_base_dsn</span><span class="pi">:</span> <span class="s">${POSTGRES_DSN}</span>
+</code></pre></div></div>
+
+<p>Behaviors (<code class="language-plaintext highlighter-rouge">config/env.py</code>):</p>
+
+<ul>
+  <li><strong>Works anywhere in a string:</strong> <code class="language-plaintext highlighter-rouge">${HOME}/workspaces</code>, <code class="language-plaintext highlighter-rouge">${VAR1}/${VAR2}</code>.</li>
+  <li><strong>Unresolved vars stay literal</strong> — usually fails validation or skips the provider.</li>
+  <li><strong>Pattern:</strong> <code class="language-plaintext highlighter-rouge">\$\{(\w+)\}</code> only (word characters; no <code class="language-plaintext highlighter-rouge">$VAR</code> POSIX form).</li>
+</ul>
+
+<p>Production Compose often uses <code class="language-plaintext highlighter-rouge">${SOOTHE_POSTGRES_BASE_DSN}</code> inside mounted YAML — that is interpolation into the file, not a <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> field override.</p>
+<h2 id="provider--tool-keys-no-prefix">
+  
+  
+    <a href="#provider--tool-keys-no-prefix" class="anchor-heading" aria-labelledby="provider--tool-keys-no-prefix"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Provider &amp; Tool Keys (No Prefix)
+  
+  
+</h2>
+    
+
+<p>Not <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> — used by zero-config bootstrap, <code class="language-plaintext highlighter-rouge">${VAR}</code> in YAML, or LangChain directly:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Used for</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OPENAI_API_KEY</code>, <code class="language-plaintext highlighter-rouge">OPENAI_BASE_URL</code></td>
+      <td>OpenAI / OpenAI-compatible APIs (Qwen/DashScope, OpenRouter, etc.)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ANTHROPIC_API_KEY</code></td>
+      <td>Anthropic</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OPENROUTER_API_KEY</code></td>
+      <td>OpenRouter</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">TAVILY_API_KEY</code>, <code class="language-plaintext highlighter-rouge">SERPER_API_KEY</code>, <code class="language-plaintext highlighter-rouge">JINA_API_KEY</code></td>
+      <td>Web search</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DEEPXIV_API_KEY</code>, <code class="language-plaintext highlighter-rouge">DEEPXIV_TOKEN</code></td>
+      <td>Academic search</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GITHUB_TOKEN</code>, <code class="language-plaintext highlighter-rouge">GITHUB_MCP_TOKEN</code>, <code class="language-plaintext highlighter-rouge">LINEAR_MCP_TOKEN</code></td>
+      <td>MCP auth</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LANGFUSE_PUBLIC_KEY</code>, <code class="language-plaintext highlighter-rouge">LANGFUSE_SECRET_KEY</code>, <code class="language-plaintext highlighter-rouge">LANGFUSE_HOST</code></td>
+      <td>Tracing</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POSTGRES_DSN</code>, <code class="language-plaintext highlighter-rouge">POSTGRES_VECTOR_DSN</code>, …</td>
+      <td>Storage (via <code class="language-plaintext highlighter-rouge">${...}</code> in YAML)</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="path--runtime-vars">
+  
+  
+    <a href="#path--runtime-vars" class="anchor-heading" aria-labelledby="path--runtime-vars"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Path &amp; Runtime Vars
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_HOME</code></td>
+      <td>Base dir (default <code class="language-plaintext highlighter-rouge">~/.soothe</code>; <code class="language-plaintext highlighter-rouge">/var/lib/soothe</code> in Docker)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_DATA_DIR</code></td>
+      <td>Data dir for databases, job artifacts, history (default: <code class="language-plaintext highlighter-rouge">$SOOTHE_HOME/data</code>; <code class="language-plaintext highlighter-rouge">/var/lib/soothe/data</code> in Docker)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_CONFIG_FILE</code></td>
+      <td>Override agent config path (CLI <code class="language-plaintext highlighter-rouge">--config</code> wins first)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_JWT_KEY</code></td>
+      <td>Identity JWT signing key</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_WORKSPACE</code></td>
+      <td>Daemon fallback workspace (<code class="language-plaintext highlighter-rouge">resolve_daemon_workspace</code>); also used in tests</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="cli-env-vars-soothe_cli_">
+  
+  
+    <a href="#cli-env-vars-soothe_cli_" class="anchor-heading" aria-labelledby="cli-env-vars-soothe_cli_"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> CLI env vars (<code class="language-plaintext highlighter-rouge">SOOTHE_CLI_*</code>)
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_CLI_OMIT_WORKSPACE</code></td>
+      <td>Optional <code class="language-plaintext highlighter-rouge">1</code>/<code class="language-plaintext highlighter-rouge">true</code>: omit <code class="language-plaintext highlighter-rouge">workspace</code> on <code class="language-plaintext highlighter-rouge">loop_new</code> (default: send <code class="language-plaintext highlighter-rouge">cwd</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_CLI_WORKSPACE</code></td>
+      <td>Override project path sent to daemon (default: cwd); <code class="language-plaintext highlighter-rouge">none</code>/<code class="language-plaintext highlighter-rouge">-</code>/<code class="language-plaintext highlighter-rouge">omit</code> omits workspace</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>Agent config (JSON or YAML) for Docker path mapping:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Variable / YAML</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_WORKSPACE_MOUNT</code></td>
+      <td>JSON: <code class="language-plaintext highlighter-rouge">{"host_root":"/Users/you/Workspace","container_root":"/var/lib/soothe/workspaces"}</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_WORKSPACE_HOST_ROOT</code></td>
+      <td>Host workspace bind-mount source for Compose (default: <code class="language-plaintext highlighter-rouge">$HOME</code>; optional override)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">workspace_mount.host_root</code></td>
+      <td>Host prefix of CLI project paths (RFC-621)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">workspace_mount.container_root</code></td>
+      <td>In-container mount point (must match Docker <code class="language-plaintext highlighter-rouge">-v</code> target)</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="priority--override-chains">
+  
+  
+    <a href="#priority--override-chains" class="anchor-heading" aria-labelledby="priority--override-chains"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Priority &amp; Override Chains
+  
+  
+</h2>
+    
+
+<p>Resolution order, highest to lowest:</p>
+
+<ol>
+  <li><strong>CLI args</strong> (<code class="language-plaintext highlighter-rouge">--config</code>, <code class="language-plaintext highlighter-rouge">--debug</code>, daemon <code class="language-plaintext highlighter-rouge">--soothe-config</code>)</li>
+  <li><strong>Top-level / JSON <code class="language-plaintext highlighter-rouge">SOOTHE_*</code> env vars</strong></li>
+  <li><strong>YAML file</strong> (with <code class="language-plaintext highlighter-rouge">${VAR}</code> already interpolated)</li>
+  <li><strong>Pydantic model defaults</strong> (+ zero-config provider bootstrap)</li>
+</ol>
+
+<p>After load, <code class="language-plaintext highlighter-rouge">_apply_active_router_profile</code> copies the selected profile into derived <code class="language-plaintext highlighter-rouge">router</code>, while <code class="language-plaintext highlighter-rouge">_apply_embedding_profile</code> resolves <code class="language-plaintext highlighter-rouge">embedding_model</code> and <code class="language-plaintext highlighter-rouge">embedding_dims</code> from <code class="language-plaintext highlighter-rouge">embedding_profile</code>. Env cannot patch individual router roles afterward unless you replace <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_PROFILES</code> or edit YAML.</p>
+<h2 id="docker-env-only-no-config-file">
+  
+  
+    <a href="#docker-env-only-no-config-file" class="anchor-heading" aria-labelledby="docker-env-only-no-config-file"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Docker (Env-Only, No Config File)
+  
+  
+</h2>
+    
+
+<p><strong>OpenAI-compatible provider + <code class="language-plaintext highlighter-rouge">qwen3.7-plus</code>:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...
+<span class="nb">export </span><span class="nv">OPENAI_BASE_URL</span><span class="o">=</span>https://dashscope.aliyuncs.com/compatible-mode/v1
+<span class="nb">export </span><span class="nv">SOOTHE_ROUTER_PROFILES</span><span class="o">=</span><span class="s1">'[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_EMBEDDING_PROFILE</span><span class="o">=</span><span class="s1">'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'</span>
+
+docker run <span class="nt">--rm</span> <span class="nt">-d</span> <span class="nt">--name</span> soothed <span class="se">\</span>
+  <span class="nt">-p</span> 8765:8765 <span class="se">\</span>
+  <span class="nt">-e</span> OPENAI_API_KEY <span class="se">\</span>
+  <span class="nt">-e</span> OPENAI_BASE_URL <span class="se">\</span>
+  <span class="nt">-e</span> SOOTHE_ROUTER_PROFILES <span class="se">\</span>
+  <span class="nt">-e</span> SOOTHE_EMBEDDING_PROFILE <span class="se">\</span>
+  <span class="nt">-v</span> soothe-data:/var/lib/soothe <span class="se">\</span>
+  registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+</code></pre></div></div>
+
+<p>Postgres sidecar + persistence without YAML:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nt">-e</span> <span class="nv">SOOTHE_PERSISTENCE</span><span class="o">=</span><span class="s1">'{"default_backend":"postgresql","postgres_base_dsn":"postgresql://postgres:postgres@soothe-pgvector:5432"}'</span> <span class="se">\</span>
+<span class="nt">-e</span> <span class="nv">SOOTHE_VECTOR_STORES</span><span class="o">=</span><span class="s1">'[{"name":"pgvector","provider_type":"pgvector"}]'</span> <span class="se">\</span>
+<span class="nt">-e</span> <span class="nv">SOOTHE_VECTOR_STORE_ROUTER</span><span class="o">=</span><span class="s1">'{"default":"pgvector:soothe_default"}'</span>
+</code></pre></div></div>
+
+<p>Image: <code class="language-plaintext highlighter-rouge">registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest</code> (or a pinned tag). Health: <code class="language-plaintext highlighter-rouge">curl http://127.0.0.1:8765/healthz</code>.</p>
+<h3 id="host-cli--docker-daemon-workspace-mount-rfc-621">
+  
+  
+    <a href="#host-cli--docker-daemon-workspace-mount-rfc-621" class="anchor-heading" aria-labelledby="host-cli--docker-daemon-workspace-mount-rfc-621"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Host CLI + Docker daemon: workspace mount (RFC-621)
+  
+  
+</h3>
+    
+
+<p>Use this when the CLI runs on the host and the daemon runs in Docker <strong>and</strong> you want file/shell tools to touch your local repo.</p>
+
+<p><strong>Three pieces must align:</strong></p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Piece</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Docker bind mount</td>
+      <td><code class="language-plaintext highlighter-rouge">-v /Users/you/Workspace:/var/lib/soothe/workspaces</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">workspace_mount.host_root</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/Users/you/Workspace</code> (must be a prefix of CLI <code class="language-plaintext highlighter-rouge">cwd</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">workspace_mount.container_root</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/var/lib/soothe/workspaces</code> (same as mount target in container)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>Env-only (no config file):</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...
+<span class="nb">export </span><span class="nv">OPENAI_BASE_URL</span><span class="o">=</span>https://dashscope.aliyuncs.com/compatible-mode/v1
+<span class="nb">export </span><span class="nv">CONTAINER_WS</span><span class="o">=</span>/var/lib/soothe/workspaces
+<span class="nb">export </span><span class="nv">SOOTHE_ROUTER_PROFILES</span><span class="o">=</span><span class="s1">'[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'</span>
+<span class="nb">export </span><span class="nv">SOOTHE_EMBEDDING_PROFILE</span><span class="o">=</span><span class="s1">'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'</span>
+
+docker run <span class="nt">--rm</span> <span class="nt">-d</span> <span class="nt">--name</span> soothed <span class="se">\</span>
+  <span class="nt">-p</span> 8765:8765 <span class="se">\</span>
+  <span class="nt">-e</span> OPENAI_API_KEY <span class="se">\</span>
+  <span class="nt">-e</span> OPENAI_BASE_URL <span class="se">\</span>
+  <span class="nt">-e</span> SOOTHE_ROUTER_PROFILES <span class="se">\</span>
+  <span class="nt">-e</span> SOOTHE_EMBEDDING_PROFILE <span class="se">\</span>
+  <span class="nt">-e</span> <span class="nv">SOOTHE_WORKSPACE_MOUNT</span><span class="o">=</span><span class="s2">"{</span><span class="se">\"</span><span class="s2">host_root</span><span class="se">\"</span><span class="s2">:</span><span class="se">\"</span><span class="nv">$HOME</span><span class="se">\"</span><span class="s2">,</span><span class="se">\"</span><span class="s2">container_root</span><span class="se">\"</span><span class="s2">:</span><span class="se">\"</span><span class="nv">$CONTAINER_WS</span><span class="se">\"</span><span class="s2">}"</span> <span class="se">\</span>
+  <span class="nt">-v</span> soothe-data:/var/lib/soothe <span class="se">\</span>
+  <span class="nt">-v</span> <span class="s2">"</span><span class="nv">$HOME</span><span class="s2">:</span><span class="nv">$CONTAINER_WS</span><span class="s2">"</span> <span class="se">\</span>
+  registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+
+<span class="nb">cd</span> ~/soothe <span class="o">&amp;&amp;</span> soothe
+</code></pre></div></div>
+
+<p>Path translation: CLI sends <code class="language-plaintext highlighter-rouge">/Users/chenxm/Workspace/soothe</code> → daemon uses <code class="language-plaintext highlighter-rouge">/var/lib/soothe/workspaces/soothe</code>.</p>
+
+<p><strong>With YAML</strong> (Compose / <code class="language-plaintext highlighter-rouge">deploy/</code>): same mapping under <code class="language-plaintext highlighter-rouge">workspace_mount:</code> in agent config; docker-compose mounts <code class="language-plaintext highlighter-rouge">$HOME</code> by default (<code class="language-plaintext highlighter-rouge">${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces</code>) — see <code class="language-plaintext highlighter-rouge">config/production/nano.yml</code> and <code class="language-plaintext highlighter-rouge">deploy/docker-compose.yml</code>. Override <code class="language-plaintext highlighter-rouge">SOOTHE_WORKSPACE_HOST_ROOT</code> when projects live outside <code class="language-plaintext highlighter-rouge">$HOME</code>.</p>
+
+<p><strong>Rules:</strong></p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">host_root</code> must be a <strong>parent directory</strong> of every project you <code class="language-plaintext highlighter-rouge">cd</code> into before running <code class="language-plaintext highlighter-rouge">soothe</code>.</li>
+  <li>Do <strong>not</strong> set <code class="language-plaintext highlighter-rouge">SOOTHE_CLI_OMIT_WORKSPACE</code> when using a mount — the CLI must send host <code class="language-plaintext highlighter-rouge">cwd</code> for RFC-621 mapping.</li>
+  <li>If you see <code class="language-plaintext highlighter-rouge">Client workspace does not exist</code>, the bind mount or <code class="language-plaintext highlighter-rouge">host_root</code> does not match your paths (or <code class="language-plaintext highlighter-rouge">workspace_mount</code> is unset).</li>
+</ul>
+<h3 id="host-cli--docker-daemon-chat-only-no-mount">
+  
+  
+    <a href="#host-cli--docker-daemon-chat-only-no-mount" class="anchor-heading" aria-labelledby="host-cli--docker-daemon-chat-only-no-mount"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Host CLI + Docker daemon: chat-only (no mount)
+  
+  
+</h3>
+    
+
+<p>When the daemon has <strong>no</strong> workspace volume and <strong>no</strong> <code class="language-plaintext highlighter-rouge">workspace_mount</code>, the CLI may still send host <code class="language-plaintext highlighter-rouge">cwd</code>. The daemon detects that the path is absent on the container filesystem and uses <code class="language-plaintext highlighter-rouge">$SOOTHE_HOME/data/workspaces/...</code> automatically — <strong><code class="language-plaintext highlighter-rouge">SOOTHE_CLI_OMIT_WORKSPACE</code> is not required</strong>.</p>
+
+<p>Optionally set <code class="language-plaintext highlighter-rouge">SOOTHE_CLI_OMIT_WORKSPACE=1</code> to omit <code class="language-plaintext highlighter-rouge">workspace</code> on the wire (slightly cleaner handshake; same runtime layout).</p>
+<h2 id="per-environment-setup">
+  
+  
+    <a href="#per-environment-setup" class="anchor-heading" aria-labelledby="per-environment-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Per-Environment Setup
+  
+  
+</h2>
+    
+
+<p>Keep <strong>structure</strong> in YAML (or JSON env for headless Docker); keep <strong>secrets</strong> in the environment.</p>
+
+<p><strong>Development:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-dev-...
+<span class="nb">export </span><span class="nv">SOOTHE_DEBUG</span><span class="o">=</span><span class="nb">true</span>
+<span class="c"># optional: export SOOTHE_CONFIG_FILE=~/.soothe/config.dev.yml</span>
+</code></pre></div></div>
+
+<p><strong>Production / CI:</strong> provider keys via secret manager; Postgres via YAML + <code class="language-plaintext highlighter-rouge">${POSTGRES_DSN}</code> or <code class="language-plaintext highlighter-rouge">SOOTHE_PERSISTENCE</code> JSON; Langfuse via <code class="language-plaintext highlighter-rouge">${LANGFUSE_*}</code> in YAML.</p>
+
+<p><strong>Testing:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_PERSISTENCE</span><span class="o">=</span><span class="s1">'{"default_backend":"sqlite"}'</span>
+<span class="c"># observability flags: set in YAML or use JSON SOOTHE_OBSERVABILITY='{"langfuse":{"enabled":false}}'</span>
+</code></pre></div></div>
+<h2 id="secret-hygiene">
+  
+  
+    <a href="#secret-hygiene" class="anchor-heading" aria-labelledby="secret-hygiene"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Secret Hygiene
+  
+  
+</h2>
+    
+
+<ul>
+  <li>Never commit resolved secrets — use <code class="language-plaintext highlighter-rouge">${VAR}</code> in YAML, or keep plain values only in local untracked overlays / <code class="language-plaintext highlighter-rouge">$SOOTHE_HOME/.env</code>.</li>
+  <li>Rotate by updating env and restarting; no config edit needed for interpolated keys.</li>
+  <li>Verify: <code class="language-plaintext highlighter-rouge">env | grep -E 'SOOTHE|OPENAI|ANTHROPIC'</code>.</li>
+</ul>
+<h2 id="sensitive-values">
+  
+  
+    <a href="#sensitive-values" class="anchor-heading" aria-labelledby="sensitive-values"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Sensitive values
+  
+  
+</h2>
+    
+
+<p>Sensitive YAML fields accept <strong>either</strong> a plain string <strong>or</strong> <code class="language-plaintext highlighter-rouge">${ENV_VAR}</code> (expanded at load via <code class="language-plaintext highlighter-rouge">_expand_env_in_config</code>). Templates ship with conventional placeholders; operators may replace them with literals in a private config copy.</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>YAML path</th>
+      <th>Conventional env</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">providers[].api_key</code></td>
+      <td><code class="language-plaintext highlighter-rouge">OPENAI_API_KEY</code>, <code class="language-plaintext highlighter-rouge">ANTHROPIC_API_KEY</code>, …</td>
+      <td>Also zero-config when <code class="language-plaintext highlighter-rouge">providers</code> is empty</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">persistence.postgres_base_dsn</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_POSTGRES_BASE_DSN</code></td>
+      <td>Unresolved placeholder treated as unset at DSN resolve</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">persistence.soothe_postgres_dsn</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_POSTGRES_DSN</code></td>
+      <td>Used when base DSN is unset/unresolved</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">observability.langfuse.public_key</code> / <code class="language-plaintext highlighter-rouge">secret_key</code> / <code class="language-plaintext highlighter-rouge">host</code></td>
+      <td><code class="language-plaintext highlighter-rouge">LANGFUSE_PUBLIC_KEY</code> / <code class="language-plaintext highlighter-rouge">LANGFUSE_SECRET_KEY</code> / <code class="language-plaintext highlighter-rouge">LANGFUSE_HOST</code></td>
+      <td>Unresolved/<code class="language-plaintext highlighter-rouge">null</code> also reads env at Langfuse init</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tools.deepxiv.token</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DEEPXIV_API_KEY</code> / <code class="language-plaintext highlighter-rouge">DEEPXIV_TOKEN</code></td>
+      <td>Unresolved/<code class="language-plaintext highlighter-rouge">null</code> falls back to env</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">vector_stores[].dsn</code> / <code class="language-plaintext highlighter-rouge">api_key</code> / <code class="language-plaintext highlighter-rouge">url</code></td>
+      <td>(operator-chosen)</td>
+      <td>Plain or <code class="language-plaintext highlighter-rouge">${ENV}</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.sinks.email.smtp_username</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_SMTP_USERNAME</code></td>
+      <td>Host overlay (<code class="language-plaintext highlighter-rouge">soothe.yml</code>)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.sinks.email.smtp_password</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_SMTP_PASSWORD</code></td>
+      <td>Host overlay</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.sinks.feishu.app_id</code></td>
+      <td><code class="language-plaintext highlighter-rouge">FEISHU_APP_ID</code></td>
+      <td>Host overlay</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.sinks.feishu.app_secret</code></td>
+      <td><code class="language-plaintext highlighter-rouge">FEISHU_APP_SECRET</code></td>
+      <td>Host overlay</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">identity.tokens.jwt_signing_key</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SOOTHE_JWT_KEY</code></td>
+      <td>Daemon; dedicated env fallback when YAML is null</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Env (recommended for shared templates)</span>
+<span class="na">smtp_password</span><span class="pi">:</span> <span class="s2">"</span><span class="s">${SOOTHE_SMTP_PASSWORD}"</span>
+
+<span class="c1"># Or plain (private/local config only)</span>
+<span class="na">smtp_password</span><span class="pi">:</span> <span class="s2">"</span><span class="s">hunter2"</span>
+</code></pre></div></div>
+<h2 id="troubleshooting">
+  
+  
+    <a href="#troubleshooting" class="anchor-heading" aria-labelledby="troubleshooting"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Troubleshooting
+  
+  
+</h2>
+    
+
+<p><strong>Variable not applied?</strong></p>
+
+<ol>
+  <li>Top-level field? Must match exactly (<code class="language-plaintext highlighter-rouge">SOOTHE_DEBUG</code>, not <code class="language-plaintext highlighter-rouge">SOOTHE_DEBUG_MODE</code>).</li>
+  <li>Nested field? Use JSON (<code class="language-plaintext highlighter-rouge">SOOTHE_PERSISTENCE</code>, <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_PROFILES</code>, <code class="language-plaintext highlighter-rouge">SOOTHE_EMBEDDING_PROFILE</code>) or YAML — not <code class="language-plaintext highlighter-rouge">SOOTHE_FOO_BAR_BAZ</code> dotted paths.</li>
+  <li>Router model unchanged? <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_DEFAULT</code> is ignored; use <code class="language-plaintext highlighter-rouge">SOOTHE_ROUTER_PROFILES</code> or YAML <code class="language-plaintext highlighter-rouge">router_profiles</code>.</li>
+  <li>Daemon transport? Use <code class="language-plaintext highlighter-rouge">SOOTHE_DAEMON_*</code> with <code class="language-plaintext highlighter-rouge">__</code> nesting.</li>
+  <li>Shell exported the var? <code class="language-plaintext highlighter-rouge">source ~/.zshrc</code> or restart the daemon container.</li>
+</ol>
+
+<p><strong>Debug resolved config:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe <span class="nt">--debug</span> <span class="s2">"test"</span>
+soothed doctor
+</code></pre></div></div>
+<h2 id="see-also">
+  
+  
+    <a href="#see-also" class="anchor-heading" aria-labelledby="see-also"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> See Also
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/configuration-guide/common-patterns.html">Common Patterns</a> — zero-config and production recipes</li>
+  <li><a href="/soothe/wiki/configuration-guide/yaml-reference.html">YAML Reference</a> — <code class="language-plaintext highlighter-rouge">router_profiles</code> schema</li>
+  <li><a href="/soothe/wiki/deployment/production-setup.html">Daemon Setup</a> — full stack deploy</li>
+  <li>Source: <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/config/settings.py</code>, <code class="language-plaintext highlighter-rouge">packages/soothe-daemon/src/soothe_daemon/config/settings.py</code></li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

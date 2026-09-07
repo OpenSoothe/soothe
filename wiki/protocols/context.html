@@ -1,0 +1,545 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(3)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > ul > li:nth-child(3) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > ul > li:nth-child(3) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(11) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(11) > ul.nav-list > li.nav-list-item:nth-child(3) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>ContextProtocol (Not Implemented) | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="ContextProtocol (Not Implemented)" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Within-thread context and working memory — planned protocol design. Context is currently managed by ContextEngine, not a protocol." />
+<meta property="og:description" content="Within-thread context and working memory — planned protocol design. Context is currently managed by ContextEngine, not a protocol." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/protocols/context.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/protocols/context.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="ContextProtocol (Not Implemented)" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Within-thread context and working memory — planned protocol design. Context is currently managed by ContextEngine, not a protocol.","headline":"ContextProtocol (Not Implemented)","url":"https://mirasoth.github.io/soothe/wiki/protocols/context.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/protocols/">Protocols</a></li>
+    <li class="breadcrumb-nav-list-item"><span>ContextProtocol (Not Implemented)</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="contextprotocol-not-implemented">
+  
+  
+    <a href="#contextprotocol-not-implemented" class="anchor-heading" aria-labelledby="contextprotocol-not-implemented"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> ContextProtocol (Not Implemented)
+  
+  
+</h1>
+    
+
+<p><strong>RFC</strong>: 302 (Protocol Specifications series, draft)
+<strong>Status</strong>: <strong>Not implemented</strong> — <code class="language-plaintext highlighter-rouge">ContextProtocol</code> class does not exist in the codebase
+<strong>Supersedes</strong>: <a href="../../specs/archive/RFC-300-context-memory-protocols.md">RFC-300</a> (archived)</p>
+
+<blockquote>
+  <p>⚠️ <code class="language-plaintext highlighter-rouge">ContextProtocol</code> is defined in RFC-302 (draft) but was <strong>never implemented</strong>. The <code class="language-plaintext highlighter-rouge">ContextProtocol</code> class does not exist in <code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/protocols/</code>. Context management is handled by <code class="language-plaintext highlighter-rouge">ContextEngine</code> (<code class="language-plaintext highlighter-rouge">soothe.context</code>), a concrete engine class — not a protocol abstraction. This article describes the <em>planned</em> protocol design and explains how context works today.</p>
+</blockquote>
+<h2 id="what-contextprotocol-is">
+  
+  
+    <a href="#what-contextprotocol-is" class="anchor-heading" aria-labelledby="what-contextprotocol-is"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What ContextProtocol Is
+  
+  
+</h2>
+    
+
+<p>ContextProtocol is planned as Soothe’s <strong>unbounded knowledge accumulator</strong> for cognitive context engineering. It serves as StrangeLoop’s “consciousness” layer — an append-only ledger that captures complete execution knowledge within a thread, then projects bounded, relevance-ranked views back to the orchestrator when it reasons.</p>
+
+<p>The core insight: accumulate everything, never discard, but only ever <em>show</em> a bounded slice. This separates durable knowledge from the token-constrained window an LLM actually sees.</p>
+<h2 id="why-it-exists">
+  
+  
+    <a href="#why-it-exists" class="anchor-heading" aria-labelledby="why-it-exists"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Why It Exists
+  
+  
+</h2>
+    
+
+<p>Current context mechanisms are fragmented across three systems, each with different scopes:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Mechanism</th>
+      <th>Scope</th>
+      <th>Limitation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Conversation history (<code class="language-plaintext highlighter-rouge">SummarizationMiddleware</code>)</td>
+      <td>Message thread</td>
+      <td>Summarization discards detail over time</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LoopWorkingMemoryProtocol</code></td>
+      <td>Single loop’s Plan phase</td>
+      <td>Bounded scratchpad, not persistent</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MemoryProtocol</code></td>
+      <td>Cross-thread knowledge</td>
+      <td>Explicit population only, not auto-captured</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>None of these provides an <em>unbounded, within-thread</em> knowledge store that survives summarization. ContextProtocol fills that gap — a per-thread ledger that ingests every tool output, subagent result, and reflection, then serves bounded projections to whoever needs context.</p>
+<h2 id="planned-design-rfc-302">
+  
+  
+    <a href="#planned-design-rfc-302" class="anchor-heading" aria-labelledby="planned-design-rfc-302"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Planned Design (RFC-302)
+  
+  
+</h2>
+    
+
+<p>The protocol defines two fundamental operations and supporting persistence:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">ingest(entry)</code></strong> — append a knowledge entry to the thread’s ledger. Append-only; entries are never deleted or truncated. The ledger grows unboundedly.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">project(query, token_budget)</code></strong> — extract a bounded view ranked by relevance to the query, constrained to <code class="language-plaintext highlighter-rouge">token_budget</code>. This is the read path: the orchestrator asks for “what’s relevant to X in N tokens” and gets back a ranked slice.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">project_for_subagent(goal, token_budget)</code></strong> — a purpose-scoped projection for subagent briefings, so delegated agents receive only the context relevant to their goal.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">persist(thread_id)</code> / <code class="language-plaintext highlighter-rouge">restore(thread_id)</code></strong> — save and load the ledger to a durability backend, keyed by thread.</li>
+</ul>
+<h3 id="the-retrieval-module">
+  
+  
+    <a href="#the-retrieval-module" class="anchor-heading" aria-labelledby="the-retrieval-module"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> The Retrieval Module
+  
+  
+</h3>
+    
+
+<p>A notable design decision: <code class="language-plaintext highlighter-rouge">get_retrieval_module()</code> returns a <strong>self-contained retrieval object</strong> with its own stable API (<code class="language-plaintext highlighter-rouge">retrieve_by_goal_relevance(goal_id, query, token_budget)</code>). This is deliberately decoupled from the protocol interface so the retrieval <em>algorithm</em> can evolve (keyword → embedding → hybrid) without breaking the <code class="language-plaintext highlighter-rouge">ContextProtocol</code> contract. The module carries an internal version tag (<code class="language-plaintext highlighter-rouge">"v1_keyword"</code>) to signal which algorithm is active.</p>
+<h2 id="design-principles">
+  
+  
+    <a href="#design-principles" class="anchor-heading" aria-labelledby="design-principles"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Design Principles
+  
+  
+</h2>
+    
+<h3 id="1-accumulate-never-discard">
+  
+  
+    <a href="#1-accumulate-never-discard" class="anchor-heading" aria-labelledby="1-accumulate-never-discard"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 1. Accumulate, Never Discard
+  
+  
+</h3>
+    
+
+<p>The ledger is append-only. No entry is ever removed. Boundedness applies only to <em>projections</em> — the token-budgeted views served to reasoning. This guarantees no knowledge is lost to summarization, while LLM context windows stay manageable.</p>
+<h3 id="2-relevance-based-projection">
+  
+  
+    <a href="#2-relevance-based-projection" class="anchor-heading" aria-labelledby="2-relevance-based-projection"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 2. Relevance-Based Projection
+  
+  
+</h3>
+    
+
+<p>Projections rank entries by a composite of importance weighting, tag matching, semantic similarity (when embedding-based), and optional temporal decay. The projection, not the ledger, is what respects token limits.</p>
+<h3 id="3-purpose-scoped-views">
+  
+  
+    <a href="#3-purpose-scoped-views" class="anchor-heading" aria-labelledby="3-purpose-scoped-views"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 3. Purpose-Scoped Views
+  
+  
+</h3>
+    
+
+<p>Different consumers need different views of the same ledger:</p>
+
+<ul>
+  <li><strong>Orchestrator reasoning</strong> — full context with goal relevance</li>
+  <li><strong>Subagent briefing</strong> — scoped to the delegated goal only (subagents never see the full ledger)</li>
+  <li><strong>Reflection</strong> — structured evidence summaries</li>
+  <li><strong>User summary</strong> — high-level progress overview</li>
+</ul>
+
+<p>This is why <code class="language-plaintext highlighter-rouge">project()</code> and <code class="language-plaintext highlighter-rouge">project_for_subagent()</code> are separate operations rather than one parameterized call: the scoping logic differs meaningfully per consumer.</p>
+<h3 id="4-subagent-isolation">
+  
+  
+    <a href="#4-subagent-isolation" class="anchor-heading" aria-labelledby="4-subagent-isolation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 4. Subagent Isolation
+  
+  
+</h3>
+    
+
+<p>Subagents receive projections, not ledger access. They get a bounded, goal-scoped slice and return only results. The orchestrator ingests those results back into the ledger. This enforces a clean information boundary — delegated agents cannot accumulate or leak context beyond their scope.</p>
+<h2 id="current-context-management">
+  
+  
+    <a href="#current-context-management" class="anchor-heading" aria-labelledby="current-context-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Current Context Management
+  
+  
+</h2>
+    
+
+<p><code class="language-plaintext highlighter-rouge">ContextProtocol</code> was never implemented. Context management is handled by <strong><code class="language-plaintext highlighter-rouge">ContextEngine</code></strong> (<code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/context/</code>), a concrete engine class that manages within-thread knowledge. It is not a protocol abstraction — it’s a direct implementation with its own ledger, projection, and persistence logic.</p>
+
+<p><code class="language-plaintext highlighter-rouge">ContextEngine</code> uses these mechanisms:</p>
+
+<ol>
+  <li><strong>Context ledger</strong> — an append-only store (<code class="language-plaintext highlighter-rouge">engine.py</code>, <code class="language-plaintext highlighter-rouge">ledger.py</code>) that ingests tool outputs, subagent results, and reflections. Unlike the planned <code class="language-plaintext highlighter-rouge">ContextProtocol</code>, this is a concrete implementation, not a swappable interface.</li>
+  <li><strong>Projection</strong> — bounded, relevance-ranked views via <code class="language-plaintext highlighter-rouge">projection.py</code> and <code class="language-plaintext highlighter-rouge">semantic.py</code>.</li>
+  <li><strong>Planning integration</strong> — <code class="language-plaintext highlighter-rouge">planning/</code> submodule integrates context with goal decomposition.</li>
+  <li><strong>Persistence</strong> — <code class="language-plaintext highlighter-rouge">persistence/</code> submodule saves/restores the ledger via durability backends.</li>
+</ol>
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Not implemented</strong> — <code class="language-plaintext highlighter-rouge">ContextProtocol</code> does not exist in code. Context is managed by <code class="language-plaintext highlighter-rouge">ContextEngine</code>, a concrete class, not a protocol. Do not depend on <code class="language-plaintext highlighter-rouge">ContextProtocol</code> in code.</li>
+  <li><strong>No swappable backends</strong> — unlike <code class="language-plaintext highlighter-rouge">MemoryProtocol</code> or <code class="language-plaintext highlighter-rouge">DurabilityProtocol</code>, context has no protocol→backend separation. <code class="language-plaintext highlighter-rouge">ContextEngine</code> is the sole implementation.</li>
+  <li><strong>Retrieval algorithm is internal</strong> — <code class="language-plaintext highlighter-rouge">semantic.py</code> implements the current retrieval strategy. There is no version tag or pluggable retrieval module as the draft RFC proposed.</li>
+  <li><strong>Persistence via durability</strong> — the ledger persists through <code class="language-plaintext highlighter-rouge">persistence/</code> using durability backends, not a dedicated protocol.</li>
+</ul>
+<h2 id="relationship-to-other-protocols">
+  
+  
+    <a href="#relationship-to-other-protocols" class="anchor-heading" aria-labelledby="relationship-to-other-protocols"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Relationship to Other Protocols
+  
+  
+</h2>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Protocol</th>
+      <th>Relationship</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/soothe/wiki/protocols/memory.html">MemoryProtocol</a></td>
+      <td>Memory is <em>cross-thread</em> and explicitly populated; Context is <em>within-thread</em> and auto-ingested. Different scopes, different retrieval strategies.</td>
+    </tr>
+    <tr>
+      <td><a href="/soothe/wiki/protocols/durability.html">DurabilityProtocol</a></td>
+      <td>Provides thread IDs that key context ledgers. Context persistence piggybacks on the thread lifecycle.</td>
+    </tr>
+    <tr>
+      <td><a href="/soothe/wiki/protocols/loop-protocols.html">LoopWorkingMemoryProtocol</a></td>
+      <td>The bounded scratchpad for Plan-phase prompts. <code class="language-plaintext highlighter-rouge">ContextEngine</code> provides the richer, persistent ledger that working memory complements.</td>
+    </tr>
+  </tbody>
+</table></div>
+<h2 id="specification-reference">
+  
+  
+    <a href="#specification-reference" class="anchor-heading" aria-labelledby="specification-reference"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Specification Reference
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>RFC-302</strong>: ContextProtocol: Unbounded Knowledge &amp; Goal-Centric Retrieval (draft)</li>
+  <li><strong><a href="../../specs/archive/RFC-300-context-memory-protocols.md">RFC-300</a></strong>: Context and Memory Architecture Design (archived, superseded by RFC-302)</li>
+</ul>
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="../../specs/RFC-302-context-protocol-architecture.md">RFC-302 Draft</a></li>
+  <li><a href="/soothe/wiki/protocols/memory.html">Memory Protocol</a> — current cross-thread memory</li>
+  <li><a href="/soothe/wiki/protocols/loop-protocols.html">Loop Protocols</a> — current bounded scratchpad</li>
+  <li><a href="/soothe/wiki/protocols/planner.html">Planner Protocol</a> — consumes bounded context for planning</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

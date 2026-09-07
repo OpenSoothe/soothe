@@ -1,0 +1,556 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(7)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > ul > li:nth-child(7) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(11) > ul > li:nth-child(7) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(11) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(11) > ul.nav-list > li.nav-list-item:nth-child(7) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Loop-Level Protocols | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Loop-Level Protocols" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Loop working memory, StrangeLoop, LoopPlanner, and OperationSecurity protocols for loop-level execution control." />
+<meta property="og:description" content="Loop working memory, StrangeLoop, LoopPlanner, and OperationSecurity protocols for loop-level execution control." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/protocols/loop-protocols.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/protocols/loop-protocols.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Loop-Level Protocols" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Loop working memory, StrangeLoop, LoopPlanner, and OperationSecurity protocols for loop-level execution control.","headline":"Loop-Level Protocols","url":"https://mirasoth.github.io/soothe/wiki/protocols/loop-protocols.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/protocols/">Protocols</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Loop-Level Protocols</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="loop-level-protocols">
+  
+  
+    <a href="#loop-level-protocols" class="anchor-heading" aria-labelledby="loop-level-protocols"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Loop-Level Protocols
+  
+  
+</h1>
+    
+
+<p><strong>RFCs</strong>: 203 (LoopWorkingMemory), 220 (StrangeLoop), 604 (LoopPlanner), 617 (OperationSecurity)
+<strong>Locations</strong>:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/protocols/loop_working_memory.py</code></li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/protocols/loop_planner.py</code> (covered in <a href="/soothe/wiki/protocols/planner.html">planner.md</a>)</li>
+  <li><code class="language-plaintext highlighter-rouge">packages/soothe/src/soothe/protocols/operation_security.py</code>
+<strong>Status</strong>: Implemented</li>
+</ul>
+<h2 id="what-loop-level-protocols-are">
+  
+  
+    <a href="#what-loop-level-protocols-are" class="anchor-heading" aria-labelledby="what-loop-level-protocols-are"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What Loop-Level Protocols Are
+  
+  
+</h2>
+    
+
+<p>These protocols serve StrangeLoop’s Plan → Execute cycle specifically. They are <em>not</em> general-purpose infrastructure — they exist because the agentic loop has unique needs: a bounded scratchpad for planning prompts, and operation-level security checks during execution.</p>
+
+<p>Two protocols live here:</p>
+
+<ol>
+  <li><strong><code class="language-plaintext highlighter-rouge">LoopWorkingMemoryProtocol</code></strong> — a bounded scratchpad that records Act-step outcomes and renders them into Plan-phase prompts.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">OperationSecurityProtocol</code></strong> — operation-level security evaluation for individual tool calls and spawns.</li>
+</ol>
+
+<p>(<code class="language-plaintext highlighter-rouge">LoopPlannerProtocol</code> is documented in <a href="/soothe/wiki/protocols/planner.html">planner.md</a> since it shares the planner domain.)</p>
+<h2 id="loopworkingmemoryprotocol">
+  
+  
+    <a href="#loopworkingmemoryprotocol" class="anchor-heading" aria-labelledby="loopworkingmemoryprotocol"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> LoopWorkingMemoryProtocol
+  
+  
+</h2>
+    
+<h3 id="role">
+  
+  
+    <a href="#role" class="anchor-heading" aria-labelledby="role"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Role
+  
+  
+</h3>
+    
+
+<p>During a StrangeLoop, each Execute phase produces step results. The Plan phase (next iteration) needs to see what happened — but not the full raw history, which would blow the LLM context window. <code class="language-plaintext highlighter-rouge">LoopWorkingMemoryProtocol</code> is the bounded intermediary: it records step outcomes, then renders a <em>truncated</em> view for the planner.</p>
+<h3 id="key-operations">
+  
+  
+    <a href="#key-operations" class="anchor-heading" aria-labelledby="key-operations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key Operations
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">clear()</code></strong> — reset for a new goal. Called at loop start.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">record_step_result(step_id, description, output, error, success, workspace, thread_id)</code></strong> — record one Act-step outcome. Outputs are truncated to bounded previews (e.g., 200 chars) to control size.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">render_for_reason(max_chars?)</code></strong> — return formatted text for Plan-phase prompt injection. When <code class="language-plaintext highlighter-rouge">max_chars</code> is set, the rendered text is hard-truncated.</li>
+</ul>
+<h3 id="design-principle-bounded-memory">
+  
+  
+    <a href="#design-principle-bounded-memory" class="anchor-heading" aria-labelledby="design-principle-bounded-memory"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Design Principle: Bounded Memory
+  
+  
+</h3>
+    
+
+<p>Working memory is deliberately bounded — the default implementation caps at ~20 entries with truncated previews. The philosophy: the planner needs <em>recent</em> outcomes and <em>patterns</em>, not exhaustive history. When memory exceeds the bound, oldest entries are evicted (FIFO).</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Execute phase: record_step_result(...) → memory grows (bounded)
+Plan phase:    render_for_reason(max_chars=2000) → bounded slice injected into prompt
+</code></pre></div></div>
+
+<p>This bounded approach contrasts with <code class="language-plaintext highlighter-rouge">ContextEngine</code> (<code class="language-plaintext highlighter-rouge">soothe.context</code>), which provides <em>unbounded</em> accumulation with relevance-based projection. Working memory is the pragmatic, always-available scratchpad; ContextEngine is the richer, persistent ledger. <code class="language-plaintext highlighter-rouge">ContextProtocol</code> was planned (RFC-302 draft) but never implemented — context is managed by <code class="language-plaintext highlighter-rouge">ContextEngine</code> directly, not a protocol.</p>
+<h3 id="workspace-spill">
+  
+  
+    <a href="#workspace-spill" class="anchor-heading" aria-labelledby="workspace-spill"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Workspace Spill
+  
+  
+</h3>
+    
+
+<p>When bounded memory exceeds limits, implementations <em>may</em> spill overflow to a workspace file (e.g., <code class="language-plaintext highlighter-rouge">.soothe/working_memory_spill.json</code>) before evicting from the in-memory list. This is optional — the protocol doesn’t mandate it — but it preserves detail that bounded eviction would lose. Recent entries stay in memory; older ones spill to disk.</p>
+<h3 id="implementation">
+  
+  
+    <a href="#implementation" class="anchor-heading" aria-labelledby="implementation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Implementation
+  
+  
+</h3>
+    
+
+<p>The default implementation (<code class="language-plaintext highlighter-rouge">DefaultWorkingMemory</code>) is an in-memory bounded list with truncated output previews, error tracking, and optional workspace spill. Configurable via <code class="language-plaintext highlighter-rouge">agent.loop.working_memory</code> settings (<code class="language-plaintext highlighter-rouge">max_entries</code>, <code class="language-plaintext highlighter-rouge">max_chars_per_entry</code>, <code class="language-plaintext highlighter-rouge">spill_to_workspace</code>).</p>
+<h2 id="operationsecurityprotocol">
+  
+  
+    <a href="#operationsecurityprotocol" class="anchor-heading" aria-labelledby="operationsecurityprotocol"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> OperationSecurityProtocol
+  
+  
+</h2>
+    
+<h3 id="role-1">
+  
+  
+    <a href="#role-1" class="anchor-heading" aria-labelledby="role-1"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Role
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">OperationSecurityProtocol</code> provides <strong>operation-level security checks</strong> — evaluating whether a specific operation (tool call, shell command, file write) should proceed. It’s a normalized, operation-focused layer distinct from the broader <code class="language-plaintext highlighter-rouge">PolicyProtocol</code>.</p>
+<h3 id="key-operation">
+  
+  
+    <a href="#key-operation" class="anchor-heading" aria-labelledby="key-operation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key Operation
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">evaluate(request, context) → OperationSecurityDecision</code></strong> — evaluate whether an operation should be allowed, returning a verdict (<code class="language-plaintext highlighter-rouge">allow</code> / <code class="language-plaintext highlighter-rouge">deny</code> / <code class="language-plaintext highlighter-rouge">need_approval</code>) with a reason.</li>
+</ul>
+<h3 id="operation-kinds">
+  
+  
+    <a href="#operation-kinds" class="anchor-heading" aria-labelledby="operation-kinds"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Operation Kinds
+  
+  
+</h3>
+    
+
+<p>The protocol normalizes operations into typed kinds:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">filesystem_read</code>, <code class="language-plaintext highlighter-rouge">filesystem_write</code> — file operations</li>
+  <li><code class="language-plaintext highlighter-rouge">shell_execute</code>, <code class="language-plaintext highlighter-rouge">python_execute</code> — code execution</li>
+  <li><code class="language-plaintext highlighter-rouge">process_control</code> — process management</li>
+  <li><code class="language-plaintext highlighter-rouge">generic</code> — fallback</li>
+</ul>
+
+<p>This typing lets security rules target specific operation categories (e.g., audit all <code class="language-plaintext highlighter-rouge">shell_execute</code> calls) without parsing tool arguments generically.</p>
+<h3 id="request-and-context">
+  
+  
+    <a href="#request-and-context" class="anchor-heading" aria-labelledby="request-and-context"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Request and Context
+  
+  
+</h3>
+    
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">OperationSecurityRequest</code></strong> — carries <code class="language-plaintext highlighter-rouge">action_type</code>, <code class="language-plaintext highlighter-rouge">tool_name</code>, <code class="language-plaintext highlighter-rouge">tool_args</code>, <code class="language-plaintext highlighter-rouge">operation_kind</code>, <code class="language-plaintext highlighter-rouge">target_path</code>, and <code class="language-plaintext highlighter-rouge">command</code> (for shell operations). This is richer than <code class="language-plaintext highlighter-rouge">PolicyProtocol</code>’s <code class="language-plaintext highlighter-rouge">ActionRequest</code> because it includes operation-specific extraction (path, command).</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">OperationSecurityContext</code></strong> — thread ID, workspace path, and security config. Workspace is used for stream-scoped filesystem policy.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">OperationSecurityDecision</code></strong> — verdict, reason, optional <code class="language-plaintext highlighter-rouge">rule_id</code> for audit traceability.</li>
+</ul>
+<h3 id="relationship-to-policyprotocol">
+  
+  
+    <a href="#relationship-to-policyprotocol" class="anchor-heading" aria-labelledby="relationship-to-policyprotocol"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Relationship to PolicyProtocol
+  
+  
+</h3>
+    
+
+<p><code class="language-plaintext highlighter-rouge">OperationSecurityProtocol</code> and <code class="language-plaintext highlighter-rouge">PolicyProtocol</code> are complementary, not redundant:</p>
+
+<ul>
+  <li><strong><code class="language-plaintext highlighter-rouge">PolicyProtocol</code></strong> (see <a href="/soothe/wiki/protocols/policy.html">policy.md</a>) operates on structured <code class="language-plaintext highlighter-rouge">Permission</code> grants (category/action/scope) and computes narrowed permission sets for subagent delegation. It’s the <em>policy decision</em> layer.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">OperationSecurityProtocol</code></strong> is the <em>operation evaluation</em> layer — it normalizes concrete operations (a shell command, a file path) into security requests and applies rules, potentially delegating to <code class="language-plaintext highlighter-rouge">PolicyProtocol</code> for permission matching.</li>
+</ul>
+
+<p>In practice, operation security can wrap policy: convert an <code class="language-plaintext highlighter-rouge">OperationSecurityRequest</code> into an <code class="language-plaintext highlighter-rouge">ActionRequest</code>, call <code class="language-plaintext highlighter-rouge">PolicyProtocol.check()</code>, then augment the result with operation-specific concerns (audit logging, path validation).</p>
+<h2 id="integration-with-strangeloop">
+  
+  
+    <a href="#integration-with-strangeloop" class="anchor-heading" aria-labelledby="integration-with-strangeloop"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Integration with StrangeLoop
+  
+  
+</h2>
+    
+
+<p>These protocols plug into the Plan → Execute cycle at specific points:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>StrangeLoop iteration:
+  Plan phase:
+    → LoopWorkingMemory.render_for_reason() injected into planner prompt
+    → LoopPlanner.plan() produces PlanResult
+  Execute phase:
+    → OperationSecurity.evaluate() checks each tool call before execution
+    → LoopWorkingMemory.record_step_result() captures outcome
+  → next iteration
+</code></pre></div></div>
+
+<p>Working memory flows <em>into</em> the Plan phase (rendering); operation security gates the Execute phase (checking). Both are per-loop, in-memory, and reset between goals.</p>
+<h2 id="gotchas">
+  
+  
+    <a href="#gotchas" class="anchor-heading" aria-labelledby="gotchas"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Gotchas
+  
+  
+</h2>
+    
+
+<ul>
+  <li><strong>Working memory is per-loop, not per-thread</strong> — <code class="language-plaintext highlighter-rouge">clear()</code> is called at the start of each goal/loop. Cross-thread continuity requires <code class="language-plaintext highlighter-rouge">MemoryProtocol</code>, not working memory.</li>
+  <li><strong>Truncation is lossy</strong> — <code class="language-plaintext highlighter-rouge">record_step_result</code> truncates outputs to bounded previews. If you need full output, capture it separately; working memory is for the planner’s summary view.</li>
+  <li><strong>Operation security may run synchronously</strong> — unlike persistence protocols, <code class="language-plaintext highlighter-rouge">evaluate()</code> is not async in the source. Don’t block on external calls inside it.</li>
+  <li><strong><code class="language-plaintext highlighter-rouge">operation_kind</code> affects audit</strong> — security config can specify which operation kinds require audit logging (<code class="language-plaintext highlighter-rouge">audit_operations</code> list). Generic kind misses targeted audit rules.</li>
+</ul>
+<h2 id="configuration">
+  
+  
+    <a href="#configuration" class="anchor-heading" aria-labelledby="configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration
+  
+  
+</h2>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">loop</span><span class="pi">:</span>
+    <span class="na">working_memory</span><span class="pi">:</span>
+      <span class="na">max_entries</span><span class="pi">:</span> <span class="m">20</span>
+      <span class="na">max_chars_per_entry</span><span class="pi">:</span> <span class="m">200</span>
+      <span class="na">spill_to_workspace</span><span class="pi">:</span> <span class="no">false</span>
+  <span class="na">security</span><span class="pi">:</span>
+    <span class="na">audit_operations</span><span class="pi">:</span> <span class="pi">[</span><span class="nv">shell_execute</span><span class="pi">,</span> <span class="nv">subagent_spawn</span><span class="pi">]</span>
+    <span class="na">audit_log_path</span><span class="pi">:</span> <span class="s">~/.soothe/logs/operations.log</span>
+</code></pre></div></div>
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/protocols/planner.html">Planner Protocol</a> — <code class="language-plaintext highlighter-rouge">LoopPlannerProtocol</code> consumes working memory</li>
+  <li><a href="/soothe/wiki/protocols/policy.html">Policy Protocol</a> — <code class="language-plaintext highlighter-rouge">PolicyProtocol</code> backs operation security decisions</li>
+  <li><a href="/soothe/wiki/protocols/execution-protocols.html">Execution Protocols</a> — <code class="language-plaintext highlighter-rouge">LoopRunnerProtocol</code> orchestrates the loop</li>
+  <li><a href="/soothe/wiki/protocols/context.html">ContextProtocol</a> — not implemented; context managed by ContextEngine</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

@@ -1,0 +1,1149 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(5)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > ul > li:nth-child(5) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > ul > li:nth-child(5) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(12) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(12) > ul.nav-list > li.nav-list-item:nth-child(5) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Backup and Recovery | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Backup and Recovery" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Comprehensive disaster recovery strategy for Soothe production deployments, covering PostgreSQL backup and recovery." />
+<meta property="og:description" content="Comprehensive disaster recovery strategy for Soothe production deployments, covering PostgreSQL backup and recovery." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/deployment/backup-recovery.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/deployment/backup-recovery.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Backup and Recovery" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Comprehensive disaster recovery strategy for Soothe production deployments, covering PostgreSQL backup and recovery.","headline":"Backup and Recovery","url":"https://mirasoth.github.io/soothe/wiki/deployment/backup-recovery.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/deployment/">Deployment</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Backup and Recovery</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="backup-and-recovery-guide">
+  
+  
+    <a href="#backup-and-recovery-guide" class="anchor-heading" aria-labelledby="backup-and-recovery-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup and Recovery Guide
+  
+  
+</h1>
+    
+
+<p>Comprehensive disaster recovery strategy for Soothe production deployments.</p>
+<h2 id="overview">
+  
+  
+    <a href="#overview" class="anchor-heading" aria-labelledby="overview"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Overview
+  
+  
+</h2>
+    
+
+<p>Soothe’s data consists of:</p>
+<ol>
+  <li><strong>PostgreSQL databases</strong>: Thread checkpoints, metadata, vectors, memory</li>
+  <li><strong>Configuration files</strong>: nano.yml, soothe.yml, daemon.yml, .env, secrets</li>
+  <li><strong>Workspace data</strong>: User project files (managed separately)</li>
+  <li><strong>Log files</strong>: Daemon logs, thread logs (optional backup)</li>
+</ol>
+<h2 id="backup-strategy">
+  
+  
+    <a href="#backup-strategy" class="anchor-heading" aria-labelledby="backup-strategy"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Strategy
+  
+  
+</h2>
+    
+<h3 id="backup-types">
+  
+  
+    <a href="#backup-types" class="anchor-heading" aria-labelledby="backup-types"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Types
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Frequency</th>
+      <th>Retention</th>
+      <th>Data</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Full</td>
+      <td>Weekly</td>
+      <td>4 weeks</td>
+      <td>All PostgreSQL databases + config</td>
+    </tr>
+    <tr>
+      <td>Incremental</td>
+      <td>Daily</td>
+      <td>7 days</td>
+      <td>Thread checkpoints + metadata</td>
+    </tr>
+    <tr>
+      <td>Continuous</td>
+      <td>Real-time</td>
+      <td>24 hours</td>
+      <td>WAL streaming (PostgreSQL)</td>
+    </tr>
+    <tr>
+      <td>Configuration</td>
+      <td>On change</td>
+      <td>Indefinite</td>
+      <td>nano.yml / soothe.yml / daemon.yml, secrets</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="backup-locations">
+  
+  
+    <a href="#backup-locations" class="anchor-heading" aria-labelledby="backup-locations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Locations
+  
+  
+</h3>
+    
+
+<p><strong>Local backup</strong>: <code class="language-plaintext highlighter-rouge">/var/backups/soothe/</code>
+<strong>Remote backup</strong>: S3/GCS/Azure Blob storage
+<strong>Disaster recovery</strong>: Separate region/zone</p>
+<h2 id="postgresql-backup">
+  
+  
+    <a href="#postgresql-backup" class="anchor-heading" aria-labelledby="postgresql-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQL Backup
+  
+  
+</h2>
+    
+<h3 id="method-1-pg_dump-recommended-for-50gb">
+  
+  
+    <a href="#method-1-pg_dump-recommended-for-50gb" class="anchor-heading" aria-labelledby="method-1-pg_dump-recommended-for-50gb"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Method 1: pg_dump (Recommended for &lt;50GB)
+  
+  
+</h3>
+    
+
+<p><strong>Full backup script</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># backup-postgres.sh - Weekly full backup</span>
+
+<span class="nv">BACKUP_DIR</span><span class="o">=</span><span class="s2">"/var/backups/soothe"</span>
+<span class="nv">DATE</span><span class="o">=</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d<span class="si">)</span>
+<span class="nv">POSTGRES_HOST</span><span class="o">=</span><span class="s2">"localhost"</span>
+<span class="nv">POSTGRES_USER</span><span class="o">=</span><span class="s2">"postgres"</span>
+
+<span class="c"># Create backup directory</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>
+
+<span class="c"># Backup each database (RFC-802 multi-database)</span>
+<span class="k">for </span>db <span class="k">in </span>soothe_checkpoints soothe_metadata soothe_vectors soothe_memory<span class="p">;</span> <span class="k">do
+    </span>pg_dump <span class="nt">-h</span> <span class="k">${</span><span class="nv">POSTGRES_HOST</span><span class="k">}</span> <span class="nt">-U</span> <span class="k">${</span><span class="nv">POSTGRES_USER</span><span class="k">}</span> <span class="nt">-d</span> <span class="k">${</span><span class="nv">db</span><span class="k">}</span> <span class="se">\</span>
+        <span class="nt">--format</span><span class="o">=</span>custom <span class="se">\</span>
+        <span class="nt">--file</span><span class="o">=</span><span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>/<span class="k">${</span><span class="nv">db</span><span class="k">}</span>.dump
+<span class="k">done</span>
+
+<span class="c"># Backup config files</span>
+<span class="nb">cp</span> /var/lib/soothe/config/nano.yml <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>/
+<span class="nb">cp</span> /var/lib/soothe/.env <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>/
+
+<span class="c"># Compress backup</span>
+<span class="nb">tar </span>czf <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/soothe_backup_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.tar.gz <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>
+
+<span class="c"># Remove uncompressed files</span>
+<span class="nb">rm</span> <span class="nt">-rf</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>
+
+<span class="c"># Upload to remote storage (S3 example)</span>
+aws s3 <span class="nb">cp</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/soothe_backup_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.tar.gz <span class="se">\</span>
+    s3://soothe-backups/<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>/
+
+<span class="c"># Cleanup old backups (keep 4 weeks)</span>
+find <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span> <span class="nt">-name</span> <span class="s2">"soothe_backup_*.tar.gz"</span> <span class="nt">-mtime</span> +28 <span class="nt">-delete</span>
+</code></pre></div></div>
+
+<p><strong>Incremental backup script</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># backup-incremental.sh - Daily incremental backup</span>
+
+<span class="nv">BACKUP_DIR</span><span class="o">=</span><span class="s2">"/var/backups/soothe"</span>
+<span class="nv">DATE</span><span class="o">=</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d<span class="si">)</span>
+
+<span class="c"># Backup only thread-related tables (checkpoints + metadata)</span>
+pg_dump <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-d</span> soothe_checkpoints <span class="se">\</span>
+    <span class="nt">--table</span><span class="o">=</span><span class="s1">'checkpoints'</span> <span class="nt">--table</span><span class="o">=</span><span class="s1">'checkpoint_blobs'</span> <span class="se">\</span>
+    <span class="nt">--format</span><span class="o">=</span>custom <span class="se">\</span>
+    <span class="nt">--file</span><span class="o">=</span><span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/incremental_checkpoints_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.dump
+
+pg_dump <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-d</span> soothe_metadata <span class="se">\</span>
+    <span class="nt">--table</span><span class="o">=</span><span class="s1">'threads'</span> <span class="nt">--table</span><span class="o">=</span><span class="s1">'goals'</span> <span class="se">\</span>
+    <span class="nt">--format</span><span class="o">=</span>custom <span class="se">\</span>
+    <span class="nt">--file</span><span class="o">=</span><span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/incremental_metadata_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.dump
+
+<span class="c"># Upload to S3</span>
+aws s3 <span class="nb">sync</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/ s3://soothe-backups/incremental/ <span class="se">\</span>
+    <span class="nt">--exclude</span> <span class="s2">"*"</span> <span class="nt">--include</span> <span class="s2">"incremental_*_</span><span class="k">${</span><span class="nv">DATE</span><span class="k">}</span><span class="s2">.dump"</span>
+</code></pre></div></div>
+<h3 id="method-2-wal-streaming-continuous-backup">
+  
+  
+    <a href="#method-2-wal-streaming-continuous-backup" class="anchor-heading" aria-labelledby="method-2-wal-streaming-continuous-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Method 2: WAL Streaming (Continuous Backup)
+  
+  
+</h3>
+    
+
+<p><strong>PostgreSQL WAL configuration</strong>:</p>
+
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- Enable WAL archiving</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">wal_level</span> <span class="o">=</span> <span class="n">replica</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">archive_mode</span> <span class="o">=</span> <span class="k">on</span><span class="p">;</span>
+<span class="k">ALTER</span> <span class="k">SYSTEM</span> <span class="k">SET</span> <span class="n">archive_command</span> <span class="o">=</span> 
+    <span class="s1">'aws s3 cp %p s3://soothe-backups/wal/%f'</span><span class="p">;</span>
+
+<span class="c1">-- Enable replication slots</span>
+<span class="k">SELECT</span> <span class="n">pg_create_physical_replication_slot</span><span class="p">(</span><span class="s1">'soothe_backup_slot'</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p><strong>WAL receiver script</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># wal-receiver.sh - Continuous WAL streaming</span>
+
+pg_receivewal <span class="se">\</span>
+    <span class="nt">--host</span><span class="o">=</span>localhost <span class="se">\</span>
+    <span class="nt">--port</span><span class="o">=</span>5432 <span class="se">\</span>
+    <span class="nt">--username</span><span class="o">=</span>postgres <span class="se">\</span>
+    <span class="nt">--slot</span><span class="o">=</span>soothe_backup_slot <span class="se">\</span>
+    <span class="nt">--directory</span><span class="o">=</span>/var/backups/soothe/wal <span class="se">\</span>
+    <span class="nt">--compress</span><span class="o">=</span>9 <span class="se">\</span>
+    <span class="nt">--verbose</span>
+</code></pre></div></div>
+
+<p><strong>Restore from WAL</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Point-in-time recovery (PITR)</span>
+pg_basebackup <span class="nt">--host</span><span class="o">=</span>localhost <span class="nt">--pgdata</span><span class="o">=</span>/var/lib/postgresql/restore <span class="se">\</span>
+    <span class="nt">--format</span><span class="o">=</span><span class="nb">tar</span> <span class="nt">--wal-method</span><span class="o">=</span>stream
+
+<span class="c"># Restore to specific timestamp</span>
+pg_ctl <span class="nt">-D</span> /var/lib/postgresql/restore start <span class="se">\</span>
+    <span class="nt">-o</span> <span class="s2">"recovery_target_time='2026-06-06 10:30:00'"</span>
+</code></pre></div></div>
+<h3 id="method-3-barman-enterprise-backup">
+  
+  
+    <a href="#method-3-barman-enterprise-backup" class="anchor-heading" aria-labelledby="method-3-barman-enterprise-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Method 3: Barman (Enterprise Backup)
+  
+  
+</h3>
+    
+
+<p><strong>Barman installation</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>apt <span class="nb">install </span>barman
+</code></pre></div></div>
+
+<p><strong>Barman configuration</strong> (<code class="language-plaintext highlighter-rouge">/etc/barman.conf</code>):</p>
+
+<div class="language-ini highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nn">[soothe]</span>
+<span class="py">description</span> <span class="p">=</span> <span class="s">"Soothe PostgreSQL cluster"</span>
+<span class="py">conninfo</span> <span class="p">=</span> <span class="s">host=localhost user=postgres dbname=soothe_checkpoints</span>
+<span class="py">backup_method</span> <span class="p">=</span> <span class="s">rsync</span>
+<span class="py">archiver</span> <span class="p">=</span> <span class="s">on</span>
+<span class="py">wal_retention_policy</span> <span class="p">=</span> <span class="s">main</span>
+<span class="py">retention_policy</span> <span class="p">=</span> <span class="s">RECOVERY WINDOW OF 4 WEEKS</span>
+</code></pre></div></div>
+
+<p><strong>Barman backup commands</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Full backup</span>
+barman backup soothe
+
+<span class="c"># List backups</span>
+barman list-backup soothe
+
+<span class="c"># Restore backup</span>
+barman recover soothe latest /var/lib/postgresql/restore
+</code></pre></div></div>
+<h2 id="configuration-backup">
+  
+  
+    <a href="#configuration-backup" class="anchor-heading" aria-labelledby="configuration-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration Backup
+  
+  
+</h2>
+    
+<h3 id="config-file-backup">
+  
+  
+    <a href="#config-file-backup" class="anchor-heading" aria-labelledby="config-file-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Config File Backup
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># backup-config.sh - Configuration backup</span>
+
+<span class="nv">CONFIG_DIR</span><span class="o">=</span><span class="s2">"/var/lib/soothe/config"</span>
+<span class="nv">BACKUP_DIR</span><span class="o">=</span><span class="s2">"/var/backups/soothe/config"</span>
+<span class="nv">DATE</span><span class="o">=</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d_%H%M%S<span class="si">)</span>
+
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>
+
+<span class="c"># Backup agent config</span>
+<span class="nb">cp</span> <span class="k">${</span><span class="nv">CONFIG_DIR</span><span class="k">}</span>/nano.yml <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/nano_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.yml
+
+<span class="c"># Backup .env (if exists)</span>
+<span class="k">if</span> <span class="o">[</span> <span class="nt">-f</span> <span class="s2">"/var/lib/soothe/.env"</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">cp</span> /var/lib/soothe/.env <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/env_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>
+<span class="k">fi</span>
+
+<span class="c"># Backup secrets from environment (optional)</span>
+<span class="c"># WARNING: Store securely with encryption</span>
+<span class="nb">env</span> | <span class="nb">grep</span> <span class="nt">-E</span> <span class="s2">"(API_KEY|PASSWORD)"</span> <span class="o">&gt;</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/secrets_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>
+
+<span class="c"># Encrypt secrets</span>
+gpg <span class="nt">--batch</span> <span class="nt">--yes</span> <span class="nt">--passphrase</span> <span class="s2">"</span><span class="k">${</span><span class="nv">GPG_PASSPHRASE</span><span class="k">}</span><span class="s2">"</span> <span class="se">\</span>
+    <span class="nt">--symmetric</span> <span class="nt">--cipher-algo</span> AES256 <span class="se">\</span>
+    <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/secrets_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>
+
+<span class="c"># Upload to S3</span>
+aws s3 <span class="nb">sync</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/ s3://soothe-backups/config/
+</code></pre></div></div>
+<h3 id="secrets-manager-backup">
+  
+  
+    <a href="#secrets-manager-backup" class="anchor-heading" aria-labelledby="secrets-manager-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Secrets Manager Backup
+  
+  
+</h3>
+    
+
+<p><strong>AWS Secrets Manager</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Backup secrets</span>
+aws secretsmanager get-secret-value <span class="se">\</span>
+    <span class="nt">--secret-id</span> soothe/openai-api-key <span class="se">\</span>
+    <span class="nt">--query</span> SecretString <span class="se">\</span>
+    <span class="nt">--output</span> text <span class="o">&gt;</span> openai_api_key_backup.txt
+
+<span class="c"># Encrypt backup</span>
+gpg <span class="nt">--symmetric</span> <span class="nt">--cipher-algo</span> AES256 openai_api_key_backup.txt
+</code></pre></div></div>
+
+<p><strong>HashiCorp Vault</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Backup Vault secrets</span>
+vault kv get <span class="nt">-format</span><span class="o">=</span>json secret/soothe <span class="o">&gt;</span> soothe_secrets_backup.json
+
+<span class="c"># Encrypt backup</span>
+gpg <span class="nt">--symmetric</span> soothe_secrets_backup.json
+</code></pre></div></div>
+<h2 id="docker-volume-backup">
+  
+  
+    <a href="#docker-volume-backup" class="anchor-heading" aria-labelledby="docker-volume-backup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Docker Volume Backup
+  
+  
+</h2>
+    
+<h3 id="volume-backup-script">
+  
+  
+    <a href="#volume-backup-script" class="anchor-heading" aria-labelledby="volume-backup-script"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Volume Backup Script
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># backup-docker-volumes.sh</span>
+
+<span class="nv">BACKUP_DIR</span><span class="o">=</span><span class="s2">"/var/backups/soothe/volumes"</span>
+<span class="nv">DATE</span><span class="o">=</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d<span class="si">)</span>
+
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>
+
+<span class="c"># Backup PostgreSQL volume</span>
+docker run <span class="nt">--rm</span> <span class="se">\</span>
+    <span class="nt">-v</span> soothe_postgres_data:/source:ro <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>:/backup <span class="se">\</span>
+    alpine <span class="nb">tar </span>czf /backup/postgres_data_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.tar.gz <span class="nt">-C</span> /source <span class="nb">.</span>
+
+<span class="c"># Backup daemon volume</span>
+docker run <span class="nt">--rm</span> <span class="se">\</span>
+    <span class="nt">-v</span> soothe_daemon_data:/source:ro <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>:/backup <span class="se">\</span>
+    alpine <span class="nb">tar </span>czf /backup/daemon_data_<span class="k">${</span><span class="nv">DATE</span><span class="k">}</span>.tar.gz <span class="nt">-C</span> /source <span class="nb">.</span>
+
+<span class="c"># Upload to S3</span>
+aws s3 <span class="nb">sync</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>/ s3://soothe-backups/volumes/
+</code></pre></div></div>
+<h3 id="volume-restore">
+  
+  
+    <a href="#volume-restore" class="anchor-heading" aria-labelledby="volume-restore"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Volume Restore
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># restore-docker-volumes.sh</span>
+
+<span class="nv">BACKUP_DATE</span><span class="o">=</span><span class="s2">"20260606"</span>
+<span class="nv">BACKUP_DIR</span><span class="o">=</span><span class="s2">"/var/backups/soothe/volumes"</span>
+
+<span class="c"># Stop services</span>
+docker compose down
+
+<span class="c"># Restore PostgreSQL volume</span>
+docker run <span class="nt">--rm</span> <span class="se">\</span>
+    <span class="nt">-v</span> soothe_postgres_data:/target <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>:/backup <span class="se">\</span>
+    alpine sh <span class="nt">-c</span> <span class="s2">"cd /target &amp;&amp; tar xzf /backup/postgres_data_</span><span class="k">${</span><span class="nv">BACKUP_DATE</span><span class="k">}</span><span class="s2">.tar.gz"</span>
+
+<span class="c"># Restore daemon volume</span>
+docker run <span class="nt">--rm</span> <span class="se">\</span>
+    <span class="nt">-v</span> soothe_daemon_data:/target <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">${</span><span class="nv">BACKUP_DIR</span><span class="k">}</span>:/backup <span class="se">\</span>
+    alpine sh <span class="nt">-c</span> <span class="s2">"cd /target &amp;&amp; tar xzf /backup/daemon_data_</span><span class="k">${</span><span class="nv">BACKUP_DATE</span><span class="k">}</span><span class="s2">.tar.gz"</span>
+
+<span class="c"># Start services</span>
+docker compose up <span class="nt">-d</span>
+</code></pre></div></div>
+<h2 id="disaster-recovery">
+  
+  
+    <a href="#disaster-recovery" class="anchor-heading" aria-labelledby="disaster-recovery"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Disaster Recovery
+  
+  
+</h2>
+    
+<h3 id="recovery-scenarios">
+  
+  
+    <a href="#recovery-scenarios" class="anchor-heading" aria-labelledby="recovery-scenarios"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Recovery Scenarios
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Scenario</th>
+      <th>Recovery Method</th>
+      <th>RTO</th>
+      <th>RPO</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Database corruption</td>
+      <td>pg_dump restore</td>
+      <td>1 hour</td>
+      <td>24 hours</td>
+    </tr>
+    <tr>
+      <td>Hardware failure</td>
+      <td>Volume restore</td>
+      <td>2 hours</td>
+      <td>24 hours</td>
+    </tr>
+    <tr>
+      <td>Region outage</td>
+      <td>Remote backup restore</td>
+      <td>4 hours</td>
+      <td>24 hours</td>
+    </tr>
+    <tr>
+      <td>Point-in-time recovery</td>
+      <td>WAL streaming</td>
+      <td>30 minutes</td>
+      <td>0-1 hour</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p><strong>RTO</strong>: Recovery Time Objective (time to restore)
+<strong>RPO</strong>: Recovery Point Objective (data loss tolerance)</p>
+<h3 id="recovery-procedure">
+  
+  
+    <a href="#recovery-procedure" class="anchor-heading" aria-labelledby="recovery-procedure"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Recovery Procedure
+  
+  
+</h3>
+    
+<h4 id="full-database-recovery">
+  
+  
+    <a href="#full-database-recovery" class="anchor-heading" aria-labelledby="full-database-recovery"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Full Database Recovery
+  
+  
+</h4>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># restore-full.sh - Full database restore</span>
+
+<span class="nv">BACKUP_DATE</span><span class="o">=</span><span class="s2">"20260606"</span>
+<span class="nv">BACKUP_FILE</span><span class="o">=</span><span class="s2">"/var/backups/soothe/soothe_backup_</span><span class="k">${</span><span class="nv">BACKUP_DATE</span><span class="k">}</span><span class="s2">.tar.gz"</span>
+<span class="nv">RESTORE_DIR</span><span class="o">=</span><span class="s2">"/tmp/soothe_restore"</span>
+
+<span class="c"># Stop daemon</span>
+docker compose stop soothed
+<span class="c"># Or systemd: sudo systemctl stop soothed</span>
+
+<span class="c"># Extract backup</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>
+<span class="nb">tar </span>xzf <span class="k">${</span><span class="nv">BACKUP_FILE</span><span class="k">}</span> <span class="nt">-C</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>
+
+<span class="c"># Drop existing databases (WARNING: destructive)</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"DROP DATABASE IF EXISTS soothe_checkpoints;"</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"DROP DATABASE IF EXISTS soothe_metadata;"</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"DROP DATABASE IF EXISTS soothe_vectors;"</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"DROP DATABASE IF EXISTS soothe_memory;"</span>
+
+<span class="c"># Restore databases</span>
+<span class="k">for </span>db <span class="k">in </span>soothe_checkpoints soothe_metadata soothe_vectors soothe_memory<span class="p">;</span> <span class="k">do</span>
+    <span class="c"># Create database</span>
+    psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"CREATE DATABASE </span><span class="k">${</span><span class="nv">db</span><span class="k">}</span><span class="s2">;"</span>
+    
+    <span class="c"># Restore data</span>
+    pg_restore <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-d</span> <span class="k">${</span><span class="nv">db</span><span class="k">}</span> <span class="se">\</span>
+        <span class="nt">--format</span><span class="o">=</span>custom <span class="se">\</span>
+        <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">db</span><span class="k">}</span>.dump
+<span class="k">done</span>
+
+<span class="c"># Restore config</span>
+<span class="nb">cp</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>/nano.yml /var/lib/soothe/config/nano.yml
+<span class="nb">cp</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>/.env /var/lib/soothe/.env
+
+<span class="c"># Start daemon</span>
+docker compose start soothed
+<span class="c"># Or systemd: sudo systemctl start soothed</span>
+
+<span class="c"># Verify restore</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-d</span> soothe_metadata <span class="se">\</span>
+    <span class="nt">-c</span> <span class="s2">"SELECT count(*) FROM threads;"</span>
+</code></pre></div></div>
+<h4 id="point-in-time-recovery-pitr">
+  
+  
+    <a href="#point-in-time-recovery-pitr" class="anchor-heading" aria-labelledby="point-in-time-recovery-pitr"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Point-in-Time Recovery (PITR)
+  
+  
+</h4>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># restore-pitr.sh - Point-in-time recovery</span>
+
+<span class="nv">TARGET_TIME</span><span class="o">=</span><span class="s2">"2026-06-06 10:30:00"</span>
+<span class="nv">WAL_DIR</span><span class="o">=</span><span class="s2">"/var/backups/soothe/wal"</span>
+<span class="nv">RESTORE_DIR</span><span class="o">=</span><span class="s2">"/var/lib/postgresql/restore"</span>
+
+<span class="c"># Stop PostgreSQL</span>
+docker compose stop soothe-pgvector
+
+<span class="c"># Create restore directory</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>
+
+<span class="c"># Restore base backup</span>
+pg_basebackup <span class="nt">--host</span><span class="o">=</span>localhost <span class="nt">--pgdata</span><span class="o">=</span><span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span> <span class="se">\</span>
+    <span class="nt">--format</span><span class="o">=</span><span class="nb">tar</span> <span class="nt">--wal-method</span><span class="o">=</span>none
+
+<span class="c"># Configure recovery</span>
+<span class="nb">cat</span> <span class="o">&gt;</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>/recovery.conf <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh">
+restore_command = 'aws s3 cp s3://soothe-backups/wal/%f %p'
+recovery_target_time = '</span><span class="k">${</span><span class="nv">TARGET_TIME</span><span class="k">}</span><span class="sh">'
+recovery_target_action = 'promote'
+</span><span class="no">EOF
+
+</span><span class="c"># Start PostgreSQL in recovery mode</span>
+pg_ctl <span class="nt">-D</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span> start
+
+<span class="c"># Wait for recovery completion</span>
+<span class="k">until </span>pg_isready <span class="nt">-h</span> localhost<span class="p">;</span> <span class="k">do
+    </span><span class="nb">sleep </span>5
+<span class="k">done</span>
+
+<span class="c"># Verify recovery</span>
+psql <span class="nt">-h</span> localhost <span class="nt">-U</span> postgres <span class="nt">-d</span> soothe_metadata <span class="se">\</span>
+    <span class="nt">-c</span> <span class="s2">"SELECT count(*) FROM threads WHERE created_at &lt;= '</span><span class="k">${</span><span class="nv">TARGET_TIME</span><span class="k">}</span><span class="s2">';"</span>
+</code></pre></div></div>
+<h3 id="disaster-recovery-site">
+  
+  
+    <a href="#disaster-recovery-site" class="anchor-heading" aria-labelledby="disaster-recovery-site"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Disaster Recovery Site
+  
+  
+</h3>
+    
+
+<p><strong>Remote backup location</strong> (different region):</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># S3 cross-region replication</span>
+<span class="s">aws s3api put-bucket-replication \</span>
+    <span class="s">--bucket soothe-backups-primary \</span>
+    <span class="s">--replication-configuration file://replication.json</span>
+
+<span class="c1"># replication.json</span>
+<span class="pi">{</span>
+  <span class="s2">"</span><span class="s">Role"</span><span class="pi">:</span> <span class="s2">"</span><span class="s">arn:aws:iam::123456789:role/replication-role"</span><span class="pi">,</span>
+  <span class="s2">"</span><span class="s">Rules"</span><span class="pi">:</span> <span class="pi">[{</span>
+    <span class="s2">"</span><span class="s">Status"</span><span class="pi">:</span> <span class="s2">"</span><span class="s">Enabled"</span><span class="pi">,</span>
+    <span class="s2">"</span><span class="s">Destination"</span><span class="pi">:</span> <span class="pi">{</span>
+      <span class="s2">"</span><span class="s">Bucket"</span><span class="pi">:</span> <span class="s2">"</span><span class="s">arn:aws:s3:::soothe-backups-secondary"</span>
+    <span class="pi">}</span>
+  <span class="pi">}]</span>
+<span class="pi">}</span>
+</code></pre></div></div>
+
+<p><strong>Disaster recovery checklist</strong>:</p>
+
+<ol>
+  <li>Verify backup integrity</li>
+  <li>Restore databases in DR site</li>
+  <li>Restore configuration files</li>
+  <li>Start daemon with DR config</li>
+  <li>Verify thread continuity</li>
+  <li>Update DNS/load balancer to DR site</li>
+  <li>Monitor for issues</li>
+</ol>
+<h2 id="backup-monitoring">
+  
+  
+    <a href="#backup-monitoring" class="anchor-heading" aria-labelledby="backup-monitoring"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Monitoring
+  
+  
+</h2>
+    
+<h3 id="backup-verification">
+  
+  
+    <a href="#backup-verification" class="anchor-heading" aria-labelledby="backup-verification"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Verification
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># verify-backup.sh - Backup integrity check</span>
+
+<span class="nv">BACKUP_DATE</span><span class="o">=</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d<span class="si">)</span>
+<span class="nv">BACKUP_FILE</span><span class="o">=</span><span class="s2">"/var/backups/soothe/soothe_backup_</span><span class="k">${</span><span class="nv">BACKUP_DATE</span><span class="k">}</span><span class="s2">.tar.gz"</span>
+
+<span class="c"># Verify backup exists</span>
+<span class="k">if</span> <span class="o">[</span> <span class="o">!</span> <span class="nt">-f</span> <span class="k">${</span><span class="nv">BACKUP_FILE</span><span class="k">}</span> <span class="o">]</span><span class="p">;</span> <span class="k">then
+    </span><span class="nb">echo</span> <span class="s2">"ERROR: Backup file missing: </span><span class="k">${</span><span class="nv">BACKUP_FILE</span><span class="k">}</span><span class="s2">"</span>
+    <span class="nb">exit </span>1
+<span class="k">fi</span>
+
+<span class="c"># Verify backup integrity</span>
+<span class="nb">tar </span>tzf <span class="k">${</span><span class="nv">BACKUP_FILE</span><span class="k">}</span> | <span class="nb">grep</span> <span class="nt">-E</span> <span class="s2">"(</span><span class="se">\.</span><span class="s2">dump|</span><span class="se">\.</span><span class="s2">yml|</span><span class="se">\.</span><span class="s2">env)"</span> <span class="o">||</span> <span class="o">{</span>
+    <span class="nb">echo</span> <span class="s2">"ERROR: Backup file corrupted"</span>
+    <span class="nb">exit </span>1
+<span class="o">}</span>
+
+<span class="c"># Verify PostgreSQL dumps</span>
+<span class="k">for </span>db <span class="k">in </span>soothe_checkpoints soothe_metadata soothe_vectors soothe_memory<span class="p">;</span> <span class="k">do
+    </span>pg_restore <span class="nt">--list</span> <span class="k">${</span><span class="nv">RESTORE_DIR</span><span class="k">}</span>/<span class="k">${</span><span class="nv">db</span><span class="k">}</span>.dump | <span class="nb">grep</span> <span class="s2">"TABLE DATA"</span> <span class="o">||</span> <span class="o">{</span>
+        <span class="nb">echo</span> <span class="s2">"WARNING: </span><span class="k">${</span><span class="nv">db</span><span class="k">}</span><span class="s2"> dump may be incomplete"</span>
+    <span class="o">}</span>
+<span class="k">done</span>
+
+<span class="c"># Verify S3 upload</span>
+aws s3 <span class="nb">ls </span>s3://soothe-backups/<span class="k">${</span><span class="nv">BACKUP_DATE</span><span class="k">}</span>/ | <span class="nb">grep</span> <span class="s2">"soothe_backup"</span> <span class="o">||</span> <span class="o">{</span>
+    <span class="nb">echo</span> <span class="s2">"ERROR: Backup not uploaded to S3"</span>
+    <span class="nb">exit </span>1
+<span class="o">}</span>
+
+<span class="nb">echo</span> <span class="s2">"Backup verification successful"</span>
+</code></pre></div></div>
+<h3 id="backup-alerts">
+  
+  
+    <a href="#backup-alerts" class="anchor-heading" aria-labelledby="backup-alerts"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Alerts
+  
+  
+</h3>
+    
+
+<p><strong>Backup failure alerting</strong> (cron + email):</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># /etc/cron.d/soothe-backup</span>
+0 2 <span class="k">*</span> <span class="k">*</span> <span class="k">*</span> root /usr/local/bin/backup-postgres.sh <span class="o">||</span> <span class="se">\</span>
+    mail <span class="nt">-s</span> <span class="s2">"Soothe Backup Failed"</span> admin@your-domain.com
+</code></pre></div></div>
+
+<p><strong>Backup monitoring dashboard</strong> (Grafana):</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Grafana alert rule</span>
+<span class="na">alert</span><span class="pi">:</span> <span class="s">backup_missing</span>
+<span class="na">expr</span><span class="pi">:</span> <span class="s">backup_last_success_timestamp &lt; now() - </span><span class="m">86400</span>
+<span class="na">severity</span><span class="pi">:</span> <span class="s">critical</span>
+<span class="na">annotations</span><span class="pi">:</span>
+  <span class="na">summary</span><span class="pi">:</span> <span class="s2">"</span><span class="s">No</span><span class="nv"> </span><span class="s">backup</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">last</span><span class="nv"> </span><span class="s">24</span><span class="nv"> </span><span class="s">hours"</span>
+</code></pre></div></div>
+<h2 id="backup-automation">
+  
+  
+    <a href="#backup-automation" class="anchor-heading" aria-labelledby="backup-automation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Automation
+  
+  
+</h2>
+    
+<h3 id="cron-jobs">
+  
+  
+    <a href="#cron-jobs" class="anchor-heading" aria-labelledby="cron-jobs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Cron Jobs
+  
+  
+</h3>
+    
+
+<p><strong><code class="language-plaintext highlighter-rouge">/etc/cron.d/soothe-backups</code></strong>:</p>
+
+<pre><code class="language-cron"># Weekly full backup (Sunday 2 AM)
+0 2 * * 0 root /usr/local/bin/backup-postgres.sh
+
+# Daily incremental backup (2 AM)
+0 2 * * * root /usr/local/bin/backup-incremental.sh
+
+# Config backup (on change, manual trigger)
+# Run manually: sudo /usr/local/bin/backup-config.sh
+
+# Backup verification (daily 3 AM)
+0 3 * * * root /usr/local/bin/verify-backup.sh
+</code></pre>
+<h3 id="systemd-timer-alternative-to-cron">
+  
+  
+    <a href="#systemd-timer-alternative-to-cron" class="anchor-heading" aria-labelledby="systemd-timer-alternative-to-cron"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> systemd Timer (Alternative to Cron)
+  
+  
+</h3>
+    
+
+<p><strong><code class="language-plaintext highlighter-rouge">/etc/systemd/system/soothe-backup.timer</code></strong>:</p>
+
+<div class="language-ini highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nn">[Unit]</span>
+<span class="py">Description</span><span class="p">=</span><span class="s">Soothe Backup Timer</span>
+
+<span class="nn">[Timer]</span>
+<span class="py">OnCalendar</span><span class="p">=</span><span class="s">weekly</span>
+<span class="py">Persistent</span><span class="p">=</span><span class="s">true</span>
+
+<span class="nn">[Install]</span>
+<span class="py">WantedBy</span><span class="p">=</span><span class="s">timers.target</span>
+</code></pre></div></div>
+
+<p><strong><code class="language-plaintext highlighter-rouge">/etc/systemd/system/soothe-backup.service</code></strong>:</p>
+
+<div class="language-ini highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nn">[Unit]</span>
+<span class="py">Description</span><span class="p">=</span><span class="s">Soothe Weekly Backup</span>
+
+<span class="nn">[Service]</span>
+<span class="py">Type</span><span class="p">=</span><span class="s">oneshot</span>
+<span class="py">ExecStart</span><span class="p">=</span><span class="s">/usr/local/bin/backup-postgres.sh</span>
+</code></pre></div></div>
+
+<p><strong>Enable timer</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>systemctl <span class="nb">enable </span>soothe-backup.timer
+<span class="nb">sudo </span>systemctl start soothe-backup.timer
+</code></pre></div></div>
+<h2 id="backup-best-practices">
+  
+  
+    <a href="#backup-best-practices" class="anchor-heading" aria-labelledby="backup-best-practices"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Backup Best Practices
+  
+  
+</h2>
+    
+<h3 id="security">
+  
+  
+    <a href="#security" class="anchor-heading" aria-labelledby="security"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Security
+  
+  
+</h3>
+    
+
+<ol>
+  <li><strong>Encrypt backups</strong>: Use GPG or AES-256 encryption</li>
+  <li><strong>Secure storage</strong>: Use encrypted S3 buckets or private storage</li>
+  <li><strong>Access control</strong>: Restrict backup file access (chmod 600)</li>
+  <li><strong>Rotate keys</strong>: Periodically rotate encryption keys</li>
+  <li><strong>Test restores</strong>: Monthly restore tests to verify integrity</li>
+</ol>
+<h3 id="testing">
+  
+  
+    <a href="#testing" class="anchor-heading" aria-labelledby="testing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Testing
+  
+  
+</h3>
+    
+
+<p><strong>Monthly restore test</strong>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c">#!/bin/bash</span>
+<span class="c"># test-restore.sh - Monthly restore verification</span>
+
+<span class="nv">RESTORE_TEST_DIR</span><span class="o">=</span><span class="s2">"/tmp/restore_test"</span>
+<span class="nv">BACKUP_DATE</span><span class="o">=</span><span class="si">$(</span><span class="nb">date</span> <span class="nt">-d</span> <span class="s2">"7 days ago"</span> +%Y%m%d<span class="si">)</span>
+
+<span class="c"># Create isolated restore environment</span>
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="k">${</span><span class="nv">RESTORE_TEST_DIR</span><span class="k">}</span>
+docker run <span class="nt">-d</span> <span class="nt">--name</span> restore-test-postgres <span class="se">\</span>
+    <span class="nt">-e</span> <span class="nv">POSTGRES_PASSWORD</span><span class="o">=</span><span class="nb">test</span> <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">${</span><span class="nv">RESTORE_TEST_DIR</span><span class="k">}</span>:/restore <span class="se">\</span>
+    pgvector:pg17
+
+<span class="c"># Restore backup to test container</span>
+docker <span class="nb">exec </span>restore-test-postgres <span class="se">\</span>
+    pg_restore <span class="nt">-d</span> soothe_checkpoints <span class="se">\</span>
+    /restore/soothe_checkpoints.dump
+
+<span class="c"># Verify restore</span>
+docker <span class="nb">exec </span>restore-test-postgres <span class="se">\</span>
+    psql <span class="nt">-U</span> postgres <span class="nt">-d</span> soothe_checkpoints <span class="se">\</span>
+    <span class="nt">-c</span> <span class="s2">"SELECT count(*) FROM checkpoints;"</span>
+
+<span class="c"># Cleanup</span>
+docker stop restore-test-postgres
+docker <span class="nb">rm </span>restore-test-postgres
+<span class="nb">rm</span> <span class="nt">-rf</span> <span class="k">${</span><span class="nv">RESTORE_TEST_DIR</span><span class="k">}</span>
+
+<span class="nb">echo</span> <span class="s2">"Restore test successful"</span>
+</code></pre></div></div>
+<h3 id="compliance">
+  
+  
+    <a href="#compliance" class="anchor-heading" aria-labelledby="compliance"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Compliance
+  
+  
+</h3>
+    
+
+<p><strong>GDPR compliance</strong>:</p>
+<ul>
+  <li>Backup retention: 4 weeks (personal data)</li>
+  <li>Encryption: AES-256 required</li>
+  <li>Access logging: Track backup access</li>
+  <li>Right to deletion: Must be able to delete threads from backups</li>
+</ul>
+
+<p><strong>SOC 2 compliance</strong>:</p>
+<ul>
+  <li>Backup monitoring: Automated alerts</li>
+  <li>Restore testing: Quarterly verification</li>
+  <li>Encryption: At rest and in transit</li>
+  <li>Access control: Role-based backup access</li>
+</ul>
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/deployment/production-setup.html">Production Setup</a> - Deployment steps</li>
+  <li><a href="/soothe/wiki/deployment/monitoring.html">Monitoring Guide</a> - Backup monitoring</li>
+  <li><a href="/soothe/wiki/deployment/scaling.html">Scaling Strategies</a> - Multi-node backup strategies</li>
+  <li><a href="/soothe/wiki/deployment/security.html">Security Hardening</a> - Backup encryption</li>
+</ul><hr />
+
+<p><strong>Backup issues?</strong> See <a href="/soothe/wiki/troubleshooting-guide/">Troubleshooting</a> or contact admin team.</p>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

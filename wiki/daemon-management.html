@@ -1,0 +1,772 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li:not(:nth-child(6)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(6) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(6) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(6) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Daemon Management | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Daemon Management" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Manage the Soothe daemon process for background execution — start, stop, attach, and lifecycle control." />
+<meta property="og:description" content="Manage the Soothe daemon process for background execution — start, stop, attach, and lifecycle control." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/daemon-management.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/daemon-management.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Daemon Management" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Manage the Soothe daemon process for background execution — start, stop, attach, and lifecycle control.","headline":"Daemon Management","url":"https://mirasoth.github.io/soothe/wiki/daemon-management.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Daemon Management</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="daemon-management">
+  
+  
+    <a href="#daemon-management" class="anchor-heading" aria-labelledby="daemon-management"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Management
+  
+  
+</h1>
+    
+
+<p>Manage the Soothe daemon process for background execution.</p>
+<h2 id="what-is-the-daemon">
+  
+  
+    <a href="#what-is-the-daemon" class="anchor-heading" aria-labelledby="what-is-the-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> What is the Daemon?
+  
+  
+</h2>
+    
+
+<p>The Soothe daemon is a background process that:</p>
+<ul>
+  <li>Runs Soothe continuously without a TUI</li>
+  <li>Enables detached execution</li>
+  <li>Supports WebSocket transport</li>
+  <li>Allows multiple clients to connect</li>
+  <li>Maintains thread state</li>
+</ul>
+<h2 id="server-lifecycle">
+  
+  
+    <a href="#server-lifecycle" class="anchor-heading" aria-labelledby="server-lifecycle"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Server Lifecycle
+  
+  
+</h2>
+    
+<h3 id="start-daemon">
+  
+  
+    <a href="#start-daemon" class="anchor-heading" aria-labelledby="start-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Start Daemon
+  
+  
+</h3>
+    
+
+<p>Start the daemon in the background:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Start daemon in background</span>
+soothed start
+
+<span class="c"># Start in foreground (useful for debugging)</span>
+soothed start <span class="nt">--foreground</span>
+</code></pre></div></div>
+
+<p><strong>Output</strong> (background):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Starting daemon...
+Daemon started successfully (PID: 12345, ws://127.0.0.1:8765)
+</code></pre></div></div>
+
+<p>The foreground mode runs <code class="language-plaintext highlighter-rouge">run_daemon(..., detached=False)</code> in the current
+process and does not print the “Daemon started successfully” line — you see
+the daemon log stream directly until you stop the process.</p>
+<h3 id="check-status">
+  
+  
+    <a href="#check-status" class="anchor-heading" aria-labelledby="check-status"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Check Status
+  
+  
+</h3>
+    
+
+<p>There are two status commands:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">soothed status</code> — <strong>fast local check</strong> (no daemon imports, no RPC).
+Reads the PID file / probes the WebSocket port and prints the local view.</li>
+  <li><code class="language-plaintext highlighter-rouge">soothe status</code> — <strong>client-side RPC</strong> (queries the running daemon over
+WebSocket) and renders a unified table including PID, <strong>Started</strong> (the
+daemon process start time, an ISO-8601 UTC timestamp), active threads,
+daemon/core versions, and readiness state.</li>
+</ul>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Fast local check (no daemon imports)</span>
+soothed status
+
+<span class="c"># Rich client-side table (queries the daemon over WebSocket)</span>
+soothe status
+
+<span class="c"># JSON output from the client</span>
+soothe status daemon <span class="nt">--json</span>
+</code></pre></div></div>
+
+<p><strong><code class="language-plaintext highlighter-rouge">soothed status</code> output</strong> (running):</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Daemon status: running
+PID: 12345
+WebSocket: ws://127.0.0.1:8765
+</code></pre></div></div>
+
+<p>When the daemon is not running it prints <code class="language-plaintext highlighter-rouge">Daemon status: stopped</code>; if the PID
+file is missing but the port is live it prints
+<code class="language-plaintext highlighter-rouge">Daemon status: running (orphan — PID file missing)</code>.</p>
+
+<p><strong><code class="language-plaintext highlighter-rouge">soothe status</code> output</strong> (running daemon, unified table):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>                          Soothe Status
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Section   ┃ Setting           ┃ Value                       ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Connection│ WebSocket URL      │ ws://127.0.0.1:8765         │
+│           │ Soothe Home        │ /home/user/.soothe          │
+│ Daemon    │ Status             │ Running                     │
+│           │ PID                │ 12345                       │
+│           │ Started            │ 2026-07-28T08:46:22+00:00   │
+│           │ Active Threads     │ 3                           │
+│           │ Daemon Version     │ 0.7.0                       │
+│           │ Core Version       │ 0.7.0                       │
+│           │ Readiness          │ ready                       │
+└───────────┴────────────────────┴──────────────────────────────┘
+</code></pre></div></div>
+
+<p>The <strong>Started</strong> row is the daemon process start time (an ISO-8601 UTC
+timestamp captured when the daemon enters the running state). It is omitted
+when the daemon is not live or before the first successful start. With
+<code class="language-plaintext highlighter-rouge">--json</code> the same value is returned under the <code class="language-plaintext highlighter-rouge">started_at</code> key.</p>
+
+<p>When the daemon is not reachable, <code class="language-plaintext highlighter-rouge">soothe status</code> prints:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>                          Soothe Status
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Section   ┃ Setting           ┃ Value                       ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Connection│ WebSocket URL      │ ws://127.0.0.1:8765         │
+│           │ Soothe Home        │ /home/user/.soothe          │
+│ Daemon    │ Status             │ Not running                 │
+└───────────┴────────────────────┴──────────────────────────────┘
+
+Hint: Start with 'soothed start'
+</code></pre></div></div>
+<h3 id="stop-daemon">
+  
+  
+    <a href="#stop-daemon" class="anchor-heading" aria-labelledby="stop-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Stop Daemon
+  
+  
+</h3>
+    
+
+<p>Gracefully stop the daemon:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed stop
+</code></pre></div></div>
+
+<p><strong>Output</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Stopping daemon (PID: 12345)...
+Daemon stopped successfully
+</code></pre></div></div>
+<h3 id="restart-daemon">
+  
+  
+    <a href="#restart-daemon" class="anchor-heading" aria-labelledby="restart-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Restart Daemon
+  
+  
+</h3>
+    
+
+<p>Restart the daemon:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed restart
+</code></pre></div></div>
+<h3 id="attach-to-daemon">
+  
+  
+    <a href="#attach-to-daemon" class="anchor-heading" aria-labelledby="attach-to-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Attach to Daemon
+  
+  
+</h3>
+    
+
+<p><strong>Note</strong>: To reconnect to a running daemon, use:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Continue last active loop via daemon</span>
+soothe loop <span class="k">continue</span>  <span class="c"># CLI auto-connects to running daemon</span>
+
+<span class="c"># Continue specific loop via daemon</span>
+soothe loop <span class="k">continue</span> &lt;loop-id&gt;  <span class="c"># CLI auto-connects to running daemon</span>
+</code></pre></div></div>
+
+<p>This opens the TUI and connects to the already-running daemon.</p>
+<h2 id="detached-execution">
+  
+  
+    <a href="#detached-execution" class="anchor-heading" aria-labelledby="detached-execution"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Detached Execution
+  
+  
+</h2>
+    
+<h3 id="detach-from-tui">
+  
+  
+    <a href="#detach-from-tui" class="anchor-heading" aria-labelledby="detach-from-tui"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Detach from TUI
+  
+  
+</h3>
+    
+
+<p>Keep daemon running after closing TUI:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># In TUI</span>
+/detach
+
+<span class="c"># Or use keyboard shortcut</span>
+Ctrl+D
+</code></pre></div></div>
+
+<p>The daemon continues running in the background.</p>
+<h3 id="reattach-later">
+  
+  
+    <a href="#reattach-later" class="anchor-heading" aria-labelledby="reattach-later"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Reattach Later
+  
+  
+</h3>
+    
+
+<p>Reconnect to the daemon:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Continue via running daemon</span>
+soothe loop <span class="k">continue</span>  <span class="c"># CLI auto-connects to running daemon</span>
+</code></pre></div></div>
+<h2 id="when-to-use-daemon-mode">
+  
+  
+    <a href="#when-to-use-daemon-mode" class="anchor-heading" aria-labelledby="when-to-use-daemon-mode"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> When to Use Daemon Mode
+  
+  
+</h2>
+    
+<h3 id="background-processing">
+  
+  
+    <a href="#background-processing" class="anchor-heading" aria-labelledby="background-processing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Background Processing
+  
+  
+</h3>
+    
+
+<p>Run long tasks without keeping the TUI open:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Start daemon</span>
+soothed start
+
+<span class="c"># Run task in background</span>
+soothe <span class="nt">-p</span> <span class="s2">"Analyze the entire codebase"</span> &amp;
+
+<span class="c"># Detach and close terminal</span>
+<span class="c"># Task continues running</span>
+</code></pre></div></div>
+<h3 id="multiple-clients">
+  
+  
+    <a href="#multiple-clients" class="anchor-heading" aria-labelledby="multiple-clients"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Multiple Clients
+  
+  
+</h3>
+    
+
+<p>Connect multiple clients to the same daemon:</p>
+<ul>
+  <li>CLI client</li>
+  <li>TUI client</li>
+  <li>Web UI (via WebSocket)</li>
+</ul>
+<h3 id="247-availability">
+  
+  
+    <a href="#247-availability" class="anchor-heading" aria-labelledby="247-availability"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> 24/7 Availability
+  
+  
+</h3>
+    
+
+<p>Keep Soothe running continuously:</p>
+<ul>
+  <li>Always ready for queries</li>
+  <li>No startup latency</li>
+  <li>Maintains context and memory</li>
+</ul>
+<h2 id="logs">
+  
+  
+    <a href="#logs" class="anchor-heading" aria-labelledby="logs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Logs
+  
+  
+</h2>
+    
+
+<p>Daemon logs are stored in:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.soothe/logs/
+├── soothed.log          <span class="c"># Daemon transport, sessions, routing (soothe_daemon.*)</span>
+├── soothe.log          <span class="c"># In-process agent core (soothe.*, soothe_plugins.*)</span>
+└── soothe-cli.log      <span class="c"># CLI client (when using soothe TUI/CLI)</span>
+</code></pre></div></div>
+<h3 id="view-logs">
+  
+  
+    <a href="#view-logs" class="anchor-heading" aria-labelledby="view-logs"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> View Logs
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Daemon server (WebSocket, session lifecycle)</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothed.log
+
+<span class="c"># Agent execution inside the daemon process</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothe.log
+
+<span class="c"># View specific thread log</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/threads/abc123.log
+</code></pre></div></div>
+<h3 id="debug-mode">
+  
+  
+    <a href="#debug-mode" class="anchor-heading" aria-labelledby="debug-mode"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Debug Mode
+  
+  
+</h3>
+    
+
+<p>Enable verbose logging:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">SOOTHE_DEBUG</span><span class="o">=</span><span class="nb">true
+</span>soothed start
+</code></pre></div></div>
+<h2 id="configuration">
+  
+  
+    <a href="#configuration" class="anchor-heading" aria-labelledby="configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configuration
+  
+  
+</h2>
+    
+
+<p>Configure daemon behavior in <code class="language-plaintext highlighter-rouge">~/.soothe/config/daemon.yml</code>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Transport configuration</span>
+<span class="na">transports</span><span class="pi">:</span>
+  <span class="na">websocket</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">host</span><span class="pi">:</span> <span class="s2">"</span><span class="s">127.0.0.1"</span>
+    <span class="na">port</span><span class="pi">:</span> <span class="m">8765</span>
+
+<span class="c1"># Concurrency — per-request wall-clock cap (default 14 days; 0 = no timeout)</span>
+<span class="na">thread_pool</span><span class="pi">:</span>
+  <span class="na">request_timeout_seconds</span><span class="pi">:</span> <span class="m">1209600</span>
+
+<span class="c1"># Legacy / optional fields (may appear in older configs)</span>
+<span class="na">max_concurrent_threads</span><span class="pi">:</span> <span class="m">100</span>
+<span class="na">thread_max_age_hours</span><span class="pi">:</span> <span class="m">24</span>
+
+<span class="c1"># Logging (agent config in nano.yml → observability)</span>
+<span class="c1"># log_file_level: INFO  # DEBUG, INFO, WARNING, ERROR</span>
+</code></pre></div></div>
+<h2 id="monitoring">
+  
+  
+    <a href="#monitoring" class="anchor-heading" aria-labelledby="monitoring"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Monitoring
+  
+  
+</h2>
+    
+<h3 id="resource-usage">
+  
+  
+    <a href="#resource-usage" class="anchor-heading" aria-labelledby="resource-usage"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Resource Usage
+  
+  
+</h3>
+    
+
+<p>Monitor daemon resource usage:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check memory and CPU</span>
+ps aux | <span class="nb">grep </span>soothe
+
+<span class="c"># Use system monitor</span>
+htop <span class="nt">-p</span> <span class="si">$(</span>pgrep <span class="nt">-f</span> <span class="s2">"soothed"</span><span class="si">)</span>
+</code></pre></div></div>
+<h3 id="health-checks">
+  
+  
+    <a href="#health-checks" class="anchor-heading" aria-labelledby="health-checks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Health Checks
+  
+  
+</h3>
+    
+
+<p>Use the daemon doctor command:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed doctor
+</code></pre></div></div>
+
+<p><strong>Response</strong>:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"healthy"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"uptime"</span><span class="p">:</span><span class="w"> </span><span class="mi">7200</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"active_threads"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"memory_mb"</span><span class="p">:</span><span class="w"> </span><span class="mi">256</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<h2 id="troubleshooting">
+  
+  
+    <a href="#troubleshooting" class="anchor-heading" aria-labelledby="troubleshooting"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Troubleshooting
+  
+  
+</h2>
+    
+<h3 id="daemon-wont-start">
+  
+  
+    <a href="#daemon-wont-start" class="anchor-heading" aria-labelledby="daemon-wont-start"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Won’t Start
+  
+  
+</h3>
+    
+
+<p><strong>Error</strong>: <code class="language-plaintext highlighter-rouge">Address already in use</code></p>
+
+<p><strong>Solution</strong>: Port 8765 is already in use by a previous instance</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed stop
+soothed start
+</code></pre></div></div>
+<h3 id="daemon-not-responding">
+  
+  
+    <a href="#daemon-not-responding" class="anchor-heading" aria-labelledby="daemon-not-responding"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Not Responding
+  
+  
+</h3>
+    
+
+<p><strong>Solution</strong>: Restart the daemon</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed stop
+soothed start
+</code></pre></div></div>
+<h3 id="cant-connect-to-daemon">
+  
+  
+    <a href="#cant-connect-to-daemon" class="anchor-heading" aria-labelledby="cant-connect-to-daemon"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Can’t Connect to Daemon
+  
+  
+</h3>
+    
+
+<p><strong>Error</strong>: <code class="language-plaintext highlighter-rouge">No daemon running</code></p>
+
+<p><strong>Solution</strong>: Start daemon first, then use loop continue</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed start
+soothe loop <span class="k">continue</span>  <span class="c"># CLI auto-connects to running daemon</span>
+</code></pre></div></div>
+<h2 id="related-guides">
+  
+  
+    <a href="#related-guides" class="anchor-heading" aria-labelledby="related-guides"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Guides
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/multi-transport.html">Transport Setup</a> - Configure WebSocket</li>
+  <li><a href="/soothe/wiki/thread-management.html">Thread Management</a> - Work with threads</li>
+  <li><a href="/soothe/wiki/troubleshooting-guide/">Troubleshooting</a> - Common daemon issues</li>
+</ul>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+

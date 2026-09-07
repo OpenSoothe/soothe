@@ -1,0 +1,1526 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-default.css">
+
+  <link rel="stylesheet" href="/soothe/assets/css/just-the-docs-head-nav.css" id="jtd-head-nav-stylesheet">
+
+  <style id="jtd-nav-activation">
+  
+
+    .site-nav > ul.nav-list:first-child > li > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > a,
+    
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li:not(:nth-child(2)) > a,
+    .site-nav > ul.nav-list:first-child > li > ul > li > ul > li > ul > li a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:not(:first-child) a,
+    .site-nav li.external a {
+      background-image: none;
+    }
+
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > ul > li:nth-child(2) > a {
+      font-weight: 600;
+      text-decoration: none;
+    }.site-nav > ul.nav-list:first-child > li:nth-child(2) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > button svg,
+    .site-nav > ul.nav-list:first-child > li:nth-child(2) > ul > li:nth-child(12) > ul > li:nth-child(2) > button svg {
+      transform: rotate(-90deg);
+    }.site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(12) > ul.nav-list,
+    .site-nav > ul.nav-list:first-child > li.nav-list-item:nth-child(2) > ul.nav-list > li.nav-list-item:nth-child(12) > ul.nav-list > li.nav-list-item:nth-child(2) > ul.nav-list {
+      display: block;
+    }
+  </style>
+
+  
+
+  
+    <script src="/soothe/assets/js/vendor/lunr.min.js"></script>
+  
+
+  <script src="/soothe/assets/js/just-the-docs.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+
+
+
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Monitoring and Observability | Soothe Docs</title>
+<meta name="generator" content="Jekyll v3.10.0" />
+<meta property="og:title" content="Monitoring and Observability" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Comprehensive guide for monitoring Soothe daemon, tracking LLM usage, and setting up observability." />
+<meta property="og:description" content="Comprehensive guide for monitoring Soothe daemon, tracking LLM usage, and setting up observability." />
+<link rel="canonical" href="https://mirasoth.github.io/soothe/wiki/deployment/monitoring.html" />
+<meta property="og:url" content="https://mirasoth.github.io/soothe/wiki/deployment/monitoring.html" />
+<meta property="og:site_name" content="Soothe Docs" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Monitoring and Observability" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebPage","description":"Comprehensive guide for monitoring Soothe daemon, tracking LLM usage, and setting up observability.","headline":"Monitoring and Observability","url":"https://mirasoth.github.io/soothe/wiki/deployment/monitoring.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  
+
+</head>
+
+<body>
+  <a class="skip-to-main" href="#main-content">Skip to main content</a>
+  <svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+  <symbol id="svg-link" viewBox="0 0 24 24">
+  <title>Link</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-link">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+  </svg>
+</symbol>
+
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+  <title>Menu</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+    <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</symbol>
+
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+  <title>Expand</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+    <polyline points="9 18 15 12 9 6"></polyline>
+  </svg>
+</symbol>
+
+  <!-- Feather. MIT License: https://github.com/feathericons/feather/blob/master/LICENSE -->
+<symbol id="svg-external-link" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-external-link">
+  <title id="svg-external-link-title">(external link)</title>
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line>
+</symbol>
+
+  
+    <symbol id="svg-doc" viewBox="0 0 24 24">
+  <title>Document</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file">
+    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline>
+  </svg>
+</symbol>
+
+    <symbol id="svg-search" viewBox="0 0 24 24">
+  <title>Search</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search">
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+</symbol>
+
+  
+  
+    <!-- Bootstrap Icons. MIT License: https://github.com/twbs/icons/blob/main/LICENSE.md -->
+<symbol id="svg-copy" viewBox="0 0 16 16">
+  <title>Copy</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+  </svg>
+</symbol>
+<symbol id="svg-copied" viewBox="0 0 16 16">
+  <title>Copied</title>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard-check-fill" viewBox="0 0 16 16">
+    <path d="M6.5 0A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Zm3 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Z"/>
+    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1A2.5 2.5 0 0 1 9.5 5h-3A2.5 2.5 0 0 1 4 2.5v-1Zm6.854 7.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708Z"/>
+  </svg>
+</symbol>
+
+  
+</svg>
+
+  
+    <div class="side-bar">
+  <div class="site-header" role="banner">
+    <a href="/soothe/" class="site-title lh-tight">
+  Soothe Docs
+
+</a>
+    <button id="menu-button" class="site-button btn-reset" aria-label="Menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use xlink:href="#svg-menu"></use></svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main" id="site-nav" class="site-nav">
+  
+  
+    <ul class="nav-list"><li class="nav-list-item"><a href="/soothe/" class="nav-list-link">Home</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Wiki submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/" class="nav-list-link">Wiki</a><ul class="nav-list"><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Getting Started submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/getting-started/" class="nav-list-link">Getting Started</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Installation.html" class="nav-list-link">Installation</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Quick-Start.html" class="nav-list-link">Quick Start</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/Basic-Concepts.html" class="nav-list-link">Basic Concepts</a></li><li class="nav-list-item"><a href="/soothe/wiki/getting-started/onboarding.html" class="nav-list-link">Onboarding Guide</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="User Guides submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/user-guides/" class="nav-list-link">User Guides</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/cli-reference.html" class="nav-list-link">CLI Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/tui-guide.html" class="nav-list-link">TUI Guide</a></li><li class="nav-list-item"><a href="/soothe/wiki/autonomous-mode.html" class="nav-list-link">Autonomous Mode</a></li><li class="nav-list-item"><a href="/soothe/wiki/subagents.html" class="nav-list-link">Subagents</a></li><li class="nav-list-item"><a href="/soothe/wiki/thread-management.html" class="nav-list-link">Thread Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/clients/" class="nav-list-link">Language Clients</a></li><li class="nav-list-item"><a href="/soothe/wiki/architecture/" class="nav-list-link">Architecture</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Core Modules submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/core/" class="nav-list-link">Core Modules</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/core/agent-factory.html" class="nav-list-link">Agent Factory</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/runner.html" class="nav-list-link">SootheRunner</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/strangeloop.html" class="nav-list-link">StrangeLoop</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/context-engine.html" class="nav-list-link">ContextEngine</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/events.html" class="nav-list-link">Event System</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/resolver.html" class="nav-list-link">Protocol Resolver</a></li><li class="nav-list-item"><a href="/soothe/wiki/core/workspace.html" class="nav-list-link">Workspace Management</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/daemon-management.html" class="nav-list-link">Daemon Management</a></li><li class="nav-list-item"><a href="/soothe/wiki/multi-transport.html" class="nav-list-link">WebSocket Transport Setup</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Configuration Guide submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/configuration-guide/" class="nav-list-link">Configuration Guide</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/yaml-reference.html" class="nav-list-link">YAML Reference</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/environment-variables.html" class="nav-list-link">Environment Variables</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/common-patterns.html" class="nav-list-link">Common Configuration Patterns</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration-guide/provider-setup.html" class="nav-list-link">Provider Setup</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Backends submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/backends/" class="nav-list-link">Backends</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/backends/memory-backends.html" class="nav-list-link">Memory Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/durability-backends.html" class="nav-list-link">Durability Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/persistence-backends.html" class="nav-list-link">Persistence Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/vector-store-backends.html" class="nav-list-link">Vector Store Backends</a></li><li class="nav-list-item"><a href="/soothe/wiki/backends/policy-backends.html" class="nav-list-link">Policy Backends</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Capabilities submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/capabilities/" class="nav-list-link">Capabilities</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/capabilities/subagents.html" class="nav-list-link">Subagents Architecture</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/tools.html" class="nav-list-link">Tools System</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/mcp.html" class="nav-list-link">MCP Integration</a></li><li class="nav-list-item"><a href="/soothe/wiki/capabilities/extension-patterns.html" class="nav-list-link">Extension Patterns</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Protocols submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/protocols/" class="nav-list-link">Protocols</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/protocols/durability.html" class="nav-list-link">DurabilityProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/memory.html" class="nav-list-link">MemoryProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/context.html" class="nav-list-link">ContextProtocol (Not Implemented)</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/policy.html" class="nav-list-link">PolicyProtocol</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/vector-store-persistence.html" class="nav-list-link">VectorStoreProtocol & AsyncPersistStore</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/planner.html" class="nav-list-link">PlannerProtocol & Planner Subagent</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/loop-protocols.html" class="nav-list-link">Loop-Level Protocols</a></li><li class="nav-list-item"><a href="/soothe/wiki/protocols/execution-protocols.html" class="nav-list-link">Execution Protocols</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Deployment submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/deployment/" class="nav-list-link">Deployment</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/deployment/production-setup.html" class="nav-list-link">Production Setup</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/monitoring.html" class="nav-list-link">Monitoring and Observability</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/security.html" class="nav-list-link">Security Hardening</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/scaling.html" class="nav-list-link">Scaling Strategies</a></li><li class="nav-list-item"><a href="/soothe/wiki/deployment/backup-recovery.html" class="nav-list-link">Backup and Recovery</a></li></ul></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="Troubleshooting & Debugging submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/troubleshooting/" class="nav-list-link">Troubleshooting & Debugging</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/howto_debug.html" class="nav-list-link">Debug Guide</a></li></ul></li><li class="nav-list-item"><a href="/soothe/wiki/query-processing-flow.html" class="nav-list-link">User Query Processing Flow</a></li><li class="nav-list-item"><a href="/soothe/wiki/authentication/" class="nav-list-link">Authentication</a></li><li class="nav-list-item"><a href="/soothe/wiki/configuration/" class="nav-list-link">Configuration (Quick Reference)</a></li><li class="nav-list-item"><a href="/soothe/wiki/troubleshooting-guide/" class="nav-list-link">Troubleshooting</a></li></ul></li><li class="nav-list-item"><a href="/soothe/faq/" class="nav-list-link">FAQ</a></li><li class="nav-list-item"><a href="/soothe/changelog/" class="nav-list-link">CHANGELOG</a></li><li class="nav-list-item"><button class="nav-list-expander btn-reset" aria-label="API Reference submenu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use xlink:href="#svg-arrow-right"></use></svg>
+      </button><a href="/soothe/wiki/api-reference/" class="nav-list-link">API Reference</a><ul class="nav-list"><li class="nav-list-item"><a href="/soothe/wiki/api-reference/core-api.html" class="nav-list-link">Core Framework API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/daemon-api.html" class="nav-list-link">Daemon Server API</a></li><li class="nav-list-item"><a href="/soothe/wiki/api-reference/sdk-api.html" class="nav-list-link">Client & Plugin SDK API</a></li></ul></li><li class="nav-list-item"><a href="/soothe/changelogs/" class="nav-list-link">Versioned Changelogs</a></li><li class="nav-list-item"><a href="/soothe/rfc-methodology-guide.html" class="nav-list-link">RFC Methodology Guide</a></li><li class="nav-list-item"><a href="/soothe/threshold-tuning.html" class="nav-list-link">Threshold Tuning Methodology, Rationale, and Rollback</a></li></ul>
+  
+</nav>
+
+
+
+
+  
+  
+    <footer class="site-footer">
+      This site uses <a href="https://github.com/just-the-docs/just-the-docs">Just the Docs</a>, a documentation theme for Jekyll.
+    </footer>
+  
+</div>
+
+  
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+  
+    
+
+<div class="search" role="search">
+  <div class="search-input-wrap">
+    <input type="text" id="search-input" class="search-input" tabindex="0" placeholder="Search Soothe Docs" autocomplete="off">
+    <label for="search-input" class="search-label">
+      <span class="sr-only">Search Soothe Docs</span>
+      <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true"><use xlink:href="#svg-search"></use></svg>
+    </label>
+  </div>
+  <div id="search-results" class="search-results"></div>
+</div>
+
+  
+  
+  
+    <nav aria-label="Auxiliary" class="aux-nav">
+  <ul class="aux-nav-list">
+    
+      <li class="aux-nav-list-item">
+        <a href="https://github.com/mirasoth/soothe" class="site-button"
+          
+        >
+          GitHub
+        </a>
+      </li>
+    
+      <li class="aux-nav-list-item">
+        <a href="https://pypi.org/project/soothe/" class="site-button"
+          
+        >
+          PyPI
+        </a>
+      </li>
+    
+  </ul>
+</nav>
+
+  
+</div>
+
+    <div class="main-content-wrap">
+      <nav aria-label="Breadcrumb" class="breadcrumb-nav">
+  <ol class="breadcrumb-nav-list">
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/">Wiki</a></li>
+    <li class="breadcrumb-nav-list-item"><a href="/soothe/wiki/deployment/">Deployment</a></li>
+    <li class="breadcrumb-nav-list-item"><span>Monitoring and Observability</span></li>
+  </ol>
+</nav>
+
+
+      <div id="main-content" class="main-content">
+        <main>
+          
+            <h1 id="monitoring-and-observability-guide">
+  
+  
+    <a href="#monitoring-and-observability-guide" class="anchor-heading" aria-labelledby="monitoring-and-observability-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Monitoring and Observability Guide
+  
+  
+</h1>
+    
+
+<p>Comprehensive guide for monitoring Soothe daemon, tracking LLM usage, and setting up observability.</p>
+<h2 id="overview">
+  
+  
+    <a href="#overview" class="anchor-heading" aria-labelledby="overview"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Overview
+  
+  
+</h2>
+    
+
+<p>Soothe provides multiple observability layers:</p>
+
+<ol>
+  <li><strong>Langfuse Integration</strong>: LLM traces, token usage, cost tracking</li>
+  <li><strong>Structured Logging</strong>: Daemon logs, thread activity, errors</li>
+  <li><strong>Health Checks</strong>: Docker/container health monitoring</li>
+  <li><strong>Thread Auditing</strong>: Conversation history and goal execution logs</li>
+  <li><strong>Metrics</strong>: Performance counters (via logging)</li>
+</ol>
+<h2 id="langfuse-integration-recommended">
+  
+  
+    <a href="#langfuse-integration-recommended" class="anchor-heading" aria-labelledby="langfuse-integration-recommended"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Langfuse Integration (Recommended)
+  
+  
+</h2>
+    
+
+<p>Langfuse provides LLM observability: traces, token counts, latency, cost tracking.</p>
+<h3 id="setup">
+  
+  
+    <a href="#setup" class="anchor-heading" aria-labelledby="setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Setup
+  
+  
+</h3>
+    
+
+<p><strong>Self-hosted</strong> (Docker):</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker compose <span class="nt">-f</span> docker-compose.yml up <span class="nt">-d</span>
+<span class="c"># UI: http://localhost:3300</span>
+<span class="c"># Default: dev@soothe.local / SootheLangfuseLocalDev1</span>
+</code></pre></div></div>
+
+<p><strong>Cloud</strong> (langfuse.com): Sign up → Create project → Get API keys.</p>
+<h3 id="configure-soothe">
+  
+  
+    <a href="#configure-soothe" class="anchor-heading" aria-labelledby="configure-soothe"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configure Soothe
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">observability</span><span class="pi">:</span>
+  <span class="na">langfuse</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">public_key</span><span class="pi">:</span> <span class="s2">"</span><span class="s">${LANGFUSE_PUBLIC_KEY}"</span>
+    <span class="na">secret_key</span><span class="pi">:</span> <span class="s2">"</span><span class="s">${LANGFUSE_SECRET_KEY}"</span>
+    <span class="na">host</span><span class="pi">:</span> <span class="s2">"</span><span class="s">${LANGFUSE_HOST}"</span>  <span class="c1"># http://localhost:3300 (self-hosted) or https://cloud.langfuse.com</span>
+    <span class="na">environment</span><span class="pi">:</span> <span class="s">production</span>
+    <span class="na">sample_rate</span><span class="pi">:</span> <span class="m">1.0</span>  <span class="c1"># Sample all traces (set lower for high-volume)</span>
+    <span class="na">trace_name</span><span class="pi">:</span> <span class="s">soothe_goal_execution</span>
+    <span class="na">tags</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">soothe</span>
+      <span class="pi">-</span> <span class="s">production</span>
+    <span class="na">user_id</span><span class="pi">:</span> <span class="s">team-member-id</span>  <span class="c1"># Optional: User attribution</span>
+</code></pre></div></div>
+
+<p><strong>Environment variables</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">LANGFUSE_PUBLIC_KEY</span><span class="o">=</span>pk-lf-...
+<span class="nv">LANGFUSE_SECRET_KEY</span><span class="o">=</span>sk-lf-...
+<span class="nv">LANGFUSE_HOST</span><span class="o">=</span>http://localhost:3300  <span class="c"># Or https://cloud.langfuse.com</span>
+</code></pre></div></div>
+<h3 id="langfuse-features-in-soothe">
+  
+  
+    <a href="#langfuse-features-in-soothe" class="anchor-heading" aria-labelledby="langfuse-features-in-soothe"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Langfuse Features in Soothe
+  
+  
+</h3>
+    
+
+<p><strong>Tracked automatically</strong>:</p>
+<ul>
+  <li>All LLM calls (CoreAgent, StrangeLoop, subagents)</li>
+  <li>Token usage (prompt + completion)</li>
+  <li>Latency per call</li>
+  <li>Model selection (default/fast/think roles)</li>
+  <li>Goal execution context</li>
+  <li>Plan/Execute phase traces</li>
+</ul>
+
+<p><strong>Trace structure</strong>:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Goal Execution (trace)
+  ├─ Plan Phase (span)
+  │   ├─ LLM: Plan generation
+  │   ├─ LLM: Plan assessment
+  │   └─ Subagent: veritas
+  │       └─ LLM: File search reasoning
+  ├─ Execute Phase (span)
+  │   ├─ LLM: Execute reasoning
+  │   ├─ Tool: read_file (x3)
+  │   ├─ LLM: Execute reasoning (iteration 2)
+  │   └─ Tool: edit_file
+  └─ Goal Completion (span)
+      └─ LLM: Synthesis
+</code></pre></div></div>
+<h3 id="langfuse-dashboard-usage">
+  
+  
+    <a href="#langfuse-dashboard-usage" class="anchor-heading" aria-labelledby="langfuse-dashboard-usage"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Langfuse Dashboard Usage
+  
+  
+</h3>
+    
+
+<p><strong>View traces</strong>:</p>
+<ol>
+  <li>Open Langfuse UI (http://localhost:3300)</li>
+  <li>Navigate to “Traces” section</li>
+  <li>Filter by:
+    <ul>
+      <li>Time range</li>
+      <li>User ID (if configured)</li>
+      <li>Model name</li>
+      <li>Tags (<code class="language-plaintext highlighter-rouge">soothe</code>, <code class="language-plaintext highlighter-rouge">production</code>)</li>
+    </ul>
+  </li>
+</ol>
+
+<p><strong>Key metrics</strong>:</p>
+<ul>
+  <li><strong>Total tokens</strong>: Cost tracking</li>
+  <li><strong>Average latency</strong>: Performance monitoring</li>
+  <li><strong>Model distribution</strong>: Usage patterns</li>
+  <li><strong>Error rate</strong>: Failure detection</li>
+</ul>
+
+<p><strong>Example queries</strong>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">-- High-cost traces (Langfuse ClickHouse)</span>
+<span class="k">SELECT</span> 
+  <span class="n">trace_id</span><span class="p">,</span>
+  <span class="k">sum</span><span class="p">(</span><span class="n">total_tokens</span><span class="p">)</span> <span class="k">as</span> <span class="n">total_tokens</span><span class="p">,</span>
+  <span class="k">sum</span><span class="p">(</span><span class="n">latency_ms</span><span class="p">)</span> <span class="k">as</span> <span class="n">total_latency</span>
+<span class="k">FROM</span> <span class="n">traces</span>
+<span class="k">WHERE</span> <span class="nb">timestamp</span> <span class="o">&gt;</span> <span class="n">now</span><span class="p">()</span> <span class="o">-</span> <span class="n">INTERVAL</span> <span class="mi">1</span> <span class="k">DAY</span>
+<span class="k">GROUP</span> <span class="k">BY</span> <span class="n">trace_id</span>
+<span class="k">ORDER</span> <span class="k">BY</span> <span class="n">total_tokens</span> <span class="k">DESC</span>
+<span class="k">LIMIT</span> <span class="mi">10</span><span class="p">;</span>
+</code></pre></div></div>
+<h3 id="cost-tracking">
+  
+  
+    <a href="#cost-tracking" class="anchor-heading" aria-labelledby="cost-tracking"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Cost Tracking
+  
+  
+</h3>
+    
+
+<p><strong>Token cost estimation</strong>:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Example: GPT-4o-mini pricing
+</span><span class="n">prompt_cost</span> <span class="o">=</span> <span class="n">prompt_tokens</span> <span class="o">*</span> <span class="mf">0.15</span> <span class="o">/</span> <span class="mi">1_000_000</span>  <span class="c1"># $0.15 per 1M tokens
+</span><span class="n">completion_cost</span> <span class="o">=</span> <span class="n">completion_tokens</span> <span class="o">*</span> <span class="mf">0.60</span> <span class="o">/</span> <span class="mi">1_000_000</span>  <span class="c1"># $0.60 per 1M tokens
+</span><span class="n">total_cost</span> <span class="o">=</span> <span class="n">prompt_cost</span> <span class="o">+</span> <span class="n">completion_cost</span>
+</code></pre></div></div>
+
+<p><strong>Langfuse dashboard</strong>:</p>
+<ul>
+  <li>“Usage” tab → Daily/Monthly token counts</li>
+  <li>“Cost” tracking → Model-specific pricing</li>
+</ul>
+<h3 id="langfuse-best-practices">
+  
+  
+    <a href="#langfuse-best-practices" class="anchor-heading" aria-labelledby="langfuse-best-practices"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Langfuse Best Practices
+  
+  
+</h3>
+    
+
+<p><strong>Production recommendations</strong>:</p>
+<ol>
+  <li><strong>Sampling</strong>: Use <code class="language-plaintext highlighter-rouge">sample_rate</code> for high-volume deployments
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">observability</span><span class="pi">:</span>
+  <span class="na">langfuse</span><span class="pi">:</span>
+    <span class="na">sample_rate</span><span class="pi">:</span> <span class="m">0.1</span>  <span class="c1"># Sample 10% of traces (cost reduction)</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>User attribution</strong>: Set <code class="language-plaintext highlighter-rouge">user_id</code> for team tracking
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">user_id</span><span class="pi">:</span> <span class="s2">"</span><span class="s">${SOOTHE_USER_ID}"</span>  <span class="c1"># Environment variable per user</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Environment tagging</strong>: Separate dev/prod traces
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">environment</span><span class="pi">:</span> <span class="s2">"</span><span class="s">${ENVIRONMENT}"</span>  <span class="c1"># dev, staging, production</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Tags</strong>: Add custom tags for filtering
+```yaml
+tags:
+    <ul>
+      <li>soothe</li>
+      <li>team-alpha</li>
+      <li>project-x
+```</li>
+    </ul>
+  </li>
+</ol>
+<h2 id="structured-logging">
+  
+  
+    <a href="#structured-logging" class="anchor-heading" aria-labelledby="structured-logging"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Structured Logging
+  
+  
+</h2>
+    
+
+<p>Soothe emits structured JSON logs for daemon activity, thread execution, and errors.</p>
+<h3 id="log-locations">
+  
+  
+    <a href="#log-locations" class="anchor-heading" aria-labelledby="log-locations"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Log Locations
+  
+  
+</h3>
+    
+
+<p><strong>Default paths</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.soothe/logs/               <span class="c"># Daemon logs (SOOTHE_HOME)</span>
+~/.soothe/data/threads/       <span class="c"># Thread execution logs</span>
+/var/log/soothe/              <span class="c"># Production deployment (Docker/systemd)</span>
+</code></pre></div></div>
+<h3 id="configure-logging">
+  
+  
+    <a href="#configure-logging" class="anchor-heading" aria-labelledby="configure-logging"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Configure Logging
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">observability</span><span class="pi">:</span>
+  <span class="na">log_file_path</span><span class="pi">:</span> <span class="s">/var/log/soothe/soothed.log</span>
+  <span class="na">log_file_level</span><span class="pi">:</span> <span class="s">INFO</span>
+  <span class="na">log_file_max_bytes</span><span class="pi">:</span> <span class="m">5242880</span>  <span class="c1"># 5 MB</span>
+  <span class="na">log_file_backup_count</span><span class="pi">:</span> <span class="m">3</span>
+  
+  <span class="na">console</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">level</span><span class="pi">:</span> <span class="s">WARNING</span>
+    <span class="na">stream</span><span class="pi">:</span> <span class="s">stderr</span>
+    <span class="na">format</span><span class="pi">:</span> <span class="s1">'</span><span class="s">%(level_short)s</span><span class="nv"> </span><span class="s">%(name)s</span><span class="nv"> </span><span class="s">%(message)s'</span>
+  
+  <span class="na">verbosity</span><span class="pi">:</span> <span class="s">normal</span>  <span class="c1"># quiet | normal | debug</span>
+  
+  <span class="na">thread_logging_enabled</span><span class="pi">:</span> <span class="no">true</span>
+  <span class="na">thread_logging_retention_days</span><span class="pi">:</span> <span class="m">30</span>
+  <span class="na">thread_logging_max_size_mb</span><span class="pi">:</span> <span class="m">100</span>
+</code></pre></div></div>
+
+<p><strong>Verbosity levels</strong>:</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Level</th>
+      <th>Logs Included</th>
+      <th>Use Case</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">quiet</code></td>
+      <td>Errors only</td>
+      <td>Production (minimal overhead)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">normal</code></td>
+      <td>Protocol events + errors</td>
+      <td>Standard monitoring</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">debug</code></td>
+      <td>Subagent events, tool calls, all events + heartbeat</td>
+      <td>Debugging</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="log-structure">
+  
+  
+    <a href="#log-structure" class="anchor-heading" aria-labelledby="log-structure"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Log Structure
+  
+  
+</h3>
+    
+
+<p><strong>Daemon log example</strong>:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-06-06T02:40:00Z"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"INFO"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"logger"</span><span class="p">:</span><span class="w"> </span><span class="s2">"soothe.daemon.server"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Goal dispatched to worker"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"goal_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"goal-abc123"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"thread_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"thread-xyz789"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"workspace"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/var/lib/soothe/workspaces/project1"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"iteration"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"phase"</span><span class="p">:</span><span class="w"> </span><span class="s2">"execute"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><strong>Thread log example</strong>:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-06-06T02:40:15Z"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"level"</span><span class="p">:</span><span class="w"> </span><span class="s2">"DEBUG"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"logger"</span><span class="p">:</span><span class="w"> </span><span class="s2">"soothe.sloop.engine.strange_loop"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Tool invocation completed"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"tool_name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"read_file"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"execution_time_ms"</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"success"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"thread_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"thread-xyz789"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<h3 id="log-aggregation">
+  
+  
+    <a href="#log-aggregation" class="anchor-heading" aria-labelledby="log-aggregation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Log Aggregation
+  
+  
+</h3>
+    
+
+<p><strong>ELK Stack (Elasticsearch + Logstash + Kibana)</strong>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Filebeat configuration</span>
+<span class="na">filebeat.inputs</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">type</span><span class="pi">:</span> <span class="s">log</span>
+    <span class="na">paths</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="s">/var/log/soothe/*.log</span>
+    <span class="na">json.keys_under_root</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">json.add_error_key</span><span class="pi">:</span> <span class="no">true</span>
+
+<span class="na">output.logstash</span><span class="pi">:</span>
+  <span class="na">hosts</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">logstash:5044"</span><span class="pi">]</span>
+</code></pre></div></div>
+
+<p><strong>Loki (Grafana Stack)</strong>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Promtail configuration</span>
+<span class="na">scrape_configs</span><span class="pi">:</span>
+  <span class="pi">-</span> <span class="na">job_name</span><span class="pi">:</span> <span class="s">soothe</span>
+    <span class="na">static_configs</span><span class="pi">:</span>
+      <span class="pi">-</span> <span class="na">targets</span><span class="pi">:</span>
+          <span class="pi">-</span> <span class="s">localhost</span>
+        <span class="na">labels</span><span class="pi">:</span>
+          <span class="na">job</span><span class="pi">:</span> <span class="s">soothe</span>
+          <span class="na">__path__</span><span class="pi">:</span> <span class="s">/var/log/soothe/*.log</span>
+</code></pre></div></div>
+<h3 id="real-time-log-monitoring">
+  
+  
+    <a href="#real-time-log-monitoring" class="anchor-heading" aria-labelledby="real-time-log-monitoring"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Real-Time Log Monitoring
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Monitor daemon logs</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothed.log
+
+<span class="c"># Docker logs</span>
+docker compose logs <span class="nt">-f</span> soothed
+
+<span class="c"># systemd logs</span>
+<span class="nb">sudo </span>journalctl <span class="nt">-u</span> soothed <span class="nt">-f</span>
+
+<span class="c"># Filter by level</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothed.log | <span class="nb">grep</span> <span class="s2">"ERROR"</span>
+
+<span class="c"># Filter by thread</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothed.log | <span class="nb">grep</span> <span class="s2">"thread-xyz789"</span>
+</code></pre></div></div>
+<h3 id="log-analysis-queries">
+  
+  
+    <a href="#log-analysis-queries" class="anchor-heading" aria-labelledby="log-analysis-queries"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Log Analysis Queries
+  
+  
+</h3>
+    
+
+<p><strong>Find slow operations</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">grep</span> <span class="s2">"execution_time_ms"</span> soothed.log | <span class="se">\</span>
+  <span class="nb">awk</span> <span class="nt">-F</span><span class="s1">'"execution_time_ms":'</span> <span class="s1">'{print $2}'</span> | <span class="se">\</span>
+  <span class="nb">awk</span> <span class="nt">-F</span><span class="s1">','</span> <span class="s1">'{print $1}'</span> | <span class="se">\</span>
+  <span class="nb">sort</span> <span class="nt">-n</span> | <span class="nb">tail</span> <span class="nt">-20</span>
+</code></pre></div></div>
+
+<p><strong>Count errors by type</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">grep</span> <span class="s2">"ERROR"</span> soothed.log | <span class="se">\</span>
+  <span class="nb">awk</span> <span class="nt">-F</span><span class="s1">'"message":"'</span> <span class="s1">'{print $2}'</span> | <span class="se">\</span>
+  <span class="nb">awk</span> <span class="nt">-F</span><span class="s1">'"'</span> <span class="s1">'{print $1}'</span> | <span class="se">\</span>
+  <span class="nb">sort</span> | <span class="nb">uniq</span> <span class="nt">-c</span>
+</code></pre></div></div>
+
+<p><strong>Thread execution summary</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Extract thread IDs</span>
+<span class="nb">grep</span> <span class="s2">"thread_id"</span> soothed.log | <span class="se">\</span>
+  <span class="nb">awk</span> <span class="nt">-F</span><span class="s1">'"thread_id":"'</span> <span class="s1">'{print $2}'</span> | <span class="se">\</span>
+  <span class="nb">awk</span> <span class="nt">-F</span><span class="s1">'"'</span> <span class="s1">'{print $1}'</span> | <span class="se">\</span>
+  <span class="nb">sort</span> <span class="nt">-u</span>
+</code></pre></div></div>
+<h2 id="health-checks">
+  
+  
+    <a href="#health-checks" class="anchor-heading" aria-labelledby="health-checks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Health Checks
+  
+  
+</h2>
+    
+<h3 id="docker-health-checks">
+  
+  
+    <a href="#docker-health-checks" class="anchor-heading" aria-labelledby="docker-health-checks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Docker Health Checks
+  
+  
+</h3>
+    
+
+<p>Built into <code class="language-plaintext highlighter-rouge">deploy/docker-compose.yml</code>:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">services</span><span class="pi">:</span>
+  <span class="na">soothe-pgvector</span><span class="pi">:</span>
+    <span class="na">healthcheck</span><span class="pi">:</span>
+      <span class="na">test</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">CMD-SHELL"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">pg_isready</span><span class="nv"> </span><span class="s">-U</span><span class="nv"> </span><span class="s">postgres"</span><span class="pi">]</span>
+      <span class="na">interval</span><span class="pi">:</span> <span class="s">5s</span>
+      <span class="na">timeout</span><span class="pi">:</span> <span class="s">5s</span>
+      <span class="na">retries</span><span class="pi">:</span> <span class="m">12</span>
+      <span class="na">start_period</span><span class="pi">:</span> <span class="s">20s</span>
+  
+  <span class="na">soothed</span><span class="pi">:</span>
+    <span class="na">healthcheck</span><span class="pi">:</span>
+      <span class="na">test</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">CMD-SHELL"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">python</span><span class="nv"> </span><span class="s">-c</span><span class="nv"> </span><span class="s">'import</span><span class="nv"> </span><span class="s">socket;</span><span class="nv"> </span><span class="s">...'"</span><span class="pi">]</span>
+      <span class="na">interval</span><span class="pi">:</span> <span class="s">30s</span>
+      <span class="na">timeout</span><span class="pi">:</span> <span class="s">5s</span>
+      <span class="na">retries</span><span class="pi">:</span> <span class="m">3</span>
+      <span class="na">start_period</span><span class="pi">:</span> <span class="s">10s</span>
+</code></pre></div></div>
+
+<p><strong>Monitor health status</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker compose ps
+
+<span class="c"># Expected output:</span>
+<span class="c"># NAME              STATUS</span>
+<span class="c"># soothe-pgvector-1 Up (healthy)</span>
+<span class="c"># soothed-1         Up (healthy)</span>
+</code></pre></div></div>
+<h3 id="daemon-health-checks">
+  
+  
+    <a href="#daemon-health-checks" class="anchor-heading" aria-labelledby="daemon-health-checks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daemon Health Checks
+  
+  
+</h3>
+    
+
+<p>Health checks are performed via the <code class="language-plaintext highlighter-rouge">soothed doctor</code> command, which verifies daemon connectivity, database access, and overall system health:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothed doctor
+</code></pre></div></div>
+<h3 id="systemd-health-monitoring">
+  
+  
+    <a href="#systemd-health-monitoring" class="anchor-heading" aria-labelledby="systemd-health-monitoring"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> systemd Health Monitoring
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check service status</span>
+<span class="nb">sudo </span>systemctl status soothed
+
+<span class="c"># Active: active (running)</span>
+
+<span class="c"># Check recent logs</span>
+<span class="nb">sudo </span>journalctl <span class="nt">-u</span> soothed <span class="nt">-n</span> 50
+</code></pre></div></div>
+<h3 id="postgresql-health">
+  
+  
+    <a href="#postgresql-health" class="anchor-heading" aria-labelledby="postgresql-health"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQL Health
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check PostgreSQL connection</span>
+docker compose <span class="nb">exec </span>soothe-pgvector pg_isready <span class="nt">-U</span> postgres
+
+<span class="c"># Check database sizes</span>
+docker compose <span class="nb">exec </span>soothe-pgvector psql <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"
+  SELECT datname, pg_size_pretty(pg_database_size(datname))
+  FROM pg_database
+  WHERE datname LIKE 'soothe_%';
+"</span>
+
+<span class="c"># Check connection count</span>
+docker compose <span class="nb">exec </span>soothe-pgvector psql <span class="nt">-U</span> postgres <span class="nt">-c</span> <span class="s2">"
+  SELECT count(*) FROM pg_stat_activity;
+"</span>
+</code></pre></div></div>
+<h2 id="thread-auditing">
+  
+  
+    <a href="#thread-auditing" class="anchor-heading" aria-labelledby="thread-auditing"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Auditing
+  
+  
+</h2>
+    
+
+<p>Soothe maintains detailed logs for each thread/goal execution.</p>
+<h3 id="thread-log-location">
+  
+  
+    <a href="#thread-log-location" class="anchor-heading" aria-labelledby="thread-log-location"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Log Location
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.soothe/data/threads/&lt;thread-id&gt;/logs/conversation.jsonl
+~/.soothe/data/threads/&lt;thread-id&gt;/goal_log.json
+</code></pre></div></div>
+<h3 id="thread-log-configuration">
+  
+  
+    <a href="#thread-log-configuration" class="anchor-heading" aria-labelledby="thread-log-configuration"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Log Configuration
+  
+  
+</h3>
+    
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">observability</span><span class="pi">:</span>
+  <span class="na">thread_logging_enabled</span><span class="pi">:</span> <span class="no">true</span>
+  <span class="na">thread_logging_retention_days</span><span class="pi">:</span> <span class="m">30</span>
+  <span class="na">thread_logging_max_size_mb</span><span class="pi">:</span> <span class="m">100</span>
+  
+  <span class="na">global_history</span><span class="pi">:</span>
+    <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span>
+    <span class="na">max_size</span><span class="pi">:</span> <span class="m">5000</span>
+    <span class="na">dedup_window</span><span class="pi">:</span> <span class="m">10</span>
+    <span class="na">retention_days</span><span class="pi">:</span> <span class="m">90</span>
+</code></pre></div></div>
+<h3 id="thread-log-structure">
+  
+  
+    <a href="#thread-log-structure" class="anchor-heading" aria-labelledby="thread-log-structure"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Log Structure
+  
+  
+</h3>
+    
+
+<p><strong><code class="language-plaintext highlighter-rouge">conversation.json</code></strong>: Full conversation history</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"thread_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"thread-xyz789"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-06-06T02:40:00Z"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"messages"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"List Python files"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-06-06T02:40:05Z"</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"assistant"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Found 15 Python files..."</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-06-06T02:40:30Z"</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><strong><code class="language-plaintext highlighter-rouge">goal_log.json</code></strong>: Goal execution phases</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"goal_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"goal-abc123"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"phases"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"phase"</span><span class="p">:</span><span class="w"> </span><span class="s2">"plan"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"iterations"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"llm_calls"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"tools_invoked"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"veritas"</span><span class="p">],</span><span class="w">
+      </span><span class="nl">"duration_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mf">5.2</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"phase"</span><span class="p">:</span><span class="w"> </span><span class="s2">"execute"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"iterations"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"llm_calls"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"tools_invoked"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"read_file"</span><span class="p">,</span><span class="w"> </span><span class="s2">"grep"</span><span class="p">,</span><span class="w"> </span><span class="s2">"edit_file"</span><span class="p">],</span><span class="w">
+      </span><span class="nl">"duration_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mf">12.5</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<h3 id="thread-auditing-use-cases">
+  
+  
+    <a href="#thread-auditing-use-cases" class="anchor-heading" aria-labelledby="thread-auditing-use-cases"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Thread Auditing Use Cases
+  
+  
+</h3>
+    
+
+<p><strong>Performance analysis</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Extract execution time per goal</span>
+<span class="nb">cat</span> ~/.soothe/data/threads/<span class="k">*</span>/goal_log.json | <span class="se">\</span>
+  jq <span class="s1">'.phases[] | {phase, duration_seconds}'</span>
+</code></pre></div></div>
+
+<p><strong>Tool usage patterns</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Count tool invocations</span>
+<span class="nb">cat</span> ~/.soothe/data/threads/<span class="k">*</span>/goal_log.json | <span class="se">\</span>
+  jq <span class="s1">'[.phases[].tools_invoked[]]'</span> | <span class="se">\</span>
+  jq <span class="s1">'group_by(.) | map({tool: .[0], count: length})'</span>
+</code></pre></div></div>
+
+<p><strong>Error investigation</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Find failed goals</span>
+<span class="nb">grep</span> <span class="nt">-r</span> <span class="s2">"ERROR"</span> ~/.soothe/data/threads/<span class="k">*</span>/logs/conversation.jsonl
+</code></pre></div></div>
+<h2 id="metrics-and-performance-monitoring">
+  
+  
+    <a href="#metrics-and-performance-monitoring" class="anchor-heading" aria-labelledby="metrics-and-performance-monitoring"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Metrics and Performance Monitoring
+  
+  
+</h2>
+    
+<h3 id="key-metrics">
+  
+  
+    <a href="#key-metrics" class="anchor-heading" aria-labelledby="key-metrics"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Key Metrics
+  
+  
+</h3>
+    
+
+<p><strong>LLM Metrics</strong> (via Langfuse):</p>
+<ul>
+  <li>Total tokens per day/week/month</li>
+  <li>Average latency per LLM call</li>
+  <li>Model distribution (default/fast/think usage)</li>
+  <li>Error rate (% failed LLM calls)</li>
+</ul>
+
+<p><strong>Daemon Metrics</strong> (via logs):</p>
+<ul>
+  <li>Active threads</li>
+  <li>Goal execution latency</li>
+  <li>Tool invocation count</li>
+  <li>Memory usage</li>
+</ul>
+
+<p><strong>Database Metrics</strong> (PostgreSQL):</p>
+<ul>
+  <li>Connection pool size</li>
+  <li>Query latency</li>
+  <li>Database size growth</li>
+  <li>Checkpoint write rate</li>
+</ul>
+<h3 id="performance-counters-via-logging">
+  
+  
+    <a href="#performance-counters-via-logging" class="anchor-heading" aria-labelledby="performance-counters-via-logging"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Performance Counters (via Logging)
+  
+  
+</h3>
+    
+
+<p>Enable detailed metrics logging:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">observability</span><span class="pi">:</span>
+  <span class="na">verbosity</span><span class="pi">:</span> <span class="s">debug</span>
+  <span class="na">log_file_level</span><span class="pi">:</span> <span class="s">INFO</span>
+</code></pre></div></div>
+
+<p><strong>Metric log examples</strong>:</p>
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"metric"</span><span class="p">:</span><span class="w"> </span><span class="s2">"llm_call_latency"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"value_ms"</span><span class="p">:</span><span class="w"> </span><span class="mi">1250</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"gpt-4o-mini"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"default"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"tokens_prompt"</span><span class="p">:</span><span class="w"> </span><span class="mi">850</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"tokens_completion"</span><span class="p">:</span><span class="w"> </span><span class="mi">420</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span><span class="p">{</span><span class="w">
+  </span><span class="nl">"metric"</span><span class="p">:</span><span class="w"> </span><span class="s2">"tool_execution"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"tool"</span><span class="p">:</span><span class="w"> </span><span class="s2">"read_file"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"execution_time_ms"</span><span class="p">:</span><span class="w"> </span><span class="mi">150</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"success"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span><span class="p">}</span><span class="w">
+
+</span><span class="p">{</span><span class="w">
+  </span><span class="nl">"metric"</span><span class="p">:</span><span class="w"> </span><span class="s2">"goal_duration"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"goal_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"goal-abc123"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"duration_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mf">18.5</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"iterations"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"llm_calls"</span><span class="p">:</span><span class="w"> </span><span class="mi">6</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<h3 id="grafana-dashboard-setup">
+  
+  
+    <a href="#grafana-dashboard-setup" class="anchor-heading" aria-labelledby="grafana-dashboard-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Grafana Dashboard Setup
+  
+  
+</h3>
+    
+
+<p><strong>Data sources</strong>:</p>
+<ol>
+  <li><strong>Loki</strong>: Log aggregation</li>
+  <li><strong>PostgreSQL</strong>: Thread counts, database size</li>
+  <li><strong>Langfuse</strong>: LLM metrics (via ClickHouse)</li>
+</ol>
+
+<p><strong>Example Grafana queries</strong>:</p>
+
+<p><strong>LLM call latency</strong> (Loki):</p>
+<pre><code class="language-logql">
+{job="soothe"} | json | line_format "{{.value_ms}}" | metric_name="llm_call_latency"
+
+</code></pre>
+
+<p><strong>Active threads</strong> (PostgreSQL):</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> <span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">threads</span> <span class="k">WHERE</span> <span class="n">status</span> <span class="o">=</span> <span class="s1">'active'</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p><strong>Database size</strong> (PostgreSQL):</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">SELECT</span> 
+  <span class="n">datname</span><span class="p">,</span>
+  <span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">pg_database_size</span><span class="p">(</span><span class="n">datname</span><span class="p">))</span> <span class="k">as</span> <span class="k">size</span>
+<span class="k">FROM</span> <span class="n">pg_database</span>
+<span class="k">WHERE</span> <span class="n">datname</span> <span class="k">LIKE</span> <span class="s1">'soothe_%'</span><span class="p">;</span>
+</code></pre></div></div>
+<h2 id="job-lifecycle-notify-tuning">
+  
+  
+    <a href="#job-lifecycle-notify-tuning" class="anchor-heading" aria-labelledby="job-lifecycle-notify-tuning"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Job Lifecycle Notify Tuning
+  
+  
+</h2>
+    
+
+<p>Soothe pushes job-root lifecycle alerts (completed, failed, suspended
+timeout) to email, webhook, and Feishu sinks via the <code class="language-plaintext highlighter-rouge">NotificationRouter</code>.
+Three thresholds control alert behavior and are fully configurable.</p>
+<h3 id="tunable-thresholds">
+  
+  
+    <a href="#tunable-thresholds" class="anchor-heading" aria-labelledby="tunable-thresholds"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Tunable Thresholds
+  
+  
+</h3>
+    
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Threshold</th>
+      <th>Config Key</th>
+      <th>Default</th>
+      <th>Range</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Suspend escalation multiplier</td>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.suspend_escalation_multiplier</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2.0</code></td>
+      <td>1.0–10.0</td>
+      <td>Multiplies <code class="language-plaintext highlighter-rouge">suspend_after_seconds</code> (default 2700s) to set the WARNING→ERROR escalation point. At 2.0, a job suspended ≥5400s escalates to ERROR severity. Lower for faster escalation (1.5 = 4050s), higher for more tolerance (3.0 = 8100s).</td>
+    </tr>
+    <tr>
+      <td>Dedup TTL</td>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.dedup_ttl_seconds</code></td>
+      <td><code class="language-plaintext highlighter-rouge">86400</code> (24h)</td>
+      <td>0+</td>
+      <td>Dedup keys (<code class="language-plaintext highlighter-rouge">{job_id}:{kind}:{generation}</code>) expire after TTL, allowing long-running jobs to re-notify when state changes past the window. Set <code class="language-plaintext highlighter-rouge">0</code> to disable expiry (keys persist indefinitely — original behavior).</td>
+    </tr>
+    <tr>
+      <td>Email rate limit</td>
+      <td><code class="language-plaintext highlighter-rouge">agent.autopilot.notify.sinks.email.rate_limit_seconds</code></td>
+      <td><code class="language-plaintext highlighter-rouge">5.0</code></td>
+      <td>0.0–300.0</td>
+      <td>Minimum seconds between email sends to the same recipient (per job+kind+address key). Set <code class="language-plaintext highlighter-rouge">0</code> to disable rate-limiting.</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="severity-classification">
+  
+  
+    <a href="#severity-classification" class="anchor-heading" aria-labelledby="severity-classification"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Severity Classification
+  
+  
+</h3>
+    
+
+<p>The router classifies each alert using structural signals only (no keyword
+heuristics per RFC-630):</p>
+
+<div class="table-wrapper"><table>
+  <thead>
+    <tr>
+      <th>Kind</th>
+      <th>Baseline</th>
+      <th>Escalation Signal</th>
+      <th>Escalated Severity</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">job.completed</code></td>
+      <td>INFO</td>
+      <td>Failed/active child goals, maturity blockers</td>
+      <td>WARNING</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">job.suspended_timeout</code></td>
+      <td>WARNING</td>
+      <td>Suspended ≥ multiplier × threshold</td>
+      <td>ERROR</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">job.failed</code></td>
+      <td>ERROR</td>
+      <td>— (always ERROR)</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table></div>
+<h3 id="production-tuning-guide">
+  
+  
+    <a href="#production-tuning-guide" class="anchor-heading" aria-labelledby="production-tuning-guide"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Production Tuning Guide
+  
+  
+</h3>
+    
+
+<p><strong>Tighten escalation (noisier alerts)</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">autopilot</span><span class="pi">:</span>
+    <span class="na">notify</span><span class="pi">:</span>
+      <span class="na">suspend_escalation_multiplier</span><span class="pi">:</span> <span class="m">1.5</span>  <span class="c1"># Escalate at 4050s instead of 5400s</span>
+      <span class="na">dedup_ttl_seconds</span><span class="pi">:</span> <span class="m">3600</span>             <span class="c1"># Re-notify after 1h instead of 24h</span>
+</code></pre></div></div>
+
+<p><strong>Loosen escalation (fewer alerts)</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">autopilot</span><span class="pi">:</span>
+    <span class="na">notify</span><span class="pi">:</span>
+      <span class="na">suspend_escalation_multiplier</span><span class="pi">:</span> <span class="m">3.0</span>  <span class="c1"># Tolerate up to 8100s before escalation</span>
+      <span class="na">dedup_ttl_seconds</span><span class="pi">:</span> <span class="m">172800</span>          <span class="c1"># 48h dedup window</span>
+</code></pre></div></div>
+
+<p><strong>High-volume SMTP provider (rate limit)</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">autopilot</span><span class="pi">:</span>
+    <span class="na">notify</span><span class="pi">:</span>
+      <span class="na">sinks</span><span class="pi">:</span>
+        <span class="na">email</span><span class="pi">:</span>
+          <span class="na">rate_limit_seconds</span><span class="pi">:</span> <span class="m">30.0</span>  <span class="c1"># Max one email per 30s per recipient</span>
+</code></pre></div></div>
+
+<p><strong>Disable rate-limiting entirely</strong>:</p>
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">agent</span><span class="pi">:</span>
+  <span class="na">autopilot</span><span class="pi">:</span>
+    <span class="na">notify</span><span class="pi">:</span>
+      <span class="na">sinks</span><span class="pi">:</span>
+        <span class="na">email</span><span class="pi">:</span>
+          <span class="na">rate_limit_seconds</span><span class="pi">:</span> <span class="m">0.0</span>
+</code></pre></div></div>
+<h3 id="deployment-steps">
+  
+  
+    <a href="#deployment-steps" class="anchor-heading" aria-labelledby="deployment-steps"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Deployment Steps
+  
+  
+</h3>
+    
+
+<ol>
+  <li>
+    <p><strong>Edit config</strong>: Override thresholds in <code class="language-plaintext highlighter-rouge">config/develop/soothe.yml</code> (dev) or your production config file. All three keys live under <code class="language-plaintext highlighter-rouge">agent.autopilot.notify</code>.</p>
+  </li>
+  <li><strong>Restart daemon</strong>:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Docker</span>
+docker compose restart soothed
+
+<span class="c"># systemd</span>
+<span class="nb">sudo </span>systemctl restart soothed
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Verify config loaded</strong>: Check daemon startup logs for notify config:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">grep</span> <span class="s2">"notify"</span> ~/.soothe/logs/soothed.log | <span class="nb">tail</span> <span class="nt">-5</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Test alert delivery</strong>: Submit a test job and verify email/webhook receipt:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>soothe autopilot submit <span class="s2">"test alert routing"</span>
+<span class="c"># Watch logs for NotifyIntent dispatch</span>
+<span class="nb">tail</span> <span class="nt">-f</span> ~/.soothe/logs/soothed.log | <span class="nb">grep</span> <span class="nt">-i</span> notify
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Monitor for 24h</strong>: Verify dedup TTL allows re-notification after the configured window. Check that escalation severity matches expected behavior for long-suspended jobs.</li>
+</ol>
+<h3 id="rollback">
+  
+  
+    <a href="#rollback" class="anchor-heading" aria-labelledby="rollback"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Rollback
+  
+  
+</h3>
+    
+
+<p>All defaults preserve prior behavior. To revert to pre-tuning defaults:</p>
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">suspend_escalation_multiplier: 2.0</code> (or remove the key entirely)</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">dedup_ttl_seconds: 86400</code> (or remove)</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">rate_limit_seconds: 5.0</code> (or remove)</li>
+</ul>
+
+<p>Removing the keys from your config causes the Pydantic model defaults to apply, which match the original hardcoded values.</p>
+<h3 id="alerting-rules">
+  
+  
+    <a href="#alerting-rules" class="anchor-heading" aria-labelledby="alerting-rules"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Alerting Rules
+  
+  
+</h3>
+    
+
+<p><strong>Critical alerts</strong>:</p>
+
+<ol>
+  <li><strong>LLM error rate &gt; 5%</strong>:
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">alert</span><span class="pi">:</span> <span class="s">llm_error_rate_high</span>
+<span class="na">expr</span><span class="pi">:</span> <span class="s">rate(llm_errors[5m]) / rate(llm_calls[5m]) &gt; </span><span class="m">0.05</span>
+<span class="na">severity</span><span class="pi">:</span> <span class="s">critical</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>PostgreSQL connection exhaustion</strong>:
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">alert</span><span class="pi">:</span> <span class="s">postgres_connections_exhausted</span>
+<span class="na">expr</span><span class="pi">:</span> <span class="s">postgres_connections &gt; </span><span class="m">180</span>
+<span class="na">severity</span><span class="pi">:</span> <span class="s">critical</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Daemon memory &gt; 3GB</strong>:
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">alert</span><span class="pi">:</span> <span class="s">daemon_memory_high</span>
+<span class="na">expr</span><span class="pi">:</span> <span class="s">daemon_memory_mb &gt; </span><span class="m">3000</span>
+<span class="na">severity</span><span class="pi">:</span> <span class="s">warning</span>
+</code></pre></div>    </div>
+  </li>
+  <li><strong>Goal execution timeout</strong>:
+    <div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">alert</span><span class="pi">:</span> <span class="s">goal_execution_timeout</span>
+<span class="na">expr</span><span class="pi">:</span> <span class="s">goal_duration_seconds &gt; </span><span class="m">300</span>
+<span class="na">severity</span><span class="pi">:</span> <span class="s">warning</span>
+</code></pre></div>    </div>
+  </li>
+</ol>
+<h2 id="monitoring-checklist">
+  
+  
+    <a href="#monitoring-checklist" class="anchor-heading" aria-labelledby="monitoring-checklist"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Monitoring Checklist
+  
+  
+</h2>
+    
+<h3 id="production-monitoring-setup">
+  
+  
+    <a href="#production-monitoring-setup" class="anchor-heading" aria-labelledby="production-monitoring-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Production Monitoring Setup
+  
+  
+</h3>
+    
+
+<ul class="task-list">
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Langfuse enabled with API keys</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Log aggregation configured (ELK/Loki)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Health checks verified (Docker/systemd)</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Grafana dashboards created</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Alerting rules configured</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Thread auditing enabled</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Log retention policy set</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Notify thresholds tuned for job-duration profile</li>
+  <li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="disabled" />Email/webhook sink delivery verified with test job</li>
+</ul>
+<h3 id="daily-monitoring-tasks">
+  
+  
+    <a href="#daily-monitoring-tasks" class="anchor-heading" aria-labelledby="daily-monitoring-tasks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Daily Monitoring Tasks
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check daemon health</span>
+docker compose ps
+
+<span class="c"># Check PostgreSQL health</span>
+docker compose <span class="nb">exec </span>soothe-pgvector pg_isready
+
+<span class="c"># Review recent errors</span>
+<span class="nb">grep</span> <span class="s2">"ERROR"</span> ~/.soothe/logs/soothed.log | <span class="nb">tail</span> <span class="nt">-20</span>
+
+<span class="c"># Check Langfuse traces</span>
+<span class="c"># Open http://localhost:3300 → Traces → Last 24 hours</span>
+
+<span class="c"># Review thread activity</span>
+psql <span class="nt">-h</span> postgres-host <span class="nt">-U</span> user <span class="nt">-d</span> soothe_metadata <span class="se">\</span>
+  <span class="nt">-c</span> <span class="s2">"SELECT count(*), status FROM threads GROUP BY status"</span>
+</code></pre></div></div>
+<h3 id="weekly-monitoring-tasks">
+  
+  
+    <a href="#weekly-monitoring-tasks" class="anchor-heading" aria-labelledby="weekly-monitoring-tasks"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Weekly Monitoring Tasks
+  
+  
+</h3>
+    
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Token usage summary (Langfuse dashboard)</span>
+<span class="c"># Navigate to "Usage" tab</span>
+
+<span class="c"># Database size growth</span>
+psql <span class="nt">-c</span> <span class="s2">"SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database WHERE datname LIKE 'soothe_%'"</span>
+
+<span class="c"># Log retention cleanup</span>
+find ~/.soothe/logs <span class="nt">-name</span> <span class="s2">"*.log"</span> <span class="nt">-mtime</span> +30 <span class="nt">-delete</span>
+
+<span class="c"># Thread log cleanup</span>
+find ~/.soothe/runs <span class="nt">-type</span> d <span class="nt">-mtime</span> +30 <span class="nt">-exec</span> <span class="nb">rm</span> <span class="nt">-rf</span> <span class="o">{}</span> +
+</code></pre></div></div>
+<h2 id="troubleshooting-monitoring-issues">
+  
+  
+    <a href="#troubleshooting-monitoring-issues" class="anchor-heading" aria-labelledby="troubleshooting-monitoring-issues"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Troubleshooting Monitoring Issues
+  
+  
+</h2>
+    
+<h3 id="langfuse-connection-failed">
+  
+  
+    <a href="#langfuse-connection-failed" class="anchor-heading" aria-labelledby="langfuse-connection-failed"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Langfuse Connection Failed
+  
+  
+</h3>
+    
+
+<p><strong>Error</strong>: <code class="language-plaintext highlighter-rouge">Langfuse connection error</code> or <code class="language-plaintext highlighter-rouge">Failed to send trace</code></p>
+
+<p><strong>Solution</strong>:</p>
+<ol>
+  <li>Check Langfuse service running: <code class="language-plaintext highlighter-rouge">docker compose ps langfuse-web</code></li>
+  <li>Verify API keys: <code class="language-plaintext highlighter-rouge">docker compose exec soothed env | grep LANGFUSE</code></li>
+  <li>Test Langfuse API:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-H</span> <span class="s2">"Authorization: Bearer </span><span class="k">${</span><span class="nv">LANGFUSE_SECRET_KEY</span><span class="k">}</span><span class="s2">"</span> <span class="se">\</span>
+  <span class="k">${</span><span class="nv">LANGFUSE_HOST</span><span class="k">}</span>/api/public/v1/traces
+</code></pre></div>    </div>
+  </li>
+</ol>
+<h3 id="log-file-permissions">
+  
+  
+    <a href="#log-file-permissions" class="anchor-heading" aria-labelledby="log-file-permissions"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Log File Permissions
+  
+  
+</h3>
+    
+
+<p><strong>Error</strong>: <code class="language-plaintext highlighter-rouge">Permission denied: /var/log/soothe/soothed.log</code></p>
+
+<p><strong>Solution</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Fix permissions</span>
+<span class="nb">sudo chown</span> <span class="nt">-R</span> soothe:soothe /var/log/soothe
+<span class="nb">sudo chmod </span>755 /var/log/soothe
+<span class="nb">sudo chmod </span>644 /var/log/soothe/soothed.log
+</code></pre></div></div>
+<h3 id="postgresql-monitoring-connection">
+  
+  
+    <a href="#postgresql-monitoring-connection" class="anchor-heading" aria-labelledby="postgresql-monitoring-connection"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> PostgreSQL Monitoring Connection
+  
+  
+</h3>
+    
+
+<p><strong>Error</strong>: <code class="language-plaintext highlighter-rouge">psql: connection refused</code></p>
+
+<p><strong>Solution</strong>:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Check PostgreSQL running</span>
+docker compose <span class="nb">exec </span>soothe-pgvector pg_isready
+
+<span class="c"># Check network connectivity</span>
+docker compose <span class="nb">exec </span>soothed ping soothe-pgvector
+
+<span class="c"># Verify credentials</span>
+docker compose <span class="nb">exec </span>soothe-pgvector psql <span class="nt">-U</span> postgres <span class="nt">-d</span> soothe_metadata <span class="nt">-c</span> <span class="s2">"SELECT 1"</span>
+</code></pre></div></div>
+<h2 id="advanced-observability-patterns">
+  
+  
+    <a href="#advanced-observability-patterns" class="anchor-heading" aria-labelledby="advanced-observability-patterns"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Advanced Observability Patterns
+  
+  
+</h2>
+    
+<h3 id="pattern-1-full-stack-observability">
+  
+  
+    <a href="#pattern-1-full-stack-observability" class="anchor-heading" aria-labelledby="pattern-1-full-stack-observability"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Pattern 1: Full Stack Observability
+  
+  
+</h3>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────┐
+│  Langfuse   │  ← LLM traces, tokens, cost
+└─────────────┘
+       ↓
+┌─────────────┐
+│  Grafana    │  ← Dashboards, alerting
+└─────────────┘
+       ↓
+┌─────────────────┬──────────────┐
+│ Loki            │ PostgreSQL   │
+│ (Logs)          │ (Metrics)    │
+└─────────────────┴──────────────┘
+</code></pre></div></div>
+<h3 id="pattern-2-minimal-production-monitoring">
+  
+  
+    <a href="#pattern-2-minimal-production-monitoring" class="anchor-heading" aria-labelledby="pattern-2-minimal-production-monitoring"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Pattern 2: Minimal Production Monitoring
+  
+  
+</h3>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────┐
+│  Langfuse   │  ← LLM traces (sample_rate: 0.1)
+│  (Cloud)    │
+└─────────────┘
+       ↓
+┌─────────────┐
+│  File logs  │  ← INFO level, 30-day retention
+│  + grep     │
+└─────────────┘
+</code></pre></div></div>
+<h3 id="pattern-3-debugging-setup">
+  
+  
+    <a href="#pattern-3-debugging-setup" class="anchor-heading" aria-labelledby="pattern-3-debugging-setup"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Pattern 3: Debugging Setup
+  
+  
+</h3>
+    
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>┌─────────────┐
+│  Langfuse   │  ← Full traces (sample_rate: 1.0)
+│  (Local)    │
+└─────────────┘
+       ↓
+┌─────────────┐
+│  Debug logs │  ← verbosity: debug
+└─────────────┘
+       ↓
+┌─────────────┐
+│ Thread logs │  ← Full conversation audit
+└─────────────┘
+</code></pre></div></div>
+<h2 id="next-steps">
+  
+  
+    <a href="#next-steps" class="anchor-heading" aria-labelledby="next-steps"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Next Steps
+  
+  
+</h2>
+    
+
+<p>After setting up monitoring:</p>
+
+<ol>
+  <li><strong>Security</strong>: Configure secure monitoring → <a href="/soothe/wiki/deployment/security.html">Security Hardening</a></li>
+  <li><strong>Scaling</strong>: Plan for monitoring growth → <a href="/soothe/wiki/deployment/scaling.html">Scaling Strategies</a></li>
+  <li><strong>Backup</strong>: Protect monitoring data → <a href="/soothe/wiki/deployment/backup-recovery.html">Backup Recovery</a></li>
+</ol>
+<h2 id="related-documentation">
+  
+  
+    <a href="#related-documentation" class="anchor-heading" aria-labelledby="related-documentation"><svg viewBox="0 0 16 16" aria-hidden="true"><use xlink:href="#svg-link"></use></svg></a> Related Documentation
+  
+  
+</h2>
+    
+
+<ul>
+  <li><a href="/soothe/wiki/deployment/">Deployment Guide</a> - Production deployment overview</li>
+  <li><a href="/soothe/wiki/deployment/production-setup.html">Production Setup</a> - Deployment steps</li>
+  <li><a href="/soothe/wiki/configuration-guide/">Configuration Guide</a> - Observability settings</li>
+  <li><a href="/soothe/wiki/howto_debug.html">Debugging Guide</a> - Detailed debugging with logs</li>
+  <li><a href="https://langfuse.com/docs">Langfuse Documentation</a></li>
+</ul><hr />
+
+<p><strong>Need help?</strong> See <a href="/soothe/wiki/troubleshooting-guide/">Troubleshooting</a> or check Langfuse logs.</p>
+
+          
+
+          
+            
+          
+        </main>
+        
+
+
+      </div>
+    </div>
+    
+      
+
+<div class="search-overlay"></div>
+
+    
+  </div>
+
+  
+    
+
+
+
+
+
+<script type="module">
+  
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.esm.min.mjs';
+  
+
+  var config = {}
+;
+  mermaid.initialize(config);
+  mermaid.run({
+    querySelector: '.language-mermaid',
+  });
+</script>
+
+
+
+  
+</body>
+</html>
+
