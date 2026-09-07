@@ -5,21 +5,27 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import ToolMessage
+from langgraph.errors import GraphInterrupt
+from langgraph.types import Interrupt
 
 from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.clarification.detector import ClarificationDetector
+from soothe.sloop.clarification.protocol import LoopStateView
 from soothe.sloop.engine.execute.executor import (
     Executor,
     _ActStreamBudget,
 )
 from soothe.sloop.engine.execute.graph_interrupt import DispatchTimeoutError
+from soothe.sloop.relay.inbox import RelayInbox
 from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepExecutionRecord
 
 
@@ -371,3 +377,227 @@ async def test_consecutive_empty_completion_watchdog_force_fails() -> None:
     assert r2[0].success is False
     assert r2[0].error_type == "fatal"
     assert "consecutive" in (r2[0].error or "").lower()
+
+
+# ---------------------------------------------------------------------------
+# Progress-aware breaker: interrupt-resumed dispatches (f07f regression)
+# ---------------------------------------------------------------------------
+
+
+class _InterruptStubAgent:
+    """CoreAgent stand-in: yields scripted chunks, then raises a
+    GraphInterrupt carrying a tool-approval Interrupt (the pause shape)."""
+
+    def __init__(self) -> None:
+        self._scripts: list[tuple[list[Any], Any]] = []
+
+    def queue(self, chunks: list[Any], *, interrupt: Any = None) -> None:
+        self._scripts.append((chunks, interrupt))
+
+    def execution_astream(self, *_a: object, **_k: object) -> Any:
+        chunks, interrupt = self._scripts.pop(0)
+
+        async def _gen() -> Any:
+            for c in chunks:
+                yield c
+            if interrupt is not None:
+                raise GraphInterrupt((interrupt,))
+
+        return _gen()
+
+    async def aget_state(self, config: Any = None) -> Any:
+        return SimpleNamespace(interrupts=(), tasks=(), values={})
+
+    async def execution_aget_state(self, config: Any = None) -> Any:
+        return await self.aget_state(config)
+
+    @property
+    def can_read_graph_state(self) -> bool:
+        return True
+
+
+def _pause_view() -> LoopStateView:
+    return LoopStateView(
+        goal_id="g",
+        goal_description="build feature X",
+        user_request="build feature X",
+        iteration=0,
+        intent_classification=None,
+        plan_summary=None,
+        recent_step_outputs=(),
+        workspace_summary=None,
+        active_skills=(),
+        active_mcp_servers=(),
+    )
+
+
+def _tool_approval_interrupt(interrupt_id: str) -> Any:
+    return Interrupt(
+        value={"action_requests": [{"name": "run_command", "args": {"command": "rm -rf /tmp/x"}}]},
+        id=interrupt_id,
+    )
+
+
+def _ok_tool_chunk() -> tuple:
+    return (
+        (),
+        "messages",
+        (ToolMessage(content="Folder created.", tool_call_id="c1", name="run_command"), {}),
+    )
+
+
+def _failing_tool_chunk() -> tuple:
+    return (
+        (),
+        "messages",
+        (
+            ToolMessage(
+                content="Not a file: /tmp/x",
+                tool_call_id="c1",
+                name="delete",
+                status="error",
+            ),
+            {},
+        ),
+    )
+
+
+def _make_pause_state() -> tuple[ContextEngine, LoopState, StepAction, AgentDecision]:
+    ce = _make_ce()
+    state = LoopState(goal="g", thread_id="t", max_iterations=3)
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+    step = _make_step()
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="",
+    )
+    return ce, state, step, decision
+
+
+def _pause_config(max_redispatch: int) -> MagicMock:
+    config = MagicMock()
+    config.agent.loop.max_redispatch_per_step = max_redispatch
+    config.agent.loop.max_tool_calls_per_step = 99
+    config.agent.loop.context_window_limit = 100000
+    config.agent.loop.execute_min_answer_chars = 50
+    config.agent.loop.dispatch_idle_seconds = 60.0
+    config.agent.loop.max_consecutive_empty_completions = 99
+    return config
+
+
+async def _run_paused_dispatch(
+    agent: _InterruptStubAgent,
+    *,
+    config: Any,
+    ce: ContextEngine,
+    capture: RelayInbox,
+    state: LoopState,
+    decision: AgentDecision,
+) -> list[StepExecutionRecord]:
+    ex = Executor(
+        agent,
+        max_parallel_steps=1,
+        config=config,
+        context_engine=ce,
+        clarification_detector=ClarificationDetector(),
+        clarification_capture=capture,
+        clarification_loop_state_view=_pause_view(),
+    )
+    out = [item async for item in ex.execute(decision, state)]
+    return [x for x in out if isinstance(x, StepExecutionRecord)]
+
+
+@pytest.mark.asyncio
+async def test_interrupt_resume_with_tool_progress_resets_redispatch_count() -> None:
+    """f07f regression: a dispatch paused by tool approval after a successful
+    tool call made progress — the breaker budget must reset, not accumulate."""
+    config = _pause_config(max_redispatch=2)
+
+    agent = _InterruptStubAgent()
+    capture = RelayInbox()
+    ce, state, step, decision = _make_pause_state()
+
+    # Five dispatch rounds — far past max_redispatch=2. Each dispatch runs a
+    # successful tool, then pauses; paused steps yield no completion record,
+    # so the invariant under test is the counter state.
+    for i in range(5):
+        agent.queue([_ok_tool_chunk()], interrupt=_tool_approval_interrupt(f"i{i}"))
+        records = await _run_paused_dispatch(
+            agent, config=config, ce=ce, capture=capture, state=state, decision=decision
+        )
+        assert all("circuit breaker" not in (r.error or "").lower() for r in records)
+        # Productive pause reset the breaker budget.
+        assert state.step_dispatch_counts.get(step.id, 0) == 0
+        assert step.id not in state.step_failure_modes
+        # The step actually paused: the relay holds the approval request.
+        assert capture.dequeue() is not None
+
+
+@pytest.mark.asyncio
+async def test_unproductive_pause_gets_guided_retry_then_trips() -> None:
+    """Pauses whose only work was a failing tool attempt keep the count; the
+    breaker injects a guided retry first, then trips fatally on a stall."""
+    config = _pause_config(max_redispatch=2)
+
+    agent = _InterruptStubAgent()
+    capture = RelayInbox()
+    ce, state, step, decision = _make_pause_state()
+
+    # Rounds 1-2: count climbs (1, 2). Round 3: count=3 > max=2 with a
+    # repeating failure mode → guided retry, count reset to 1, dispatched.
+    # Round 4: count=2, dispatched. Round 5: count=3 > max, guided retry
+    # already done → fatal trip (no dispatch).
+    expected_counts = {1: 1, 2: 2, 3: 1, 4: 2}
+    for round_no in range(1, 6):
+        if round_no <= 4:
+            agent.queue([_failing_tool_chunk()], interrupt=_tool_approval_interrupt(f"i{round_no}"))
+        records = await _run_paused_dispatch(
+            agent, config=config, ce=ce, capture=capture, state=state, decision=decision
+        )
+        if round_no <= 4:
+            # Paused dispatch: no completion record, count kept (no progress).
+            capture.dequeue()
+            assert records == []
+            assert state.step_dispatch_counts.get(step.id) == expected_counts[round_no]
+            assert step.id in state.step_failure_modes
+        if round_no == 3:
+            # Guided retry was injected instead of a fatal trip.
+            assert state.step_guided_retry_done.get(step.id) is True
+        if round_no == 5:
+            assert len(records) == 1
+            assert records[0].success is False
+            assert records[0].error_type == "fatal"
+            assert "circuit breaker" in (records[0].error or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_step_success_clears_redispatch_counters() -> None:
+    """A dispatch that completes the step clears all breaker counters."""
+    agent = _InterruptStubAgent()
+    capture = RelayInbox()
+    ce, state, step, decision = _make_pause_state()
+
+    # Dispatch 1: empty stream → failure; count and failure mode recorded.
+    agent.queue([])
+    records = await _run_paused_dispatch(
+        agent, config=None, ce=ce, capture=capture, state=state, decision=decision
+    )
+    assert len(records) == 1
+    assert records[0].success is False
+    assert state.step_dispatch_counts.get(step.id) == 1
+    assert step.id in state.step_failure_modes
+
+    # Dispatch 2: successful tool, no interrupt → step completes; counters cleared.
+    agent.queue([_ok_tool_chunk()])
+    records = await _run_paused_dispatch(
+        agent, config=None, ce=ce, capture=capture, state=state, decision=decision
+    )
+    assert len(records) == 1
+    assert records[0].success is True
+    assert step.id not in state.step_dispatch_counts
+    assert step.id not in state.step_failure_modes
+    assert step.id not in state.step_guided_retry_done

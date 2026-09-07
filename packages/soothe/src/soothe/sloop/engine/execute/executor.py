@@ -1407,10 +1407,11 @@ class Executor:
                     continue
                 logger.error(
                     "[Execute] step %s re-dispatched %d times without "
-                    "completion; tripping circuit breaker (max=%d)",
+                    "completion; tripping circuit breaker (max=%d, mode=%s)",
                     s.id,
                     count - 1,
                     max_redispatch,
+                    state.step_failure_modes.get(s.id, "unknown"),
                 )
                 tripped.append(s)
         for s in tripped:
@@ -2165,10 +2166,11 @@ class Executor:
                         continue
                     logger.error(
                         "[Execute] step %s re-dispatched %d times without "
-                        "completion; tripping circuit breaker (max=%d)",
+                        "completion; tripping circuit breaker (max=%d, mode=%s)",
                         s.id,
                         count - 1,
                         max_redispatch,
+                        state.step_failure_modes.get(s.id, "unknown"),
                     )
                     failed_sticky.add(s.id)
                     tripped.append(s)
@@ -2874,10 +2876,30 @@ class Executor:
                 # Reset counter on a meaningful completion.
                 loop_state.step_consecutive_empty.pop(step.id, None)
 
-            # Record failure-mode signature so the breaker can detect a
-            # deterministic stall on the next re-dispatch. Clear on success.
+            # Breaker bookkeeping: only unproductive dispatches accumulate.
+            # Success and pauses with tool progress reset the count (a resume
+            # after an approval/ask interrupt is not a retry); unproductive
+            # pauses and failures record a failure mode for guided retry.
             if loop_state is not None:
-                if not step_success and not captured_clarification:
+                if step_success and not captured_clarification:
+                    loop_state.step_dispatch_counts.pop(step.id, None)
+                    loop_state.step_failure_modes.pop(step.id, None)
+                    loop_state.step_guided_retry_done.pop(step.id, None)
+                elif captured_clarification and (main_tool_call_count > 0 and not all_tools_failed):
+                    loop_state.step_dispatch_counts.pop(step.id, None)
+                    loop_state.step_failure_modes.pop(step.id, None)
+                elif captured_clarification:
+                    pause_error = step_error or (
+                        _first_tool_error_message(stream_outcomes) if stream_outcomes else None
+                    )
+                    loop_state.step_failure_modes[step.id] = self._failure_mode_signature(
+                        step_error=pause_error,
+                        step_error_type=step_error_type,
+                        tool_call_count=main_tool_call_count,
+                        had_recoverable_tool_errors=has_tool_error,
+                        outcome=primary_outcome,
+                    )
+                else:
                     fm = self._failure_mode_signature(
                         step_error=step_error,
                         step_error_type=step_error_type,
@@ -2886,8 +2908,6 @@ class Executor:
                         outcome=primary_outcome,
                     )
                     loop_state.step_failure_modes[step.id] = fm
-                else:
-                    loop_state.step_failure_modes.pop(step.id, None)
 
             return _ExecuteStepResult(
                 events=events,
