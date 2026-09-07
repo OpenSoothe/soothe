@@ -9,10 +9,14 @@
  * Wire protocol: {proto: "1", type, method, params, id}
  *   - Client → server: connection_init, request, subscribe, unsubscribe, ping, disconnect
  *   - Server → client: connection_ack, response, next, error, complete, status, pong
+ *
+ * The daemon enforces at most one loop subscription per client; a new
+ * subscribe replaces the prior one. We track the active subscription id so
+ * unsubscribe targets the right stream.
  */
 
 import { Client } from "@mirasoth/soothe-client";
-import type { DecodedMessage, MethodName } from "@mirasoth/soothe-client";
+import type { MethodName } from "@mirasoth/soothe-client";
 
 export interface SootheResponse {
   loop_id?: string;
@@ -27,6 +31,8 @@ export class SoothePool {
   private client: Client | null = null;
   private connecting: Promise<void> | null = null;
   private url: string;
+  private subId: string | null = null;
+  private subLoopId: string | null = null;
 
   constructor(url: string) {
     this.url = url;
@@ -53,7 +59,11 @@ export class SoothePool {
       console.warn("[soothe-pool] disconnected from daemon, will retry on next request");
     });
     client.on("close", () => {
-      if (this.client === client) this.client = null;
+      if (this.client === client) {
+        this.client = null;
+        this.subId = null;
+        this.subLoopId = null;
+      }
     });
     await client.connect();
     this.client = client;
@@ -81,27 +91,35 @@ export class SoothePool {
    */
   async request(method: string, params: Record<string, unknown>): Promise<SootheResponse> {
     const client = await this.ensureConnected();
-    const result = await client.requestResponse(
-      method as MethodName,
-      params,
-      method,
-      30_000,
-    );
+    const result = await client.requestResponse(method as MethodName, params, method, 30_000);
     return (result ?? {}) as SootheResponse;
   }
 
   /**
-   * Subscribe to loop events. Returns an async iterator of event payloads.
+   * Ensure the pool client is subscribed to the loop's event stream.
+   * The daemon replaces any prior loop subscription, so re-subscribing to a
+   * different loop is always safe; re-subscribing to the same loop is skipped
+   * to avoid a redundant reattach replay.
    */
-  async *subscribeLoopEvents(
+  async subscribeLoop(loopId: string): Promise<void> {
+    if (this.subLoopId === loopId && this.subId !== null) return;
+    const client = await this.ensureConnected();
+    this.subId = await client.subscribe("loop_events", { loop_id: loopId }, 10_000);
+    this.subLoopId = loopId;
+  }
+
+  /**
+   * Consume loop event frames for the currently subscribed loop.
+   * `client.next()` unwraps `next` frames to their payload and returns full
+   * envelopes for `complete`/`error`. Yields until the stream ends or the
+   * signal aborts.
+   */
+  async *consumeLoopEvents(
     loopId: string,
     signal?: AbortSignal,
   ): AsyncGenerator<Record<string, unknown>> {
     const client = await this.ensureConnected();
-
-    // Subscribe to the loop's event stream
-    await client.subscribe("loop_events", { loop_id: loopId }, 10_000);
-
+    await this.subscribeLoop(loopId);
     try {
       while (!signal?.aborted) {
         const event = await client.next();
@@ -109,40 +127,22 @@ export class SoothePool {
         yield event;
       }
     } finally {
-      try {
-        client.unsubscribe(loopId);
-      } catch {
-        // Best-effort cleanup
+      if (this.subId !== null) {
+        try {
+          await client.unsubscribe(this.subId);
+        } catch {
+          // Best-effort cleanup
+        }
+        this.subId = null;
+        this.subLoopId = null;
       }
-    }
-  }
-
-  /**
-   * Subscribe to a loop without consuming events.
-   * The Soothe daemon requires a subscription before accepting loop_input.
-   */
-  async subscribeLoop(loopId: string): Promise<void> {
-    const client = await this.ensureConnected();
-    await client.subscribe("loop_events", { loop_id: loopId }, 10_000);
-  }
-
-  /**
-   * Fetch messages for a loop.
-   */
-  async getLoopMessages(loopId: string): Promise<unknown[]> {
-    try {
-      const resp = await this.request("loop_messages", { loop_id: loopId });
-      const messages = (resp as any).messages ?? [];
-      return Array.isArray(messages) ? messages : [];
-    } catch {
-      return [];
     }
   }
 
   async close(): Promise<void> {
     this.client?.close();
     this.client = null;
+    this.subId = null;
+    this.subLoopId = null;
   }
 }
-
-export type { DecodedMessage };

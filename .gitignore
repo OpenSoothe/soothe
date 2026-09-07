@@ -253,3 +253,4 @@ __MACOSX
 
 # Accidental MemU test persist_dir artifacts
 packages/soothe/MagicMock/
+docs/soothe-teammates-integration.md

@@ -11,7 +11,9 @@ export async function rpc<T = unknown>(
   method: string,
   params?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await fetch(RPC_URL, {
+  // Bridge routes are path-based: bots.create → POST /rpc/bots/create
+  const path = RPC_URL + "/" + method.split(".").join("/");
+  const response = await fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "include",
@@ -33,16 +35,18 @@ export async function rpc<T = unknown>(
 
 /**
  * Subscribe to thread events via SSE.
- * Returns an async iterator of events.
+ * Returns an async iterator of events; pass a signal to cancel the stream.
  */
 export async function* subscribeThreadEvents(
   botId: string,
   cursor: number,
+  signal?: AbortSignal,
 ): AsyncGenerator<unknown> {
   const params = new URLSearchParams({ botId, cursor: String(cursor) });
   const response = await fetch(`${RPC_URL}/threads/subscribe?${params}`, {
     headers: { accept: "text/event-stream" },
     credentials: "include",
+    signal,
   });
 
   if (!response.body) return;

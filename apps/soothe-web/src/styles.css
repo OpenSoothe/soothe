@@ -32,15 +32,17 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   overflow: hidden;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial,
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
@@ -55,7 +57,8 @@ button {
   background: none;
 }
 
-input, textarea {
+input,
+textarea {
   font-family: inherit;
   outline: none;
 }
@@ -269,6 +272,20 @@ input, textarea {
   font-size: 13px;
 }
 
+.contact-item.renaming {
+  padding: 10px 14px;
+}
+
+.contact-rename-input {
+  width: 100%;
+  background: #3a3a3a;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: #fff;
+  font-size: 14px;
+}
+
 /* ── Right Chat Area ── */
 
 .chat-area {
@@ -301,6 +318,24 @@ input, textarea {
   background: rgba(34, 197, 94, 0.12);
   padding: 2px 8px;
   border-radius: 10px;
+}
+
+.chat-header-delete {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.chat-header-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .message-list {
@@ -426,8 +461,16 @@ input, textarea {
 }
 
 @keyframes typing-bounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-6px); opacity: 1; }
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
 }
 
 /* ── Chat Input Area ── */
@@ -517,7 +560,9 @@ input, textarea {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .error-screen {

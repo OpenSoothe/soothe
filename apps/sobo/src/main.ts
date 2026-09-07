@@ -42,9 +42,7 @@ function normalizeUrl(input: string): string | null {
   const trimmed = input.trim();
   if (trimmed === "") return null;
   try {
-    const url = trimmed.match(/^https?:\/\//)
-      ? new URL(trimmed)
-      : new URL(`http://${trimmed}`);
+    const url = trimmed.match(/^https?:\/\//) ? new URL(trimmed) : new URL(`http://${trimmed}`);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     return url.origin;
   } catch {
@@ -53,9 +51,7 @@ function normalizeUrl(input: string): string | null {
 }
 
 // --- Health probe ---
-async function probeServer(
-  url: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+async function probeServer(url: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const normalized = normalizeUrl(url);
   if (normalized === null) return { ok: false, error: "Enter a valid address." };
   try {
@@ -108,7 +104,7 @@ function createAppWindow(url: string) {
 
   win.once("ready-to-show", () => win.show());
 
-  win.on("close", (event) => {
+  win.on("close", event => {
     if (process.platform === "darwin") {
       event.preventDefault();
       win.hide();
@@ -147,21 +143,22 @@ function createSetupWindow() {
 // --- IPC handlers ---
 ipcMain.handle("desktop.platform", () => process.platform);
 
-ipcMain.handle("desktop.window.close", (e) => {
+ipcMain.handle("desktop.window.close", e => {
   BrowserWindow.fromWebContents(e.sender)?.close();
 });
 
-ipcMain.handle("desktop.window.minimize", (e) => {
+ipcMain.handle("desktop.window.minimize", e => {
   BrowserWindow.fromWebContents(e.sender)?.minimize();
 });
 
-ipcMain.handle("desktop.window.toggleMaximize", (e) => {
+ipcMain.handle("desktop.window.toggleMaximize", e => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return;
-  win.isMaximized() ? win.unmaximize() : win.maximize();
+  if (win.isMaximized()) win.unmaximize();
+  else win.maximize();
 });
 
-ipcMain.handle("desktop.window.state", (e) => {
+ipcMain.handle("desktop.window.state", e => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return { maximized: false };
   return { maximized: win.isMaximized() };

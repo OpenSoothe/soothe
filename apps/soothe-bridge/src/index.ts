@@ -20,20 +20,24 @@
 
 import { serve } from "@hono/node-server";
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { Hono } from "hono";
 import { SoothePool } from "./soothe-pool.js";
 import { createRouter } from "./router.js";
+import { BridgeStore, bridgeDataDir } from "./store.js";
 
 const port = Number(process.env.SOOTHE_BRIDGE_PORT ?? 3100);
 const daemonUrl = process.env.SOOTHE_DAEMON_URL ?? "ws://127.0.0.1:8765";
 
 // Web UI static assets — built by @soothe/web, served by the bridge.
-const WEB_ROOT = process.env.SOOTHE_WEB_ROOT ??
+const WEB_ROOT =
+  process.env.SOOTHE_WEB_ROOT ??
   path.resolve(import.meta.dirname, "..", "..", "soothe-web", "dist");
 
 const pool = new SoothePool(daemonUrl);
+const store = new BridgeStore(bridgeDataDir());
+console.log(`[sobo-bridge] bot store: ${bridgeDataDir()}/bridge.db`);
 const app = new Hono();
 
 // CORS
@@ -47,17 +51,17 @@ app.use("*", async (c, next) => {
 });
 
 // --- Health probe ---
-app.post("/rpc/health", async (c) => {
+app.post("/rpc/health", async c => {
   const connected = await pool.isConnectedAsync();
   return c.json({ json: { ok: true, version: "0.0.1", daemon: connected } });
 });
-app.get("/rpc/health", async (c) => {
+app.get("/rpc/health", async c => {
   const connected = await pool.isConnectedAsync();
   return c.json({ json: { ok: true, version: "0.0.1", daemon: connected } });
 });
 
 // --- RPC router ---
-const router = createRouter(pool);
+const router = createRouter(pool, store);
 app.route("/rpc", router);
 
 // --- Static web UI assets ---
@@ -74,7 +78,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 if (existsSync(WEB_ROOT)) {
-  app.get("*", async (c) => {
+  app.get("*", async c => {
     let pathname = c.req.path;
     if (pathname === "/" || pathname === "") pathname = "/index.html";
     const filePath = path.join(WEB_ROOT, pathname);
@@ -98,13 +102,15 @@ if (existsSync(WEB_ROOT)) {
   });
   console.log(`[sobo-bridge] serving web UI from ${WEB_ROOT}`);
 } else {
-  console.warn(`[sobo-bridge] web UI not found at ${WEB_ROOT} — run pnpm --filter @soothe/web build`);
+  console.warn(
+    `[sobo-bridge] web UI not found at ${WEB_ROOT} — run pnpm --filter @soothe/web build`,
+  );
 }
 
 // --- Start ---
 console.log(`[sobo-bridge] listening on http://127.0.0.1:${port}`);
 console.log(`[sobo-bridge] soothe daemon: ${daemonUrl}`);
 
-serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
+serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, info => {
   console.log(`[sobo-bridge] ready on http://127.0.0.1:${info.port}`);
 });

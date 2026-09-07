@@ -21,7 +21,9 @@
 # Production stack only (deploy/docker-compose.yml needs API keys from deploy/.env)
 DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file deploy/.env
 .PHONY: reset-the-world
-.PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
+.PHONY: format format-py format-node format-check format-check-py format-check-node
+.PHONY: lint lint-py lint-node lint-src lint-fix lint-fix-py lint-fix-node autofix
+.PHONY: vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
 .PHONY: bench-alert-slo
 .PHONY: cli-publish soothe-publish autopilot-publish daemon-publish sdk-publish publish
@@ -32,6 +34,9 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file de
 # ============================================================================
 
 PACKAGES = soothe-sdk soothe-nano soothe-cli soothe soothe-autopilot soothe-daemon
+
+# Node.js apps under apps/ (pnpm workspace — format / lint / build here)
+NODE_APPS = soothe-web soothe-bridge sobo
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
@@ -75,12 +80,20 @@ help:
 	@echo "  make reset-the-world   - Reset all state and restart clean"
 	@echo ""
 	@echo "Quality:"
-	@echo "  make format           - Format all packages (src + tests)"
-	@echo "  make format-check     - Check formatting (for CI)"
-	@echo "  make lint             - Lint all packages (src + tests)"
-	@echo "  make lint-src         - Lint only src/ (lighter check)"
-	@echo "  make lint-fix         - Auto-fix linting issues"
-	@echo "  make autofix          - Run all auto-fixes (format + lint-fix)"
+	@echo "  make format           - Format all (Python packages + Node apps)"
+	@echo "  make format-py        - Format Python packages only (ruff)"
+	@echo "  make format-node      - Format Node apps only (prettier)"
+	@echo "  make format-check     - Check formatting (for CI, all)"
+	@echo "  make format-check-py  - Check Python formatting only"
+	@echo "  make format-check-node - Check Node formatting only"
+	@echo "  make lint             - Lint all (Python + Node)"
+	@echo "  make lint-py          - Lint Python packages only (ruff)"
+	@echo "  make lint-node        - Lint Node apps only (eslint)"
+	@echo "  make lint-src         - Lint only src/ (lighter check, Python)"
+	@echo "  make lint-fix         - Auto-fix linting issues (all)"
+	@echo "  make lint-fix-py      - Auto-fix Python lint issues (ruff)"
+	@echo "  make lint-fix-node    - Auto-fix Node lint issues (eslint + prettier)"
+	@echo "  make autofix          - Run all auto-fixes (format + lint-fix, all)"
 	@echo "  make vulture          - Dead-code analysis (vulture, min 90% confidence)"
 	@echo "  make test             - Run all tests"
 	@echo "  make test-unit        - Run unit tests"
@@ -220,9 +233,28 @@ reset-the-world:
 # ============================================================================
 # Format & Lint
 # ============================================================================
+#
+# Python packages use ruff (.venv/bin/ruff, managed by uv).
+# Node apps (apps/*) use prettier + eslint (managed by pnpm at workspace root).
+# Umbrella targets (format / format-check / lint / lint-fix / autofix) run both.
 
-format: sync
-	@echo "Formatting all packages..."
+# --- Umbrella targets (Python + Node) ---------------------------------------
+
+format: format-py format-node
+
+format-check: format-check-py format-check-node
+
+lint: lint-py lint-node
+
+lint-fix: lint-fix-py lint-fix-node
+
+autofix: format lint-fix
+	@echo "All auto-fixes applied"
+
+# --- Python (ruff) ----------------------------------------------------------
+
+format-py: sync
+	@echo "Formatting all Python packages..."
 	@for pkg in $(PACKAGES); do \
 		paths="packages/$$pkg/src/"; \
 		test -d "packages/$$pkg/tests" && paths="packages/$$pkg/src/ packages/$$pkg/tests/"; \
@@ -236,8 +268,8 @@ format: sync
 	done
 	@echo "Done"
 
-format-check: sync
-	@echo "Checking formatting..."
+format-check-py: sync
+	@echo "Checking Python formatting..."
 	@failed=0; \
 	for pkg in $(PACKAGES); do \
 		paths="packages/$$pkg/src/"; \
@@ -250,8 +282,8 @@ format-check: sync
 	done; \
 	test $$failed -eq 0 && echo "OK" || exit 1
 
-lint: sync
-	@echo "Linting all packages (src + tests)..."
+lint-py: sync
+	@echo "Linting all Python packages (src + tests)..."
 	@failed=0; \
 	for pkg in $(PACKAGES); do \
 		paths="packages/$$pkg/src/"; \
@@ -279,8 +311,8 @@ lint-src: sync
 	done
 	@echo "Done"
 
-lint-fix: sync
-	@echo "Fixing linting and formatting issues..."
+lint-fix-py: sync
+	@echo "Fixing Python linting and formatting issues..."
 	@for pkg in $(PACKAGES); do \
 		paths="packages/$$pkg/src/"; \
 		test -d "packages/$$pkg/tests" && paths="packages/$$pkg/src/ packages/$$pkg/tests/"; \
@@ -294,8 +326,39 @@ lint-fix: sync
 	done
 	@echo "Done"
 
-autofix: format lint-fix
-	@echo "All auto-fixes applied"
+# --- Node (prettier + eslint) ----------------------------------------------
+
+format-node:
+	@echo "Formatting Node apps..."
+	@for app in $(NODE_APPS); do \
+		echo "  $$app"; \
+	done
+	pnpm run format
+	@echo "Done"
+
+format-check-node:
+	@echo "Checking Node formatting..."
+	@for app in $(NODE_APPS); do \
+		echo "  $$app"; \
+	done
+	pnpm run format:check
+
+lint-node:
+	@echo "Linting Node apps..."
+	@for app in $(NODE_APPS); do \
+		echo "  $$app"; \
+	done
+	pnpm run lint
+
+lint-fix-node:
+	@echo "Fixing Node lint and formatting issues..."
+	@for app in $(NODE_APPS); do \
+		echo "  $$app"; \
+	done
+	pnpm run lint:fix
+	@echo "Done"
+
+# --- Dead-code analysis ----------------------------------------------------
 
 vulture: sync
 	@echo "Running vulture dead-code analysis..."
@@ -357,6 +420,7 @@ clean:
 	find packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find packages -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
 	find packages -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
+	rm -rf apps/*/dist apps/sobo/out
 	@echo "Done"
 
 # ============================================================================

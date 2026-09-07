@@ -1,0 +1,20 @@
+# Build artifacts
+**/dist/
+**/node_modules/
+apps/sobo/out/
+apps/sobo/assets/
+
+# Generated / vendored
+pnpm-lock.yaml
+uv.lock
+pnpm-workspace.yaml
+
+# Non-app source (Python monorepo owned by ruff)
+packages/
+client/
+scripts/
+examples/
+docs/
+deploy/
+.github/
+.agents/

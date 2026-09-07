@@ -10,9 +10,18 @@
   },
   "scripts": {
     "dev": "pnpm --filter @soothe/bridge dev & pnpm --filter @soothe/web dev & pnpm --filter sobo dev",
-    "build": "pnpm --filter @soothe/web build && pnpm --filter @soothe/bridge build && pnpm --filter sobo build"
+    "build": "pnpm --filter @soothe/web build && pnpm --filter @soothe/bridge build && pnpm --filter sobo build",
+    "format": "prettier --write \"apps/*/src/**/*.{ts,tsx,js,cjs,mjs,json,css}\"",
+    "format:check": "prettier --check \"apps/*/src/**/*.{ts,tsx,js,cjs,mjs,json,css}\"",
+    "lint": "eslint \"apps/*/src/**/*.{ts,tsx,js,cjs,mjs}\"",
+    "lint:fix": "eslint --fix \"apps/*/src/**/*.{ts,tsx,js,cjs,mjs}\" && pnpm format"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.6.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.46.0"
   }
 }

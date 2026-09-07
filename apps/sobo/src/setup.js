@@ -10,7 +10,7 @@
   const quitButton = document.getElementById("quit");
 
   // Pre-fill default if available.
-  bridge?.state().then((state) => {
+  bridge?.state().then(state => {
     if (state.saved?.serverUrl) serverUrl.value = state.saved.serverUrl;
     else if (state.defaultLocalUrl) serverUrl.value = state.defaultLocalUrl;
   });
@@ -68,7 +68,7 @@
 
   checkButton.addEventListener("click", () => void check());
 
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", e => {
     e.preventDefault();
     void (async () => {
       const result = await check();
